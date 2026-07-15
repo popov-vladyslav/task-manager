@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Context, Task } from '@task-manager/shared';
+import type { Context, ReorderScope, Task } from '@task-manager/shared';
 import { api } from '../lib/api';
 
 interface TasksState {
@@ -15,6 +15,13 @@ interface TasksState {
   toggleComplete: (task: Task) => Promise<void>;
   patchTask: (id: string, patch: Parameters<typeof api.updateTask>[1]) => Promise<void>;
   removeTask: (id: string) => Promise<void>;
+  adjustCommentCount: (id: string, delta: number) => void;
+  reorder: (
+    id: string,
+    afterId: string | null,
+    beforeId: string | null,
+    scope: ReorderScope,
+  ) => Promise<void>;
 }
 
 export const useTasksStore = create<TasksState>((set, get) => ({
@@ -72,6 +79,33 @@ export const useTasksStore = create<TasksState>((set, get) => ({
       await api.deleteTask(id);
     } catch {
       set({ tasks: prev }); // rollback
+    }
+  },
+
+  adjustCommentCount(id, delta) {
+    set({
+      tasks: get().tasks.map((t) =>
+        t.id === id ? { ...t, commentsCount: Math.max(0, t.commentsCount + delta) } : t,
+      ),
+    });
+  },
+
+  async reorder(id, afterId, beforeId, scope) {
+    const key = scope === 'context' ? 'sortContext' : 'sortGlobal';
+    const current = get().tasks;
+    const sortOf = (nid: string | null) =>
+      nid ? (current.find((t) => t.id === nid)?.[key] ?? null) : null;
+    const a = sortOf(afterId);
+    const b = sortOf(beforeId);
+    // Fractional index between neighbors — applied optimistically so the list
+    // settles in place instead of snapping back during the API round-trip.
+    const newSort = a == null && b == null ? 0 : a == null ? b! - 1 : b == null ? a + 1 : (a + b) / 2;
+    set({ tasks: current.map((t) => (t.id === id ? { ...t, [key]: newSort } : t)) });
+    try {
+      const updated = await api.reorderTask(id, { afterId, beforeId, scope });
+      set({ tasks: get().tasks.map((t) => (t.id === id ? updated : t)) });
+    } catch {
+      get().load(); // resync on failure
     }
   },
 }));

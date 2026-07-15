@@ -4,6 +4,7 @@ import { env } from './env';
 import authRouter from './routes/auth';
 import contextsRouter from './routes/contexts';
 import tasksRouter from './routes/tasks';
+import commentsRouter from './routes/comments';
 import { requireAuth } from './middleware/auth';
 import { errorHandler } from './middleware/error';
 
@@ -21,6 +22,7 @@ app.use('/auth', authRouter);
 // Everything under /api requires a valid JWT.
 app.use('/api/contexts', requireAuth, contextsRouter);
 app.use('/api/tasks', requireAuth, tasksRouter);
+app.use('/api/comments', requireAuth, commentsRouter);
 
 app.use(errorHandler);
 

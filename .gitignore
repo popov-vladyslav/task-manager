@@ -16,3 +16,6 @@ expo-env.d.ts
 # misc
 *.log
 .DS_Store
+
+# playwright mcp scratch
+.playwright-mcp/

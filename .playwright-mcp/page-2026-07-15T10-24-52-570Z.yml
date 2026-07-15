@@ -1,5 +1,0 @@
-- generic [ref=e11]:
-  - generic [ref=e12]: LOG
-  - generic [ref=e13]: Sign in with a magic link
-  - textbox "you@example.com" [ref=e14]
-  - generic [ref=e15] [cursor=pointer]: Send magic link

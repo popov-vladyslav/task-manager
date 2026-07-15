@@ -1,5 +1,6 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useState } from 'react';
 import {
+  KeyboardAvoidingView,
   Modal,
   Pressable,
   ScrollView,
@@ -8,9 +9,12 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
-import { Bell, Clock, Repeat, Trash2, X } from 'lucide-react-native';
-import type { Context, Task, UpdateTaskInput } from '@task-manager/shared';
-import { colors, monoFont, nextInstanceLabel, radius, shortDate, shortTime } from '../../theme';
+import { ChevronRight, MessageSquare, Trash2, X } from 'lucide-react-native';
+import type { Comment, Context, RecurrenceInput, Task, UpdateTaskInput } from '@task-manager/shared';
+import { colors, monoFont, nextInstanceLabel, radius, shortDateTime } from '../../theme';
+import { api } from '../../lib/api';
+import { useTasksStore } from '../../store/tasks';
+import { DateFieldsSection, FieldLabel } from './date-fields-section';
 
 interface Props {
   task: Task;
@@ -21,154 +25,272 @@ interface Props {
 }
 
 const WIDE_BREAKPOINT = 768;
+const isIOS = process.env.EXPO_OS === 'ios';
 
-function Label({ children }: { children: string }) {
-  return (
-    <Text
-      style={{
-        fontFamily: monoFont,
-        fontSize: 10.5,
-        letterSpacing: 1,
-        textTransform: 'uppercase',
-        color: colors.textMuted,
-        marginBottom: 8,
-      }}
-    >
-      {children}
-    </Text>
-  );
+const WEEKDAYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+type RecKind = 'none' | 'daily' | 'weekly' | 'monthly';
+const REC_OPTIONS: { k: RecKind; label: string }[] = [
+  { k: 'none', label: 'No repeat' },
+  { k: 'daily', label: 'Daily' },
+  { k: 'weekly', label: 'Weekly' },
+  { k: 'monthly', label: 'Monthly' },
+];
+
+function recKind(rule: string | null): RecKind {
+  if (!rule) return 'none';
+  if (rule === 'daily') return 'daily';
+  if (rule.startsWith('weekly')) return 'weekly';
+  if (rule.startsWith('monthly')) return 'monthly';
+  return 'none';
+}
+function recInput(kind: RecKind, base: Date): RecurrenceInput | null {
+  switch (kind) {
+    case 'daily':
+      return { rule: 'daily' };
+    case 'weekly':
+      return { rule: `weekly:${WEEKDAYS[base.getDay()]}` };
+    case 'monthly':
+      return { rule: `monthly:${base.getDate()}` };
+    default:
+      return null;
+  }
 }
 
-function ReadonlyField({ icon, value }: { icon: ReactNode; value: string }) {
+function Pill({
+  active,
+  color,
+  label,
+  onPress,
+}: {
+  active: boolean;
+  color?: string;
+  label: string;
+  onPress: () => void;
+}) {
   return (
-    <View
+    <Pressable
+      onPress={onPress}
       style={{
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 8,
-        borderRadius: radius.card,
-        borderCurve: 'continuous',
         paddingHorizontal: 12,
-        paddingVertical: 10,
-        backgroundColor: colors.bgCard,
+        paddingVertical: 6,
+        borderRadius: 999,
+        backgroundColor: active ? (color ?? colors.bgElevated) : colors.bgCard,
         borderWidth: 1,
-        borderColor: colors.borderSubtle,
+        borderColor: active ? (color ?? colors.borderStrong) : colors.borderSubtle,
       }}
     >
-      {icon}
-      <Text style={{ fontSize: 13, color: value === '—' ? colors.textMuted : colors.textPrimary }}>{value}</Text>
-    </View>
+      <Text
+        style={{
+          fontSize: 12,
+          fontWeight: '500',
+          color: active ? (color ? colors.bgBase : colors.textPrimary) : colors.textSecondary,
+        }}
+      >
+        {label}
+      </Text>
+    </Pressable>
   );
 }
 
 function DetailBody({ task, contexts, onClose, onPatch, onDelete, wide }: Props & { wide: boolean }) {
+  const adjustCommentCount = useTasksStore((s) => s.adjustCommentCount);
   const [title, setTitle] = useState(task.title);
+  const [comments, setComments] = useState<Comment[]>([]);
+  const [draft, setDraft] = useState('');
+
   useEffect(() => setTitle(task.title), [task.id, task.title]);
+
+  useEffect(() => {
+    let alive = true;
+    api
+      .listComments(task.id)
+      .then((c) => {
+        if (alive) setComments(c);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [task.id]);
 
   const commitTitle = () => {
     const next = title.trim();
     if (next && next !== task.title) onPatch(task.id, { title: next });
   };
 
-  const due = shortDate(task.dueAt) ?? '—';
-  const remind = shortTime(task.remindAt) ?? '—';
-  const recurrence = task.recurrenceId
-    ? `Repeats · next ${nextInstanceLabel(task.nextInstance) ?? '—'}`
-    : 'No repeat';
+  const base = task.dueAt ? new Date(task.dueAt) : new Date();
+  const activeKind = recKind(task.recurrenceRule);
+
+  const addComment = async () => {
+    const body = draft.trim();
+    if (!body) return;
+    setDraft('');
+    try {
+      const c = await api.addComment(task.id, body);
+      setComments((prev) => [...prev, c]);
+      adjustCommentCount(task.id, 1);
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const removeComment = async (id: string) => {
+    const prev = comments;
+    setComments(prev.filter((c) => c.id !== id));
+    adjustCommentCount(task.id, -1);
+    try {
+      await api.deleteComment(id);
+    } catch {
+      setComments(prev);
+      adjustCommentCount(task.id, 1);
+    }
+  };
 
   return (
-    <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 28, gap: 16 }}>
-      {wide ? (
-        <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
+    <KeyboardAvoidingView behavior={isIOS ? 'padding' : undefined}>
+      <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 28, gap: 16 }} keyboardShouldPersistTaps="handled">
+        {wide ? (
+          <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
+            <TextInput
+              value={title}
+              onChangeText={setTitle}
+              onEndEditing={commitTitle}
+              onBlur={commitTitle}
+              style={{ flex: 1, fontSize: 18, fontWeight: '600', color: colors.textPrimary }}
+            />
+            <Pressable onPress={onClose} hitSlop={8} style={{ padding: 6, borderRadius: 8, backgroundColor: colors.bgElevated }}>
+              <X size={15} color={colors.textSecondary} />
+            </Pressable>
+          </View>
+        ) : (
           <TextInput
             value={title}
             onChangeText={setTitle}
             onEndEditing={commitTitle}
             onBlur={commitTitle}
-            style={{ flex: 1, fontSize: 18, fontWeight: '600', color: colors.textPrimary }}
+            style={{ fontSize: 17, fontWeight: '600', color: colors.textPrimary }}
           />
-          <Pressable onPress={onClose} hitSlop={8} style={{ padding: 6, borderRadius: 8, backgroundColor: colors.bgElevated }}>
-            <X size={15} color={colors.textSecondary} />
-          </Pressable>
+        )}
+
+        <View>
+          <FieldLabel>Context</FieldLabel>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+            {contexts.map((c) => {
+              const active = task.contextId === c.id;
+              return (
+                <Pill
+                  key={c.id}
+                  active={active}
+                  color={active ? c.color : undefined}
+                  label={c.label}
+                  onPress={() => onPatch(task.id, { contextId: active ? null : c.id })}
+                />
+              );
+            })}
+          </View>
         </View>
-      ) : (
-        <TextInput
-          value={title}
-          onChangeText={setTitle}
-          onEndEditing={commitTitle}
-          onBlur={commitTitle}
-          style={{ fontSize: 17, fontWeight: '600', color: colors.textPrimary }}
+
+        <DateFieldsSection
+          dueAt={task.dueAt}
+          remindAt={task.remindAt}
+          onChangeDue={(iso) => onPatch(task.id, { dueAt: iso })}
+          onChangeRemind={(iso) => onPatch(task.id, { remindAt: iso })}
         />
-      )}
 
-      <View>
-        <Label>Context</Label>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-          {contexts.map((c) => {
-            const active = task.contextId === c.id;
-            return (
-              <Pressable
-                key={c.id}
-                onPress={() => onPatch(task.id, { contextId: active ? null : c.id })}
-                style={{
-                  paddingHorizontal: 12,
-                  paddingVertical: 6,
-                  borderRadius: 999,
-                  backgroundColor: active ? c.color : colors.bgCard,
-                  borderWidth: 1,
-                  borderColor: active ? c.color : colors.borderSubtle,
-                }}
-              >
-                <Text style={{ fontSize: 12, fontWeight: '500', color: active ? colors.bgBase : colors.textSecondary }}>
-                  {c.label}
+        <View>
+          <FieldLabel>Repeat</FieldLabel>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+            {REC_OPTIONS.map((o) => (
+              <Pill
+                key={o.k}
+                active={activeKind === o.k}
+                label={o.label}
+                onPress={() => onPatch(task.id, { recurrence: recInput(o.k, base) })}
+              />
+            ))}
+          </View>
+          {task.recurrenceId && task.nextInstance ? (
+            <Text style={{ marginTop: 8, fontSize: 11, color: colors.textMuted, flexDirection: 'row' }}>
+              Next instance: {nextInstanceLabel(task.nextInstance)}
+            </Text>
+          ) : null}
+        </View>
+
+        <View>
+          <FieldLabel>Comments</FieldLabel>
+          {comments.map((c) => (
+            <View
+              key={c.id}
+              style={{ borderRadius: radius.card, borderCurve: 'continuous', paddingHorizontal: 12, paddingVertical: 10, marginBottom: 8, backgroundColor: colors.bgCard }}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
+                <Text selectable style={{ flex: 1, fontSize: 13, lineHeight: 18, color: '#B8BFCC' }}>
+                  {c.body}
                 </Text>
-              </Pressable>
-            );
-          })}
+                <Pressable onPress={() => removeComment(c.id)} hitSlop={8} style={{ marginLeft: 8 }}>
+                  <X size={12} color={colors.textMuted} />
+                </Pressable>
+              </View>
+              <Text style={{ fontFamily: monoFont, fontSize: 10, marginTop: 4, color: colors.textMuted }}>
+                {shortDateTime(c.createdAt)}
+              </Text>
+            </View>
+          ))}
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <View
+              style={{
+                flex: 1,
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 8,
+                borderRadius: radius.card,
+                borderCurve: 'continuous',
+                paddingHorizontal: 12,
+                paddingVertical: 8,
+                backgroundColor: colors.bgCard,
+                borderWidth: 1,
+                borderColor: colors.borderSubtle,
+              }}
+            >
+              <MessageSquare size={13} color={colors.textMuted} />
+              <TextInput
+                value={draft}
+                onChangeText={setDraft}
+                onSubmitEditing={addComment}
+                placeholder="Add a comment…"
+                placeholderTextColor={colors.textMuted}
+                style={{ flex: 1, fontSize: 13, color: colors.textPrimary }}
+              />
+            </View>
+            <Pressable onPress={addComment} style={{ padding: 10, borderRadius: radius.card, backgroundColor: colors.accentPrimary }}>
+              <ChevronRight size={15} color={colors.bgSurface} />
+            </Pressable>
+          </View>
         </View>
-      </View>
 
-      <View style={{ flexDirection: 'row', gap: 12 }}>
-        <View style={{ flex: 1 }}>
-          <Label>Deadline</Label>
-          <ReadonlyField icon={<Clock size={13} color={colors.textSecondary} />} value={due} />
-        </View>
-        <View style={{ flex: 1 }}>
-          <Label>Reminder</Label>
-          <ReadonlyField
-            icon={<Bell size={13} color={task.remindAt ? colors.accentReminder : colors.textSecondary} />}
-            value={remind}
-          />
-        </View>
-      </View>
-
-      <View>
-        <Label>Repeat</Label>
-        <ReadonlyField icon={<Repeat size={13} color={colors.textSecondary} />} value={recurrence} />
-      </View>
-
-      <Pressable
-        onPress={() => {
-          onDelete(task.id);
-          onClose();
-        }}
-        style={{
-          flexDirection: 'row',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: 8,
-          borderRadius: radius.card,
-          borderCurve: 'continuous',
-          paddingVertical: 11,
-          backgroundColor: 'rgba(217,102,139,0.12)',
-          borderWidth: 1,
-          borderColor: 'rgba(217,102,139,0.25)',
-        }}
-      >
-        <Trash2 size={14} color={colors.accentNow} />
-        <Text style={{ fontSize: 13, fontWeight: '500', color: colors.accentNow }}>Delete task</Text>
-      </Pressable>
-    </ScrollView>
+        <Pressable
+          onPress={() => {
+            onDelete(task.id);
+            onClose();
+          }}
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 8,
+            borderRadius: radius.card,
+            borderCurve: 'continuous',
+            paddingVertical: 11,
+            backgroundColor: 'rgba(217,102,139,0.12)',
+            borderWidth: 1,
+            borderColor: 'rgba(217,102,139,0.25)',
+          }}
+        >
+          <Trash2 size={14} color={colors.accentNow} />
+          <Text style={{ fontSize: 13, fontWeight: '500', color: colors.accentNow }}>Delete task</Text>
+        </Pressable>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -203,7 +325,7 @@ export function TaskDetail(props: Props) {
                   borderColor: colors.borderSubtle,
                 }
               : {
-                  maxHeight: '88%',
+                  maxHeight: '90%',
                   borderTopLeftRadius: radius.sheet,
                   borderTopRightRadius: radius.sheet,
                   borderCurve: 'continuous',

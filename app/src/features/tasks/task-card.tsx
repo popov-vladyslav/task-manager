@@ -26,6 +26,7 @@ interface Props {
   onToggle: () => void;
   onOpen: () => void;
   showGrip?: boolean;
+  onDrag?: () => void; // long-press the grip to start a reorder drag
 }
 
 function Badge({ icon, text, color }: { icon: ReactNode; text: string; color: string }) {
@@ -37,7 +38,7 @@ function Badge({ icon, text, color }: { icon: ReactNode; text: string; color: st
   );
 }
 
-function TaskCardBase({ task, context, onToggle, onOpen, showGrip }: Props) {
+function TaskCardBase({ task, context, onToggle, onOpen, showGrip, onDrag }: Props) {
   const color = context?.color ?? colors.textMuted;
   const due = shortDate(task.dueAt);
   const remind = shortTime(task.remindAt);
@@ -65,9 +66,15 @@ function TaskCardBase({ task, context, onToggle, onOpen, showGrip }: Props) {
       }}
     >
       {showGrip ? (
-        <View style={{ marginTop: 4 }}>
-          <GripVertical size={14} color={colors.textFaint} />
-        </View>
+        <Pressable
+          onLongPress={onDrag}
+          delayLongPress={180}
+          hitSlop={10}
+          accessibilityLabel="Drag to reorder"
+          style={{ marginTop: 3, paddingRight: 2 }}
+        >
+          <GripVertical size={16} color={colors.textFaint} />
+        </Pressable>
       ) : null}
 
       <Pressable

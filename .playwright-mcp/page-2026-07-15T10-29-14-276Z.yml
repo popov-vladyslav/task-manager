@@ -1,8 +1,0 @@
-- generic [ref=f1e11]:
-  - generic [ref=f1e12]: LOG
-  - generic [ref=f1e13]: Sign in with a magic link
-  - textbox "you@example.com" [ref=f1e14]: vladyslav.popov.94@gmail.com
-  - generic [active] [ref=f1e15] [cursor=pointer]: Send magic link
-  - generic [ref=f1e18]: Link sent. Open it, or paste the token below (in dev it's printed to the server console).
-  - textbox "Paste sign-in token" [ref=f1e19]
-  - generic: Sign in

@@ -1,4 +1,5 @@
 import type {
+  Comment,
   Context,
   CreateTaskInput,
   ReorderInput,
@@ -81,4 +82,8 @@ export const api = {
   deleteTask: (id: string) => request<void>(`/api/tasks/${id}`, { method: 'DELETE' }),
   reorderTask: (id: string, input: ReorderInput) =>
     request<Task>(`/api/tasks/${id}/reorder`, { method: 'POST', body: input }),
+  listComments: (taskId: string) => request<Comment[]>(`/api/tasks/${taskId}/comments`),
+  addComment: (taskId: string, body: string) =>
+    request<Comment>(`/api/tasks/${taskId}/comments`, { method: 'POST', body: { body } }),
+  deleteComment: (id: string) => request<void>(`/api/comments/${id}`, { method: 'DELETE' }),
 };

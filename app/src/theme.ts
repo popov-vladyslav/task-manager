@@ -26,6 +26,16 @@ export function shortTime(iso: string | null): string | null {
   return new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
 }
 
+export function shortDateTime(iso: string | null): string | null {
+  if (!iso) return null;
+  return new Date(iso).toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
+
 // "2026-08-01" -> "Aug 1"
 export function nextInstanceLabel(date: string | null): string | null {
   if (!date) return null;

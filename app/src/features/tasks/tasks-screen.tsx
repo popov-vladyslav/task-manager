@@ -8,8 +8,8 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { FlashList } from '@shopify/flash-list';
 import { CalendarDays, ChevronRight, ListTodo, Plus, RotateCcw, X } from 'lucide-react-native';
+import { DraggableTaskList } from './draggable-task-list';
 import type { Context, Task } from '@task-manager/shared';
 import { colors, headerDate, monoFont } from '../../theme';
 import { useTasksStore } from '../../store/tasks';
@@ -36,6 +36,7 @@ export function TasksScreen() {
     toggleComplete,
     patchTask,
     removeTask,
+    reorder,
   } = useTasksStore();
 
   const [selected, setSelected] = useState<Task | null>(null);
@@ -95,31 +96,29 @@ export function TasksScreen() {
     if (created) setSelected(created); // open detail to configure, per the design
   };
 
-  const list = (
-    <FlashList
-      data={visible}
-      keyExtractor={(t) => t.id}
-      renderItem={({ item }) => (
-        <TaskCard
-          task={item}
-          context={item.contextId != null ? contextById.get(item.contextId) : undefined}
-          onToggle={() => onToggle(item)}
-          onOpen={() => setSelected(item)}
-          showGrip={!wide}
-        />
-      )}
-      contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 24 }}
-      ListEmptyComponent={
-        loading ? (
-          <ActivityIndicator color={colors.accentPrimary} style={{ marginTop: 40 }} />
-        ) : (
-          <Text style={{ color: colors.textMuted, textAlign: 'center', marginTop: 40 }}>
-            No open tasks
-          </Text>
-        )
-      }
-    />
-  );
+  const list =
+    loading && visible.length === 0 ? (
+      <ActivityIndicator color={colors.accentPrimary} style={{ marginTop: 40 }} />
+    ) : visible.length === 0 ? (
+      <Text style={{ color: colors.textMuted, textAlign: 'center', marginTop: 40 }}>No open tasks</Text>
+    ) : (
+      <DraggableTaskList
+        tasks={visible}
+        onReorder={(movedId, afterId, beforeId) =>
+          reorder(movedId, afterId, beforeId, activeContextId == null ? 'global' : 'context')
+        }
+        renderCard={(item, drag) => (
+          <TaskCard
+            task={item}
+            context={item.contextId != null ? contextById.get(item.contextId) : undefined}
+            onToggle={() => onToggle(item)}
+            onOpen={() => setSelected(item)}
+            showGrip={!wide}
+            onDrag={drag}
+          />
+        )}
+      />
+    );
 
   const addRow = adding ? (
     <View

@@ -38,6 +38,7 @@ function rowToTask(r: Row): Task {
     commentsCount: Number(r.commentsCount ?? 0),
     photosCount: Number(r.photosCount ?? 0),
     nextInstance: r.rule ? computeNext(r.rule) : null,
+    recurrenceRule: r.rule,
   });
 }
 
@@ -116,6 +117,12 @@ export async function createTask(input: CreateTaskInput): Promise<Task> {
 }
 
 export async function updateTask(id: string, patch: UpdateTaskInput): Promise<Task> {
+  const [cur] = await db
+    .select({ recurrenceId: tasks.recurrenceId, title: tasks.title, contextId: tasks.contextId })
+    .from(tasks)
+    .where(eq(tasks.id, id));
+  if (!cur) throw notFound('Task not found');
+
   const set: Partial<typeof tasks.$inferInsert> = {};
   if (patch.title !== undefined) set.title = patch.title;
   if (patch.contextId !== undefined) set.contextId = patch.contextId;
@@ -134,11 +141,47 @@ export async function updateTask(id: string, patch: UpdateTaskInput): Promise<Ta
     }
   }
 
-  if (Object.keys(set).length === 0) return getTask(id);
+  // Recurrence: create/update the linked rule, or unlink (and drop the orphan).
+  let orphanRuleId: string | null = null;
+  if (patch.recurrence !== undefined) {
+    if (patch.recurrence === null) {
+      if (cur.recurrenceId) {
+        set.recurrenceId = null;
+        orphanRuleId = cur.recurrenceId;
+      }
+    } else if (cur.recurrenceId) {
+      await db
+        .update(recurrenceRules)
+        .set({
+          rule: patch.recurrence.rule,
+          remindTime: patch.recurrence.remindTime ?? null,
+          dueOffsetD: patch.recurrence.dueOffsetDays ?? 0,
+        })
+        .where(eq(recurrenceRules.id, cur.recurrenceId));
+    } else {
+      const [rule] = await db
+        .insert(recurrenceRules)
+        .values({
+          title: patch.title ?? cur.title,
+          contextId: patch.contextId !== undefined ? patch.contextId : cur.contextId,
+          rule: patch.recurrence.rule,
+          remindTime: patch.recurrence.remindTime ?? null,
+          dueOffsetD: patch.recurrence.dueOffsetDays ?? 0,
+        })
+        .returning();
+      set.recurrenceId = rule.id;
+    }
+  }
 
-  const [row] = await db.update(tasks).set(set).where(eq(tasks.id, id)).returning({ id: tasks.id });
-  if (!row) throw notFound('Task not found');
-  return getTask(row.id);
+  if (Object.keys(set).length > 0) {
+    await db.update(tasks).set(set).where(eq(tasks.id, id));
+  }
+  // Delete the rule only after the task no longer references it (FK).
+  if (orphanRuleId) {
+    await db.delete(recurrenceRules).where(eq(recurrenceRules.id, orphanRuleId));
+  }
+
+  return getTask(id);
 }
 
 export async function deleteTask(id: string): Promise<void> {

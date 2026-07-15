@@ -19,6 +19,7 @@ export interface TaskExtras {
   commentsCount: number;
   photosCount: number;
   nextInstance: string | null;
+  recurrenceRule: string | null;
 }
 
 export function toTask(r: InferSelectModel<typeof tasks>, extras: TaskExtras): Task {
@@ -32,6 +33,7 @@ export function toTask(r: InferSelectModel<typeof tasks>, extras: TaskExtras): T
     sortGlobal: r.sortGlobal,
     sortContext: r.sortContext,
     recurrenceId: r.recurrenceId ?? null,
+    recurrenceRule: extras.recurrenceRule,
     completedAt: iso(r.completedAt),
     createdAt: r.createdAt.toISOString(),
     createdVia: r.createdVia,

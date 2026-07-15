@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import type { TaskStatus } from '@task-manager/shared';
 import * as svc from '../services/tasks';
+import * as commentsSvc from '../services/comments';
 
 const router = Router();
 
@@ -26,6 +27,7 @@ const updateSchema = z.object({
   dueAt: z.string().nullable().optional(),
   remindAt: z.string().nullable().optional(),
   completed: z.boolean().optional(),
+  recurrence: recurrenceSchema.nullish(),
 });
 
 const reorderSchema = z.object({
@@ -62,6 +64,16 @@ router.delete('/:id', async (req, res) => {
 
 router.post('/:id/reorder', async (req, res) => {
   res.json(await svc.reorderTask(req.params.id, reorderSchema.parse(req.body)));
+});
+
+// ---- comments ----
+router.get('/:id/comments', async (req, res) => {
+  res.json(await commentsSvc.listComments(req.params.id));
+});
+
+router.post('/:id/comments', async (req, res) => {
+  const { body } = z.object({ body: z.string().min(1) }).parse(req.body);
+  res.status(201).json(await commentsSvc.addComment(req.params.id, body));
 });
 
 export default router;

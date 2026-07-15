@@ -25,6 +25,7 @@ export interface Task {
   sortGlobal: number;
   sortContext: number;
   recurrenceId: string | null;
+  recurrenceRule: string | null; // e.g. 'daily' | 'weekly:mon' | 'monthly:15'
   completedAt: string | null;
   createdAt: string;
   createdVia: CreatedVia;
@@ -55,6 +56,11 @@ export interface UpdateTaskInput {
   dueAt?: string | null;
   remindAt?: string | null;
   completed?: boolean; // true => run complete-logic
+  recurrence?: RecurrenceInput | null; // set/change a rule, or null to remove
+}
+
+export interface CreateCommentInput {
+  body: string;
 }
 
 export interface ReorderInput {
