@@ -1,0 +1,15 @@
+{
+  "name": "task-manager",
+  "version": "0.0.0",
+  "private": true,
+  "workspaces": [
+    "packages/*",
+    "server",
+    "app"
+  ],
+  "scripts": {
+    "server": "npm --workspace server run dev",
+    "db:migrate": "npm --workspace server run db:migrate",
+    "db:seed": "npm --workspace server run db:seed"
+  }
+}

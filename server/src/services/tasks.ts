@@ -1,0 +1,167 @@
+import { and, asc, eq, ne, sql } from 'drizzle-orm';
+import type {
+  CreateTaskInput,
+  ReorderInput,
+  Task,
+  TaskStatus,
+  UpdateTaskInput,
+} from '@task-manager/shared';
+import { db } from '../db/client';
+import { tasks, recurrenceRules } from '../db/schema';
+import { toTask } from '../db/mappers';
+import { between } from '../lib/frac-index';
+import { nextInstance as computeNext } from '../lib/recurrence';
+import { badRequest, notFound } from '../lib/errors';
+
+interface ListFilter {
+  contextId?: number;
+  status?: TaskStatus;
+}
+
+// Task columns + derived comment/photo counts + the linked recurrence rule.
+const selection = {
+  task: tasks,
+  rule: recurrenceRules.rule,
+  commentsCount: sql<number>`(select count(*)::int from comments c where c.task_id = ${tasks.id})`,
+  photosCount: sql<number>`(select count(*)::int from photos p where p.task_id = ${tasks.id})`,
+};
+
+type Row = {
+  task: typeof tasks.$inferSelect;
+  rule: string | null;
+  commentsCount: number;
+  photosCount: number;
+};
+
+function rowToTask(r: Row): Task {
+  return toTask(r.task, {
+    commentsCount: Number(r.commentsCount ?? 0),
+    photosCount: Number(r.photosCount ?? 0),
+    nextInstance: r.rule ? computeNext(r.rule) : null,
+  });
+}
+
+export async function listTasks(filter: ListFilter): Promise<Task[]> {
+  const conds = [];
+  if (filter.contextId != null) conds.push(eq(tasks.contextId, filter.contextId));
+  if (filter.status) conds.push(eq(tasks.status, filter.status));
+  else conds.push(ne(tasks.status, 'done')); // default: open tasks only
+
+  // "All" orders by sort_global; a single context orders by sort_context.
+  const order = filter.contextId != null ? tasks.sortContext : tasks.sortGlobal;
+
+  const rows = await db
+    .select(selection)
+    .from(tasks)
+    .leftJoin(recurrenceRules, eq(tasks.recurrenceId, recurrenceRules.id))
+    .where(and(...conds))
+    .orderBy(asc(order), asc(tasks.createdAt));
+
+  return rows.map(rowToTask);
+}
+
+export async function getTask(id: string): Promise<Task> {
+  const rows = await db
+    .select(selection)
+    .from(tasks)
+    .leftJoin(recurrenceRules, eq(tasks.recurrenceId, recurrenceRules.id))
+    .where(eq(tasks.id, id));
+  if (!rows[0]) throw notFound('Task not found');
+  return rowToTask(rows[0]);
+}
+
+export async function createTask(input: CreateTaskInput): Promise<Task> {
+  const title = input.title?.trim();
+  if (!title) throw badRequest('Title is required');
+  const contextId = input.contextId ?? null;
+
+  // New task goes to the top of both the global and the context scope.
+  const [mins] = await db
+    .select({
+      ming: sql<number>`coalesce(min(${tasks.sortGlobal}), 1)`,
+      minc: sql<number>`coalesce(min(${tasks.sortContext}) filter (where ${tasks.contextId} is not distinct from ${contextId}), 1)`,
+    })
+    .from(tasks);
+
+  let recurrenceId: string | null = null;
+  if (input.recurrence) {
+    const [rule] = await db
+      .insert(recurrenceRules)
+      .values({
+        title,
+        contextId,
+        rule: input.recurrence.rule,
+        remindTime: input.recurrence.remindTime ?? null,
+        dueOffsetD: input.recurrence.dueOffsetDays ?? 0,
+      })
+      .returning();
+    recurrenceId = rule.id;
+  }
+
+  const [row] = await db
+    .insert(tasks)
+    .values({
+      title,
+      contextId,
+      dueAt: input.dueAt ? new Date(input.dueAt) : null,
+      remindAt: input.remindAt ? new Date(input.remindAt) : null,
+      sortGlobal: Number(mins.ming) - 1,
+      sortContext: Number(mins.minc) - 1,
+      recurrenceId,
+      createdVia: 'app',
+    })
+    .returning();
+
+  return getTask(row.id);
+}
+
+export async function updateTask(id: string, patch: UpdateTaskInput): Promise<Task> {
+  const set: Partial<typeof tasks.$inferInsert> = {};
+  if (patch.title !== undefined) set.title = patch.title;
+  if (patch.contextId !== undefined) set.contextId = patch.contextId;
+  if (patch.status !== undefined) set.status = patch.status;
+  if (patch.dueAt !== undefined) set.dueAt = patch.dueAt ? new Date(patch.dueAt) : null;
+  if (patch.remindAt !== undefined) set.remindAt = patch.remindAt ? new Date(patch.remindAt) : null;
+
+  // { completed: true } runs the complete-logic (spec §3).
+  if (patch.completed !== undefined) {
+    if (patch.completed) {
+      set.status = 'done';
+      set.completedAt = new Date();
+    } else {
+      set.status = 'active';
+      set.completedAt = null;
+    }
+  }
+
+  if (Object.keys(set).length === 0) return getTask(id);
+
+  const [row] = await db.update(tasks).set(set).where(eq(tasks.id, id)).returning({ id: tasks.id });
+  if (!row) throw notFound('Task not found');
+  return getTask(row.id);
+}
+
+export async function deleteTask(id: string): Promise<void> {
+  const [row] = await db.delete(tasks).where(eq(tasks.id, id)).returning({ id: tasks.id });
+  if (!row) throw notFound('Task not found');
+}
+
+export async function reorderTask(id: string, input: ReorderInput): Promise<Task> {
+  const col = input.scope === 'context' ? tasks.sortContext : tasks.sortGlobal;
+
+  const neighborSort = async (nid?: string | null): Promise<number | null> => {
+    if (!nid) return null;
+    const [n] = await db.select({ s: col }).from(tasks).where(eq(tasks.id, nid));
+    return n ? n.s : null;
+  };
+
+  const after = await neighborSort(input.afterId);
+  const before = await neighborSort(input.beforeId);
+  const newSort = between(after, before);
+
+  const set: Partial<typeof tasks.$inferInsert> =
+    input.scope === 'context' ? { sortContext: newSort } : { sortGlobal: newSort };
+  const [row] = await db.update(tasks).set(set).where(eq(tasks.id, id)).returning({ id: tasks.id });
+  if (!row) throw notFound('Task not found');
+  return getTask(row.id);
+}

@@ -1,0 +1,62 @@
+- generic [ref=f1e1]:
+  - generic [ref=f1e22]:
+    - generic [ref=f1e23]:
+      - generic [ref=f1e168]:
+        - generic [ref=f1e169]: LOG
+        - generic [ref=f1e170]: WED, JUL 15
+      - generic [ref=f1e171] [cursor=pointer]: Tasks
+      - generic [ref=f1e176] [cursor=pointer]: Routine
+      - generic [ref=f1e181] [cursor=pointer]: Calendar
+      - generic [ref=f1e185]: CONTEXTS
+      - generic [ref=f1e186] [cursor=pointer]:
+        - generic [ref=f1e188]: All
+        - generic [ref=f1e189]: "2"
+      - generic [ref=f1e190] [cursor=pointer]:
+        - generic [ref=f1e192]: ZT
+        - generic [ref=f1e193]: "0"
+      - generic [ref=f1e194] [cursor=pointer]:
+        - generic [ref=f1e196]: DA
+        - generic [ref=f1e197]: "0"
+      - generic [ref=f1e198] [cursor=pointer]:
+        - generic [ref=f1e200]: Cairn
+        - generic [ref=f1e201]: "0"
+      - generic [ref=f1e202] [cursor=pointer]:
+        - generic [ref=f1e204]: Zalando
+        - generic [ref=f1e205]: "0"
+      - generic [ref=f1e206] [cursor=pointer]:
+        - generic [ref=f1e208]: Home
+        - generic [ref=f1e209]: "0"
+      - generic [ref=f1e211] [cursor=pointer]: Sign out
+    - generic [ref=f1e213]:
+      - generic [ref=f1e214]:
+        - generic [ref=f1e215]: All tasks
+        - generic [ref=f1e262] [cursor=pointer]: Task
+      - generic [ref=f1e223]:
+        - generic [ref=f1e245] [cursor=pointer]:
+          - checkbox "Complete New task" [ref=f1e246]
+          - generic [ref=f1e247]: New task
+        - generic [ref=f1e266] [cursor=pointer]:
+          - checkbox "Complete Review octopus PR" [ref=f1e267]
+          - generic [ref=f1e268]: Review octopus PR
+  - dialog [ref=f1e274]:
+    - generic [ref=f1e279] [cursor=pointer]:
+      - textbox [ref=f1e281]: Review octopus PR
+      - generic [ref=f1e286]:
+        - generic [ref=f1e287]: Context
+        - generic [ref=f1e288]:
+          - generic [ref=f1e289]: ZT
+          - generic [ref=f1e291]: DA
+          - generic [ref=f1e293]: Cairn
+          - generic [ref=f1e295]: Zalando
+          - generic [ref=f1e297]: Home
+      - generic [ref=f1e299]:
+        - generic [ref=f1e300]:
+          - generic [ref=f1e301]: Deadline
+          - generic [ref=f1e302]: —
+        - generic [ref=f1e307]:
+          - generic [ref=f1e308]: Reminder
+          - generic [ref=f1e309]: —
+      - generic [ref=f1e314]:
+        - generic [ref=f1e315]: Repeat
+        - generic [ref=f1e316]: No repeat
+      - generic [ref=f1e323]: Delete task

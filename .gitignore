@@ -1,0 +1,18 @@
+# deps
+node_modules/
+
+# env / secrets
+.env
+.env.*
+!.env.example
+
+# builds
+dist/
+build/
+web-build/
+.expo/
+expo-env.d.ts
+
+# misc
+*.log
+.DS_Store

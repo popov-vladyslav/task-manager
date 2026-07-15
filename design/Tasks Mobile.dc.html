@@ -1,0 +1,936 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  html,body{margin:0;padding:0}
+  body{background:#0B0E13;font-family:'Inter',-apple-system,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+  a{color:#E8A33D;text-decoration:none}
+  a:hover{color:#f0b662}
+  *{box-sizing:border-box}
+  ::-webkit-scrollbar{width:0;height:0}
+  @keyframes logpulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.35;transform:scale(.8)}}
+  @keyframes sheetup{from{transform:translateY(100%)}to{transform:translateY(0)}}
+  @keyframes fadein{from{opacity:0}to{opacity:1}}
+  @keyframes toastin{from{opacity:0;transform:translate(-50%,8px)}to{opacity:1;transform:translate(-50%,0)}}
+</style>
+</helmet>
+
+<div style="min-height:100vh;display:flex;align-items:flex-start;justify-content:center;padding:24px 16px;background:#0B0E13">
+  <div style="position:relative;width:100%;max-width:390px;height:800px;border-radius:38px;overflow:hidden;display:flex;flex-direction:column;background:#14181F;box-shadow:0 0 0 9px #05060A,0 0 0 10px #1a1e26,0 24px 70px rgba(0,0,0,.6)">
+
+    <!-- notch / status region -->
+    <div style="position:relative;height:34px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:0 22px">
+      <span style="font:600 12px 'JetBrains Mono',monospace;color:#EDEFF3">9:41</span>
+      <div style="position:absolute;left:50%;top:9px;transform:translateX(-50%);width:96px;height:22px;border-radius:14px;background:#05060A"></div>
+      <span style="font:500 11px 'JetBrains Mono',monospace;color:#8B93A3;letter-spacing:.05em">▪▪▪ ▾ 84%</span>
+    </div>
+
+    <!-- ============ LOGIN SCREEN ============ -->
+    <sc-if value="{{ notAuthed }}" hint-placeholder-val="">
+    <div style="flex:1;display:flex;flex-direction:column;justify-content:center;padding:0 34px 60px">
+      <p style="text-align:center;margin:0 0 6px;font:600 15px 'JetBrains Mono',monospace;letter-spacing:.42em;text-transform:uppercase;color:#E8A33D">Log</p>
+      <p style="text-align:center;margin:0 0 40px;font-size:12px;color:#5A6272">Персональний таск-менеджер</p>
+
+      <sc-if value="{{ loginForm }}" hint-placeholder-val="{{ true }}">
+        <p style="margin:0 0 8px;font:500 10.5px 'JetBrains Mono',monospace;text-transform:uppercase;letter-spacing:.13em;color:#5A6272">Email</p>
+        <input value="{{ loginEmail }}" onInput="{{ onLoginEmail }}" onKeyDown="{{ onMagicKey }}" placeholder="you@example.com" type="email" style="width:100%;background:#1C222C;border:1px solid #262D39;border-radius:12px;padding:13px 14px;font-size:14px;color:#EDEFF3;outline:none;font-family:inherit;margin-bottom:12px">
+        <button onClick="{{ sendMagic }}" style="width:100%;border-radius:12px;padding:13px;font-size:14px;font-weight:600;background:#E8A33D;color:#14181F;border:none;cursor:pointer">Send magic link</button>
+
+        <div style="display:flex;align-items:center;gap:12px;margin:22px 0">
+          <div style="flex:1;height:1px;background:#262D39"></div>
+          <span style="font:500 10px 'JetBrains Mono',monospace;text-transform:uppercase;letter-spacing:.13em;color:#3A4150">або</span>
+          <div style="flex:1;height:1px;background:#262D39"></div>
+        </div>
+
+        <sc-if value="{{ pinClosed }}" hint-placeholder-val="{{ true }}">
+          <button onClick="{{ openPin }}" style="width:100%;border-radius:12px;padding:12px;font-size:13.5px;font-weight:500;background:#1C222C;color:#B8BFCC;border:1px solid #262D39;cursor:pointer">Enter with PIN</button>
+        </sc-if>
+        <sc-if value="{{ pinOpen }}" hint-placeholder-val="">
+          <p style="margin:0 0 10px;text-align:center;font:500 10.5px 'JetBrains Mono',monospace;text-transform:uppercase;letter-spacing:.13em;color:#5A6272">Введіть PIN</p>
+          <div onClick="{{ focusPin }}" style="position:relative;display:flex;gap:8px;justify-content:center">
+            <sc-for list="{{ pinCells }}" as="d" hint-placeholder-count="6">
+              <div style="{{ d.style }}">{{ d.char }}</div>
+            </sc-for>
+            <input value="{{ pin }}" onInput="{{ onPin }}" inputmode="numeric" maxlength="6" style="position:absolute;inset:0;opacity:0;cursor:pointer;font-family:inherit" autofocus="true">
+          </div>
+        </sc-if>
+      </sc-if>
+
+      <sc-if value="{{ loginSent }}" hint-placeholder-val="">
+        <div style="text-align:center">
+          <div style="width:52px;height:52px;border-radius:16px;margin:0 auto 16px;display:flex;align-items:center;justify-content:center;background:rgba(232,163,61,.14);border:1px solid rgba(232,163,61,.3)">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#E8A33D" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 5L2 7"/></svg>
+          </div>
+          <h2 style="margin:0 0 6px;font-size:18px;font-weight:600;color:#EDEFF3">Check your inbox</h2>
+          <p style="margin:0 0 4px;font-size:13px;color:#8B93A3">Ми надіслали magic link на</p>
+          <p style="margin:0 0 24px;font:500 13px 'JetBrains Mono',monospace;color:#EDEFF3">{{ loginEmail }}</p>
+          <button onClick="{{ enterDemo }}" style="width:100%;border-radius:12px;padding:12px;font-size:13.5px;font-weight:600;background:#E8A33D;color:#14181F;border:none;cursor:pointer;margin-bottom:14px">Відкрити застосунок →</button>
+          <button onClick="{{ resend }}" style="background:none;border:none;font-size:12.5px;color:#5A6272;cursor:pointer">Resend</button>
+        </div>
+      </sc-if>
+    </div>
+    </sc-if>
+
+    <!-- ============ TASKS TAB ============ -->
+    <sc-if value="{{ isTasks }}" hint-placeholder-val="{{ true }}">
+    <!-- header -->
+    <div style="padding:8px 20px 12px;flex:none;display:flex;align-items:flex-start;justify-content:space-between">
+      <div>
+        <p style="margin:0;font:500 10.5px 'JetBrains Mono',monospace;text-transform:uppercase;letter-spacing:.15em;color:#5A6272">Log — {{ dateLabel }}</p>
+        <h1 style="margin:2px 0 0;font-size:22px;font-weight:600;letter-spacing:-.02em;color:#EDEFF3">{{ headline }}</h1>
+      </div>
+      <button onClick="{{ openSettings }}" style="flex:none;margin-top:2px;width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;background:#1C222C;border:1px solid #262D39;cursor:pointer">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#8B93A3" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      </button>
+    </div>
+
+    <!-- context chips -->
+    <div style="display:flex;gap:8px;padding:0 20px 12px;overflow-x:auto;flex:none">
+      <sc-for list="{{ chips }}" as="chip" hint-placeholder-count="6">
+        <button onClick="{{ chip.onClick }}" style="{{ chip.style }}">
+          <span>{{ chip.label }}</span>
+          <span style="{{ chip.countStyle }}">{{ chip.count }}</span>
+        </button>
+      </sc-for>
+    </div>
+
+    <!-- task list -->
+    <div style="flex:1 1 auto;min-height:0;overflow-y:auto;padding:2px 16px 8px">
+      <sc-for list="{{ tasks }}" as="t" hint-placeholder-count="6">
+        <div onClick="{{ t.onOpen }}" style="{{ t.cardStyle }}">
+          <div style="align-self:center;flex:none;color:#3A4150;display:flex;cursor:grab">
+            <svg width="14" height="20" viewBox="0 0 12 18" fill="currentColor"><circle cx="4" cy="3" r="1.7"/><circle cx="4" cy="9" r="1.7"/><circle cx="4" cy="15" r="1.7"/><circle cx="8" cy="3" r="1.7"/><circle cx="8" cy="9" r="1.7"/><circle cx="8" cy="15" r="1.7"/></svg>
+          </div>
+          <button onClick="{{ t.onToggle }}" style="margin-top:1px;flex:none;width:22px;height:22px;border-radius:50%;border:1.5px solid #3A4150;background:transparent;cursor:pointer"></button>
+          <div style="flex:1;min-width:0">
+            <p style="margin:0;font-size:14px;line-height:1.35;color:#EDEFF3">{{ t.title }}</p>
+            <div style="display:flex;align-items:center;gap:8px;margin-top:7px;flex-wrap:wrap">
+              <span style="{{ t.ctxBadgeStyle }}">{{ t.context }}</span>
+              <sc-if value="{{ t.due }}" hint-placeholder-val="">
+                <span style="display:inline-flex;align-items:center;gap:4px;font-size:10px;color:#8B93A3">
+                  <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>{{ t.due }}
+                </span>
+              </sc-if>
+              <sc-if value="{{ t.remind }}" hint-placeholder-val="">
+                <span style="display:inline-flex;align-items:center;gap:4px;font-size:10px;color:#9B7EDE">
+                  <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>{{ t.remind }}
+                </span>
+              </sc-if>
+              <sc-if value="{{ t.recurring }}" hint-placeholder-val="">
+                <span style="display:inline-flex;align-items:center;gap:4px;font-size:10px;color:#5A6272">
+                  <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>{{ t.next }}
+                </span>
+              </sc-if>
+              <sc-if value="{{ t.hasComments }}" hint-placeholder-val="">
+                <span style="display:inline-flex;align-items:center;gap:4px;font-size:10px;color:#5A6272">
+                  <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>{{ t.commentsCount }}
+                </span>
+              </sc-if>
+              <sc-if value="{{ t.hasPhotos }}" hint-placeholder-val="">
+                <span style="display:inline-flex;align-items:center;gap:4px;font-size:10px;color:#5A6272">
+                  <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>{{ t.photos }}
+                </span>
+              </sc-if>
+            </div>
+          </div>
+          <button onClick="{{ t.onTimer }}" style="{{ t.playStyle }}">
+            <sc-if value="{{ t.isRunning }}" hint-placeholder-val="">
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="#14181F"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>
+            </sc-if>
+            <sc-if value="{{ t.notRunning }}" hint-placeholder-val="{{ true }}">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="#8B93A3" style="margin-left:1px"><polygon points="6 4 20 12 6 20 6 4"/></svg>
+            </sc-if>
+          </button>
+        </div>
+      </sc-for>
+      <div style="height:4px"></div>
+    </div>
+    </sc-if>
+
+    <!-- ============ ROUTINE TAB ============ -->
+    <sc-if value="{{ isRoutine }}" hint-placeholder-val="">
+    <div style="padding:8px 20px 14px;flex:none">
+      <p style="margin:0;font:500 10.5px 'JetBrains Mono',monospace;text-transform:uppercase;letter-spacing:.15em;color:#5A6272">Routine — {{ dateLabel }}</p>
+      <h1 style="margin:2px 0 12px;font-size:22px;font-weight:600;letter-spacing:-.02em;color:#EDEFF3">Денний чеклист</h1>
+      <div style="display:flex;align-items:center;gap:10px">
+        <div style="flex:1;height:6px;border-radius:999px;background:#1C222C;overflow:hidden">
+          <div style="{{ routineBarStyle }}"></div>
+        </div>
+        <span style="font:500 11px 'JetBrains Mono',monospace;color:#4FB6A9;white-space:nowrap">{{ routineProgress }}</span>
+      </div>
+    </div>
+    <div style="flex:1 1 auto;min-height:0;overflow-y:auto;padding:2px 16px 8px">
+      <sc-for list="{{ routine }}" as="r" hint-placeholder-count="7">
+        <div style="display:flex;align-items:center;gap:11px;border-radius:12px;padding:12px 12px;margin-bottom:8px;background:#1C222C">
+          <button onClick="{{ r.onToggle }}" style="{{ r.checkStyle }}">
+            <sc-if value="{{ r.done }}" hint-placeholder-val="">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#0B0E13" stroke-width="3.2"><polyline points="20 6 9 17 4 12"/></svg>
+            </sc-if>
+          </button>
+          <span style="{{ r.labelStyle }}">{{ r.label }}</span>
+          <span style="font:500 11px 'JetBrains Mono',monospace;color:#5A6272;flex:none">{{ r.time }}</span>
+        </div>
+      </sc-for>
+      <p style="margin:12px 4px 4px;display:flex;align-items:center;gap:6px;font-size:11px;color:#3A4150">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+        Скидається щодня о 00:00
+      </p>
+    </div>
+    </sc-if>
+
+    <!-- ============ CALENDAR TAB ============ -->
+    <sc-if value="{{ isCalendar }}" hint-placeholder-val="">
+    <div style="padding:8px 20px 10px;flex:none">
+      <p style="margin:0;font:500 10.5px 'JetBrains Mono',monospace;text-transform:uppercase;letter-spacing:.15em;color:#5A6272">Calendar — Jul 2026</p>
+      <h1 style="margin:2px 0 12px;font-size:22px;font-weight:600;letter-spacing:-.02em;color:#EDEFF3">{{ calTitle }}</h1>
+      <div style="display:flex;gap:6px">
+        <sc-for list="{{ calModes }}" as="m" hint-placeholder-count="4">
+          <button onClick="{{ m.onClick }}" style="{{ m.style }}">{{ m.label }}</button>
+        </sc-for>
+      </div>
+    </div>
+
+    <!-- timeline modes -->
+    <sc-if value="{{ calTimeline }}" hint-placeholder-val="{{ true }}">
+    <div style="flex:1 1 auto;min-height:0;overflow-y:auto;overflow-x:hidden;padding:0 14px 10px">
+      <div style="display:flex;position:relative;width:100%">
+        <!-- hour gutter -->
+        <div style="width:34px;flex:none;position:relative;padding-top:20px">
+          <sc-for list="{{ calHours }}" as="h" hint-placeholder-count="15">
+            <div style="height:42px;position:relative">
+              <span style="position:absolute;top:-6px;right:6px;font:500 9px 'JetBrains Mono',monospace;color:#5A6272">{{ h }}</span>
+            </div>
+          </sc-for>
+        </div>
+        <!-- day columns -->
+        <sc-for list="{{ calColumns }}" as="col" hint-placeholder-count="1">
+          <div style="{{ col.wrapStyle }}">
+            <div style="{{ col.headStyle }}">
+              <span style="font:500 9px 'JetBrains Mono',monospace;text-transform:uppercase;color:#8B93A3">{{ col.dow }}</span>
+              <span style="{{ col.numStyle }}">{{ col.num }}</span>
+            </div>
+            <div onClick="{{ col.onEmpty }}" style="position:relative;height:630px;cursor:pointer">
+              <sc-for list="{{ calGrid }}" as="g" hint-placeholder-count="15">
+                <div style="{{ g.lineStyle }}"></div>
+              </sc-for>
+              <sc-for list="{{ col.events }}" as="ev" hint-placeholder-count="0">
+                <div style="{{ ev.style }}">
+                  <span style="font-size:10px;font-weight:600;line-height:1.2;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">{{ ev.title }}</span>
+                  <span style="font:500 8.5px 'JetBrains Mono',monospace;opacity:.8">{{ ev.time }}</span>
+                </div>
+              </sc-for>
+              <sc-if value="{{ col.isToday }}" hint-placeholder-val="">
+                <div style="{{ nowLineStyle }}">
+                  <div style="position:absolute;left:-3px;top:-3px;width:7px;height:7px;border-radius:50%;background:#D9668B"></div>
+                </div>
+              </sc-if>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+    </sc-if>
+
+    <!-- month mode -->
+    <sc-if value="{{ calMonth }}" hint-placeholder-val="">
+    <div style="flex:1 1 auto;min-height:0;overflow-y:auto;padding:0 16px 10px">
+      <div style="display:grid;grid-template-columns:repeat(7,1fr);margin-bottom:6px">
+        <sc-for list="{{ calDows }}" as="d" hint-placeholder-count="7">
+          <span style="text-align:center;font:500 9px 'JetBrains Mono',monospace;text-transform:uppercase;color:#5A6272">{{ d }}</span>
+        </sc-for>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px">
+        <sc-for list="{{ calCells }}" as="c" hint-placeholder-count="35">
+          <button onClick="{{ c.onClick }}" style="{{ c.style }}">
+            <span style="{{ c.numStyle }}">{{ c.num }}</span>
+            <div style="display:flex;gap:3px;justify-content:center;margin-top:4px;height:5px">
+              <sc-for list="{{ c.dots }}" as="dot" hint-placeholder-count="0">
+                <div style="{{ dot }}"></div>
+              </sc-for>
+            </div>
+          </button>
+        </sc-for>
+      </div>
+    </div>
+    </sc-if>
+    </sc-if>
+
+    <!-- ============ SETTINGS SCREEN ============ -->
+    <sc-if value="{{ isSettings }}" hint-placeholder-val="">
+    <div style="padding:8px 16px 10px;flex:none;display:flex;align-items:center;gap:12px">
+      <button onClick="{{ closeSettings }}" style="flex:none;width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;background:#1C222C;border:1px solid #262D39;cursor:pointer">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#8B93A3" stroke-width="2.2"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+      </button>
+      <h1 style="margin:0;font-size:20px;font-weight:600;letter-spacing:-.02em;color:#EDEFF3">Settings</h1>
+    </div>
+    <div style="flex:1 1 auto;min-height:0;overflow-y:auto;padding:6px 16px 20px">
+
+      <!-- Account -->
+      <p style="margin:8px 4px 8px;font:500 10.5px 'JetBrains Mono',monospace;text-transform:uppercase;letter-spacing:.13em;color:#5A6272">Account</p>
+      <div style="border-radius:14px;padding:14px;background:#171C24;margin-bottom:20px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+          <span style="font-size:12px;color:#5A6272">Увійшли як</span>
+          <span style="font:500 12px 'JetBrains Mono',monospace;color:#8B93A3">{{ acctEmail }}</span>
+        </div>
+        <button onClick="{{ logout }}" style="width:100%;display:flex;align-items:center;justify-content:center;gap:8px;border-radius:11px;padding:11px;font-size:13px;font-weight:500;background:#262D39;color:#EDEFF3;border:none;cursor:pointer">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+          Log out
+        </button>
+      </div>
+
+      <!-- Notifications -->
+      <p style="margin:8px 4px 8px;font:500 10.5px 'JetBrains Mono',monospace;text-transform:uppercase;letter-spacing:.13em;color:#5A6272">Notifications</p>
+      <div style="border-radius:14px;background:#171C24;margin-bottom:20px;overflow:hidden">
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:14px">
+          <span style="font-size:14px;color:#EDEFF3">Push reminders</span>
+          <button onClick="{{ togglePush }}" style="{{ pushTrack }}"><div style="{{ pushKnob }}"></div></button>
+        </div>
+        <div style="height:1px;background:#1C222C"></div>
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:14px">
+          <span style="font-size:14px;color:#EDEFF3">Repeat if not completed</span>
+          <button onClick="{{ toggleRepeat }}" style="{{ repeatTrack }}"><div style="{{ repeatKnob }}"></div></button>
+        </div>
+        <sc-if value="{{ repeatOn }}" hint-placeholder-val="{{ true }}">
+          <div style="padding:0 14px 14px;display:flex;gap:8px">
+            <sc-for list="{{ repeatOpts }}" as="o" hint-placeholder-count="3">
+              <button onClick="{{ o.onClick }}" style="{{ o.style }}">{{ o.label }}</button>
+            </sc-for>
+          </div>
+        </sc-if>
+      </div>
+
+      <!-- Contexts -->
+      <p style="margin:8px 4px 8px;font:500 10.5px 'JetBrains Mono',monospace;text-transform:uppercase;letter-spacing:.13em;color:#5A6272">Contexts</p>
+      <div style="border-radius:14px;background:#171C24;margin-bottom:20px;overflow:hidden">
+        <sc-for list="{{ ctxRows }}" as="c" hint-placeholder-count="5">
+          <div style="display:flex;align-items:center;gap:11px;padding:11px 14px;border-bottom:1px solid #1C222C">
+            <button onClick="{{ c.onColor }}" title="Змінити колір" style="{{ c.dotStyle }}"></button>
+            <input value="{{ c.label }}" onInput="{{ c.onRename }}" style="flex:1;min-width:0;background:transparent;border:none;outline:none;font-size:14px;color:#EDEFF3;font-family:inherit">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#3A4150" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+          </div>
+        </sc-for>
+        <button onClick="{{ addContext }}" style="width:100%;display:flex;align-items:center;gap:9px;padding:13px 14px;background:none;border:none;cursor:pointer">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#E8A33D" stroke-width="2.4"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          <span style="font-size:14px;font-weight:500;color:#E8A33D">Add context</span>
+        </button>
+      </div>
+
+      <!-- Data -->
+      <p style="margin:8px 4px 8px;font:500 10.5px 'JetBrains Mono',monospace;text-transform:uppercase;letter-spacing:.13em;color:#5A6272">Data</p>
+      <button onClick="{{ exportData }}" style="width:100%;display:flex;align-items:center;justify-content:center;gap:8px;border-radius:12px;padding:12px;font-size:13.5px;font-weight:500;background:#262D39;color:#EDEFF3;border:none;cursor:pointer;margin-bottom:12px">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Export data (JSON)
+      </button>
+      <button onClick="{{ openReset }}" style="width:100%;display:flex;align-items:center;justify-content:center;gap:8px;border-radius:12px;padding:12px;font-size:13.5px;font-weight:500;background:rgba(217,102,139,.12);color:#D9668B;border:1px solid rgba(217,102,139,.25);cursor:pointer">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+        Reset all data
+      </button>
+    </div>
+    </sc-if>
+
+    <sc-if value="{{ toast }}" hint-placeholder-val="">
+      <div style="position:absolute;left:50%;bottom:186px;transform:translateX(-50%);padding:9px 16px;border-radius:999px;font-size:12px;color:#EDEFF3;background:#262D39;border:1px solid #3A4150;z-index:20;white-space:nowrap;box-shadow:0 8px 24px rgba(0,0,0,.5);animation:toastin .2s ease">{{ toast }}</div>
+    </sc-if>
+
+    <!-- timer bar -->
+    <sc-if value="{{ timerTask }}" hint-placeholder-val="">
+      <div style="margin:0 16px 8px;flex:none;display:flex;align-items:center;gap:12px;border-radius:14px;padding:10px 12px;background:#1E2A26;border:1px solid #2E4038">
+        <div style="width:8px;height:8px;border-radius:50%;background:#4FB6A9;flex:none;animation:logpulse 1.6s ease-in-out infinite"></div>
+        <div style="flex:1;min-width:0">
+          <p style="margin:0;font-size:12px;font-weight:500;color:#EDEFF3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ timerTaskTitle }}</p>
+          <p style="margin:1px 0 0;font:500 10px 'JetBrains Mono',monospace;color:#4FB6A9">{{ timerElapsed }}</p>
+        </div>
+        <button onClick="{{ stopTimer }}" style="flex:none;display:flex;align-items:center;gap:6px;border-radius:10px;padding:7px 11px;background:#4FB6A9;border:none;cursor:pointer">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="#14181F"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>
+          <span style="font-size:11px;font-weight:600;color:#14181F">Stop</span>
+        </button>
+      </div>
+    </sc-if>
+
+    <!-- add task -->
+    <sc-if value="{{ isTasks }}" hint-placeholder-val="{{ true }}">
+    <div style="padding:0 20px 10px;flex:none">
+      <sc-if value="{{ showAdd }}" hint-placeholder-val="">
+        <div style="display:flex;align-items:center;gap:8px;border-radius:12px;padding:7px;background:#1C222C;border:1px solid #2A303C">
+          <input value="{{ newTitle }}" onInput="{{ onNewTitle }}" onKeyDown="{{ onAddKey }}" placeholder="Нова задача..." autofocus="true" style="flex:1;background:transparent;outline:none;border:none;font-size:13.5px;color:#EDEFF3;padding:4px 8px;font-family:inherit">
+          <button onClick="{{ commitAdd }}" style="border-radius:9px;padding:8px;background:#E8A33D;border:none;cursor:pointer;display:flex">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#14181F" stroke-width="2.6"><polyline points="9 18 15 12 9 6"/></svg>
+          </button>
+          <button onClick="{{ cancelAdd }}" style="border-radius:9px;padding:8px;background:#262D39;border:none;cursor:pointer;display:flex">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#8B93A3" stroke-width="2.2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+      </sc-if>
+      <sc-if value="{{ notAdding }}" hint-placeholder-val="{{ true }}">
+        <button onClick="{{ openAdd }}" style="width:100%;display:flex;align-items:center;justify-content:center;gap:8px;border-radius:12px;padding:12px;font-size:13.5px;font-weight:600;background:#E8A33D;color:#14181F;border:none;cursor:pointer">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#14181F" stroke-width="2.6"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Додати задачу
+        </button>
+      </sc-if>
+    </div>
+    </sc-if>
+
+    <!-- bottom tab bar -->
+    <sc-if value="{{ showTabBar }}" hint-placeholder-val="{{ true }}">
+    <div style="flex:none;display:flex;padding:6px 20px 22px;border-top:1px solid #1C222C;background:#14181F">
+      <button onClick="{{ goTasks }}" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;background:none;border:none;cursor:pointer;padding:6px 0">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="{{ tabTasksColor }}" stroke-width="2"><rect x="3" y="5" width="6" height="6" rx="1"/><path d="m3 17 2 2 4-4"/><path d="M13 6h8"/><path d="M13 12h8"/><path d="M13 18h8"/></svg>
+        <span style="font-size:10px;font-weight:600;color:{{ tabTasksColor }}">Tasks</span>
+      </button>
+      <button onClick="{{ goRoutine }}" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;background:none;border:none;cursor:pointer;padding:6px 0">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="{{ tabRoutineColor }}" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+        <span style="font-size:10px;font-weight:600;color:{{ tabRoutineColor }}">Routine</span>
+      </button>
+      <button onClick="{{ goCalendar }}" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;background:none;border:none;cursor:pointer;padding:6px 0">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="{{ tabCalColor }}" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        <span style="font-size:10px;font-weight:600;color:{{ tabCalColor }}">Calendar</span>
+      </button>
+    </div>
+    </sc-if>
+
+    <!-- ============ RESET CONFIRM DIALOG ============ -->
+    <sc-if value="{{ resetOpen }}" hint-placeholder-val="">
+      <div onClick="{{ closeReset }}" style="position:absolute;inset:0;z-index:50;background:rgba(5,6,10,.7);backdrop-filter:blur(2px);animation:fadein .18s ease"></div>
+      <div style="position:absolute;left:20px;right:20px;top:50%;transform:translateY(-50%);z-index:60;border-radius:18px;padding:20px;background:#171C24;border:1px solid #2A303C;box-shadow:0 20px 60px rgba(0,0,0,.6);animation:fadein .2s ease">
+        <div style="width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;background:rgba(217,102,139,.14);border:1px solid rgba(217,102,139,.3);margin-bottom:14px">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#D9668B" stroke-width="2"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        </div>
+        <h2 style="margin:0 0 8px;font-size:17px;font-weight:600;color:#EDEFF3">Reset all data</h2>
+        <p style="margin:0 0 16px;font-size:13px;line-height:1.45;color:#8B93A3">This will permanently delete all tasks, routines, and time entries. Type <span style="font:600 12px 'JetBrains Mono',monospace;color:#D9668B">RESET</span> to confirm.</p>
+        <input value="{{ resetText }}" onInput="{{ onResetText }}" placeholder="RESET" style="width:100%;background:#1C222C;border:1px solid #262D39;border-radius:11px;padding:11px 13px;font:500 14px 'JetBrains Mono',monospace;letter-spacing:.1em;color:#EDEFF3;outline:none;margin-bottom:16px">
+        <div style="display:flex;gap:10px">
+          <button onClick="{{ closeReset }}" style="flex:1;border-radius:11px;padding:11px;font-size:13px;font-weight:500;background:#262D39;color:#EDEFF3;border:none;cursor:pointer">Cancel</button>
+          <button onClick="{{ doReset }}" style="{{ resetBtnStyle }}">Reset</button>
+        </div>
+      </div>
+    </sc-if>
+
+    <!-- ============ DETAIL BOTTOM SHEET ============ -->
+    <sc-if value="{{ sheet }}" hint-placeholder-val="">
+      <div onClick="{{ closeSheet }}" style="position:absolute;inset:0;z-index:30;background:rgba(5,6,10,.6);backdrop-filter:blur(2px);animation:fadein .18s ease"></div>
+      <div style="position:absolute;left:0;right:0;bottom:0;z-index:40;border-radius:24px 24px 0 0;display:flex;flex-direction:column;background:#171C24;max-height:90%;box-shadow:0 -12px 44px rgba(0,0,0,.55);animation:sheetup .26s cubic-bezier(.32,.72,0,1)">
+        <div style="display:flex;justify-content:center;padding:11px 0 4px;flex:none">
+          <div style="width:38px;height:4px;border-radius:999px;background:#3A4150"></div>
+        </div>
+        <div style="overflow-y:auto;padding:4px 20px 24px">
+          <input value="{{ sheet.title }}" onInput="{{ onSheetTitle }}" style="width:100%;background:transparent;outline:none;border:none;font-size:17px;font-weight:600;color:#EDEFF3;margin:4px 0 18px;font-family:inherit">
+
+          <p style="margin:0 0 8px;font:500 10.5px 'JetBrains Mono',monospace;text-transform:uppercase;letter-spacing:.13em;color:#5A6272">Контекст</p>
+          <div style="display:flex;gap:8px;margin-bottom:18px;overflow-x:auto">
+            <sc-for list="{{ sheet.contextPills }}" as="p" hint-placeholder-count="5">
+              <button onClick="{{ p.onClick }}" style="{{ p.style }}">{{ p.label }}</button>
+            </sc-for>
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:18px">
+            <div>
+              <p style="margin:0 0 8px;font:500 10.5px 'JetBrains Mono',monospace;text-transform:uppercase;letter-spacing:.13em;color:#5A6272">Дедлайн</p>
+              <button style="width:100%;display:flex;align-items:center;gap:8px;border-radius:12px;padding:10px 12px;background:#1C222C;border:1px solid #262D39;cursor:pointer">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#8B93A3" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                <span style="{{ sheet.dueStyle }}">{{ sheet.dueLabel }}</span>
+              </button>
+            </div>
+            <div>
+              <p style="margin:0 0 8px;font:500 10.5px 'JetBrains Mono',monospace;text-transform:uppercase;letter-spacing:.13em;color:#5A6272">Нагадування</p>
+              <button style="width:100%;display:flex;align-items:center;gap:8px;border-radius:12px;padding:10px 12px;background:#1C222C;border:1px solid #262D39;cursor:pointer">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="{{ sheet.remindIconColor }}" stroke-width="2"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
+                <span style="{{ sheet.remindStyle }}">{{ sheet.remindLabel }}</span>
+              </button>
+            </div>
+          </div>
+
+          <p style="margin:0 0 8px;font:500 10.5px 'JetBrains Mono',monospace;text-transform:uppercase;letter-spacing:.13em;color:#5A6272">Повторення</p>
+          <div style="display:flex;gap:8px;margin-bottom:6px;overflow-x:auto">
+            <sc-for list="{{ sheet.recurrencePills }}" as="p" hint-placeholder-count="4">
+              <button onClick="{{ p.onClick }}" style="{{ p.style }}">{{ p.label }}</button>
+            </sc-for>
+          </div>
+          <sc-if value="{{ sheet.recurring }}" hint-placeholder-val="">
+            <p style="margin:0 0 18px;display:flex;align-items:center;gap:6px;font-size:11px;color:#5A6272">
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+              Наступний інстанс: {{ sheet.next }}
+            </p>
+          </sc-if>
+          <sc-if value="{{ sheet.notRecurring }}" hint-placeholder-val="{{ true }}"><div style="height:18px"></div></sc-if>
+
+          <p style="margin:0 0 8px;font:500 10.5px 'JetBrains Mono',monospace;text-transform:uppercase;letter-spacing:.13em;color:#5A6272">Фото</p>
+          <div style="display:flex;gap:8px;margin-bottom:18px;flex-wrap:wrap">
+            <sc-for list="{{ sheet.photoSlots }}" as="ph" hint-placeholder-count="0">
+              <div style="position:relative;width:64px;height:64px;border-radius:12px;display:flex;align-items:center;justify-content:center;background:#1C222C;border:1px solid #262D39">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3A4150" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                <button onClick="{{ ph.onRemove }}" style="position:absolute;top:-6px;right:-6px;border-radius:50%;padding:3px;background:#262D39;border:none;cursor:pointer;display:flex">
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#8B93A3" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+              </div>
+            </sc-for>
+            <button onClick="{{ sheet.addPhoto }}" style="width:64px;height:64px;border-radius:12px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;background:#1C222C;border:1px dashed #3A4150;cursor:pointer">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8B93A3" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+              <span style="font-size:9px;color:#5A6272">Додати</span>
+            </button>
+          </div>
+
+          <p style="margin:0 0 8px;font:500 10.5px 'JetBrains Mono',monospace;text-transform:uppercase;letter-spacing:.13em;color:#5A6272">Коментарі</p>
+          <sc-for list="{{ sheet.comments }}" as="c" hint-placeholder-count="0">
+            <div style="border-radius:12px;padding:10px 12px;margin-bottom:8px;background:#1C222C">
+              <p style="margin:0;font-size:13px;line-height:1.4;color:#B8BFCC">{{ c.text }}</p>
+              <p style="margin:5px 0 0;font:400 10px 'JetBrains Mono',monospace;color:#5A6272">{{ c.at }}</p>
+            </div>
+          </sc-for>
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:20px">
+            <div style="flex:1;display:flex;align-items:center;gap:8px;border-radius:12px;padding:8px 12px;background:#1C222C;border:1px solid #262D39">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#5A6272" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+              <input value="{{ sheet.newComment }}" onInput="{{ onNewComment }}" onKeyDown="{{ onCommentKey }}" placeholder="Додати коментар..." style="flex:1;background:transparent;outline:none;border:none;font-size:13px;color:#EDEFF3;font-family:inherit">
+            </div>
+            <button onClick="{{ sheet.addComment }}" style="border-radius:12px;padding:10px;background:#E8A33D;border:none;cursor:pointer;display:flex">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#14181F" stroke-width="2.6"><polyline points="9 18 15 12 9 6"/></svg>
+            </button>
+          </div>
+
+          <button onClick="{{ sheet.deleteTask }}" style="width:100%;display:flex;align-items:center;justify-content:center;gap:8px;border-radius:12px;padding:11px;font-size:13px;font-weight:500;background:rgba(217,102,139,.12);color:#D9668B;border:1px solid rgba(217,102,139,.25);cursor:pointer">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+            Видалити задачу
+          </button>
+        </div>
+      </div>
+    </sc-if>
+
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  CONTEXTS = [
+    { id: 'all', label: 'All', color: '#8B93A3' },
+    { id: 'ZT', label: 'ZT', color: '#5B8DEF' },
+    { id: 'DA', label: 'DA', color: '#4FB6A9' },
+    { id: 'Cairn', label: 'Cairn', color: '#E8A33D' },
+    { id: 'Zalando', label: 'Zalando', color: '#D9668B' },
+    { id: 'Home', label: 'Home', color: '#9B7EDE' },
+  ];
+  PRIORITIES = [
+    { id: 'high', label: 'High', color: '#D9668B' },
+    { id: 'medium', label: 'Medium', color: '#E8A33D' },
+    { id: 'low', label: 'Low', color: '#4FB6A9' },
+  ];
+  RECURRENCE = [
+    { id: null, label: 'Без повтору' },
+    { id: 'daily', label: 'Щодня' },
+    { id: 'weekly', label: 'Щотижня' },
+    { id: 'monthly', label: 'Щомісяця' },
+  ];
+
+  state = {
+    authed: true,
+    loginEmail: '',
+    loginSent: false,
+    pinMode: false,
+    pin: '',
+    pushReminders: true,
+    repeatIfIncomplete: true,
+    repeatAfter: '1h',
+    resetOpen: false,
+    resetText: '',
+    contexts: [
+      { id: 'ZT', label: 'ZT', color: '#5B8DEF' },
+      { id: 'DA', label: 'DA', color: '#4FB6A9' },
+      { id: 'Cairn', label: 'Cairn', color: '#E8A33D' },
+      { id: 'Zalando', label: 'Zalando', color: '#D9668B' },
+      { id: 'Home', label: 'Home', color: '#9B7EDE' },
+    ],
+    tasks: [
+      { id: 1, title: 'Color drawer: octopus flag rollout', context: 'Zalando', priority: 'high', due: '14 лип', remind: '9:00', recurring: null, next: null, comments: [{ id: 'c1', text: 'Дочекатись апруву від analytics team перед merge', at: '11 лип' }], photos: 1 },
+      { id: 2, title: 'Іпотека — липень', context: 'Home', priority: 'high', due: '15 лип', remind: '10:00', recurring: 'monthly', next: '1 сер', comments: [], photos: 0 },
+      { id: 3, title: 'VAT-7 — липень', context: 'Home', priority: 'high', due: '20 лип', remind: '9:00', recurring: 'monthly', next: '20 сер', comments: [], photos: 0 },
+      { id: 4, title: 'July invoice — Zoolatech', context: 'ZT', priority: 'medium', due: '17 лип', remind: null, recurring: 'monthly', next: '15 сер', comments: [], photos: 0 },
+      { id: 5, title: 'Показники води', context: 'Home', priority: 'low', due: '23 лип', remind: '18:00', recurring: 'monthly', next: '23 сер', comments: [{ id: 'c2', text: 'Лічильник у котельні, фото минулих показників в альбомі', at: '23 чер' }], photos: 2 },
+      { id: 6, title: 'Cairn: /decide command polish', context: 'Cairn', priority: 'low', due: null, remind: null, recurring: null, next: null, comments: [], photos: 0 },
+    ],
+    activeContext: 'all',
+    activeTab: 'tasks',
+    calMode: 'day',
+    routine: [
+      { id: 'r1', label: 'Переглянути inbox + Slack', time: '08:30', done: true },
+      { id: 'r2', label: 'Standup нотатки', time: '09:00', done: true },
+      { id: 'r3', label: 'Deep work block #1', time: '09:30', done: false },
+      { id: 'r4', label: 'Code review черга', time: '13:00', done: false },
+      { id: 'r5', label: 'Deep work block #2', time: '14:30', done: false },
+      { id: 'r6', label: 'Записати log дня', time: '18:00', done: false },
+      { id: 'r7', label: 'Планування на завтра', time: '21:30', done: false },
+    ],
+    timerTaskId: null,
+    openTaskId: null,
+    toast: null,
+    showAdd: false,
+    newTitle: '',
+    newComment: '',
+    elapsed: 0,
+  };
+
+  CAL_START = 8; CAL_END = 22; CAL_HOUR = 42;
+  NOW_HOUR = 14 + 20 / 60; // 14:20
+  DOWS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  // events keyed by weekday index (Mon=0), current week (Jul 13–19)
+  CAL_EVENTS = {
+    0: [ { s: 9, e: 9.5, t: 'ZT standup', ctx: 'ZT' }, { s: 11, e: 12.5, t: 'Zalando: octopus flag', ctx: 'Zalando' } ],
+    1: [ { s: 9, e: 10, t: 'July invoice', ctx: 'ZT' }, { s: 11, e: 12.5, t: 'Octopus flag rollout', ctx: 'Zalando' }, { s: 14, e: 15, t: '/decide polish', ctx: 'Cairn' }, { s: 16, e: 17, t: 'Іпотека — липень', ctx: 'Home' } ],
+    2: [ { s: 10, e: 11, t: 'DA sync', ctx: 'DA' }, { s: 13, e: 14, t: 'VAT-7', ctx: 'Home' } ],
+    3: [ { s: 9, e: 10, t: 'ZT planning', ctx: 'ZT' }, { s: 15, e: 16.5, t: 'Cairn deep work', ctx: 'Cairn' } ],
+    4: [ { s: 11, e: 12, t: 'Zalando review', ctx: 'Zalando' }, { s: 18, e: 18.5, t: 'Home admin', ctx: 'Home' } ],
+    5: [ { s: 12, e: 12.5, t: 'Показники води', ctx: 'Home' } ],
+    6: [],
+  };
+  WEEK_DATES = [13, 14, 15, 16, 17, 18, 19];
+  TODAY_IDX = 1;
+
+  _toastTimer = null;
+  _tick = null;
+
+  componentWillUnmount() { clearInterval(this._tick); clearTimeout(this._toastTimer); }
+
+  ACCT_EMAIL = 'nazar@example.com';
+  SWATCHES = ['#5B8DEF', '#4FB6A9', '#E8A33D', '#D9668B', '#9B7EDE', '#EDA6C4', '#7FB77E', '#E0B15B'];
+
+  ctxOf(id) {
+    if (id === 'all') return this.ALL;
+    return this.state.contexts.find(c => c.id === id) || this.ALL;
+  }
+  ALL = { id: 'all', label: 'All', color: '#8B93A3' };
+  prOf(id) { return this.PRIORITIES.find(p => p.id === id) || null; }
+
+  patch(id, p) {
+    this.setState(s => ({ tasks: s.tasks.map(t => t.id === id ? { ...t, ...p } : t) }));
+  }
+
+  toggle(id) {
+    const t = this.state.tasks.find(x => x.id === id);
+    if (!t) return;
+    clearTimeout(this._toastTimer);
+    this.setState(s => ({
+      tasks: s.tasks.filter(x => x.id !== id),
+      timerTaskId: s.timerTaskId === id ? null : s.timerTaskId,
+      toast: t.recurring ? `Виконано. Наступний раз: ${t.next || '—'}` : 'Виконано ✓',
+    }));
+    this._toastTimer = setTimeout(() => this.setState({ toast: null }), 2400);
+  }
+
+  startTimer(id) {
+    this.setState(s => {
+      const on = s.timerTaskId === id ? null : id;
+      return { timerTaskId: on, elapsed: on ? 0 : s.elapsed };
+    });
+    clearInterval(this._tick);
+    if (this.state.timerTaskId !== id) {
+      this._tick = setInterval(() => this.setState(s => ({ elapsed: s.elapsed + 1 })), 1000);
+    }
+  }
+
+  fmt(sec) {    const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
+    return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  }
+
+  switchTrack(on) { return { flex: 'none', width: '42px', height: '24px', borderRadius: '999px', border: 'none', cursor: 'pointer', padding: 0, position: 'relative', transition: 'background .2s ease', background: on ? '#4FB6A9' : '#262D39' }; }
+  switchKnob(on) { return { position: 'absolute', top: '3px', left: on ? '21px' : '3px', width: '18px', height: '18px', borderRadius: '50%', background: '#EDEFF3', transition: 'left .2s ease' }; }
+
+  commitAdd() {
+    const title = this.state.newTitle.trim();
+    if (!title) return;
+    const ac = this.state.activeContext;
+    const t = { id: Date.now(), title, context: ac === 'all' ? 'ZT' : ac, priority: 'medium', due: null, remind: null, recurring: null, next: null, comments: [], photos: 0 };
+    this.setState(s => ({ tasks: [t, ...s.tasks], newTitle: '', showAdd: false, openTaskId: t.id }));
+  }
+
+  addComment() {
+    const text = this.state.newComment.trim();
+    const id = this.state.openTaskId;
+    if (!text || !id) return;
+    const t = this.state.tasks.find(x => x.id === id);
+    this.patch(id, { comments: [...t.comments, { id: `c${Date.now()}`, text, at: 'зараз' }] });
+    this.setState({ newComment: '' });
+  }
+
+  flashToast(msg) {
+    clearTimeout(this._toastTimer);
+    this.setState({ toast: msg });
+    this._toastTimer = setTimeout(() => this.setState({ toast: null }), 2200);
+  }
+
+  sendMagic() { if (this.state.loginEmail.trim()) this.setState({ loginSent: true }); }
+  resend() { this.flashToast('Magic link надіслано знову'); }
+  enterDemo() { this.setState({ authed: true, loginSent: false, pinMode: false, pin: '' }); }
+  onPin(e) {
+    const v = e.target.value.replace(/\D/g, '').slice(0, 6);
+    if (v.length === 6) this.setState({ authed: true, pin: '', pinMode: false });
+    else this.setState({ pin: v });
+  }
+  logout() { this.setState({ authed: false, loginSent: false, pinMode: false, pin: '', loginEmail: '', activeTab: 'tasks' }); }
+
+  cycleColor(id) {
+    this.setState(s => ({ contexts: s.contexts.map(c => {
+      if (c.id !== id) return c;
+      const i = this.SWATCHES.indexOf(c.color);
+      return { ...c, color: this.SWATCHES[(i + 1) % this.SWATCHES.length] };
+    }) }));
+  }
+  renameContext(id, val) { this.setState(s => ({ contexts: s.contexts.map(c => c.id === id ? { ...c, label: val } : c) })); }
+  addContext() {
+    const id = 'ctx' + Date.now();
+    this.setState(s => ({ contexts: [...s.contexts, { id, label: 'New context', color: this.SWATCHES[s.contexts.length % this.SWATCHES.length] }] }));
+  }
+  doReset() {
+    if (this.state.resetText !== 'RESET') return;
+    clearInterval(this._tick);
+    this.setState(s => ({ tasks: [], routine: s.routine.map(r => ({ ...r, done: false })), timerTaskId: null, elapsed: 0, resetOpen: false, resetText: '', activeTab: 'tasks' }));
+    this.flashToast('Дані скинуто');
+  }
+
+  toggleRoutine(id) {
+    this.setState(s => ({ routine: s.routine.map(r => r.id === id ? { ...r, done: !r.done } : r) }));
+  }
+
+  buildCalendarColumn(dayIdx) {
+    const evStyleBase = { position: 'absolute', left: '3px', right: '3px', borderRadius: '7px', padding: '5px 7px', display: 'flex', flexDirection: 'column', gap: '2px', overflow: 'hidden', cursor: 'pointer' };
+    const fmtT = (h) => { const hh = Math.floor(h), mm = Math.round((h - hh) * 60); return `${hh}:${String(mm).padStart(2, '0')}`; };
+    const events = (this.CAL_EVENTS[dayIdx] || []).map((ev, i) => {
+      const color = this.ctxOf(ev.ctx).color;
+      const top = (ev.s - this.CAL_START) * this.CAL_HOUR + 20;
+      const height = Math.max(24, (ev.e - ev.s) * this.CAL_HOUR - 3);
+      return {
+        title: ev.t, time: `${fmtT(ev.s)}–${fmtT(ev.e)}`,
+        style: { ...evStyleBase, top: `${top}px`, height: `${height}px`, background: `${color}26`, borderLeft: `3px solid ${color}`, color },
+      };
+    });
+    return events;
+  }
+
+  renderVals() {
+    const S = this.state;
+    const chips = [this.ALL, ...S.contexts].map(c => {
+      const count = c.id === 'all' ? S.tasks.length : S.tasks.filter(t => t.context === c.id).length;
+      const active = S.activeContext === c.id;
+      return {
+        label: c.label, count,
+        onClick: () => this.setState({ activeContext: c.id }),
+        style: { flex: 'none', display: 'flex', alignItems: 'center', gap: '6px', padding: '7px 12px', borderRadius: '999px', fontSize: '12px', fontWeight: 500, cursor: 'pointer', whiteSpace: 'nowrap', background: active ? c.color : '#1C222C', color: active ? '#0B0E13' : '#B8BFCC', border: `1px solid ${active ? c.color : '#262D39'}` },
+        countStyle: { fontSize: '9.5px', fontFamily: "'JetBrains Mono',monospace", padding: '1px 6px', borderRadius: '999px', background: active ? 'rgba(11,14,19,.22)' : '#262D39', color: active ? '#0B0E13' : '#8B93A3' },
+      };
+    });
+
+    const filtered = S.activeContext === 'all' ? S.tasks : S.tasks.filter(t => t.context === S.activeContext);
+    const tasks = filtered.map(t => {
+      const color = this.ctxOf(t.context).color;
+      const pr = this.prOf(t.priority);
+      const running = S.timerTaskId === t.id;
+      return {
+        id: t.id, title: t.title, context: t.context,
+        priority: !!pr, priorityColor: pr ? pr.color : '#8B93A3', priorityLabel: pr ? pr.label : '',
+        due: t.due, remind: t.remind,
+        recurring: !!t.recurring, next: t.next,
+        hasComments: t.comments.length > 0, commentsCount: t.comments.length,
+        hasPhotos: t.photos > 0, photos: t.photos,
+        isRunning: running, notRunning: !running,
+        cardStyle: { position: 'relative', display: 'flex', alignItems: 'flex-start', gap: '7px', borderRadius: '12px', padding: '11px 8px', marginBottom: '8px', cursor: 'pointer', background: running ? '#1E2A26' : '#1C222C', borderLeft: `3px solid ${color}` },
+        ctxBadgeStyle: { fontSize: '10px', fontFamily: "'JetBrains Mono',monospace", padding: '2px 6px', borderRadius: '5px', color, background: `${color}1A` },
+        playStyle: { flex: 'none', alignSelf: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '50%', width: '28px', height: '28px', border: 'none', cursor: 'pointer', background: running ? '#4FB6A9' : '#262D39' },
+        onOpen: () => this.setState({ openTaskId: t.id, newComment: '' }),
+        onToggle: (e) => { e.stopPropagation(); this.toggle(t.id); },
+        onTimer: (e) => { e.stopPropagation(); this.startTimer(t.id); },
+      };
+    });
+
+    const timer = S.tasks.find(t => t.id === S.timerTaskId) || null;
+
+    // ---- Routine ----
+    const rDone = S.routine.filter(r => r.done).length;
+    const rTotal = S.routine.length;
+    const routine = S.routine.map(r => ({
+      label: r.label, time: r.time, done: r.done,
+      onToggle: () => this.toggleRoutine(r.id),
+      checkStyle: { flex: 'none', width: '22px', height: '22px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', background: r.done ? '#4FB6A9' : 'transparent', border: `1.5px solid ${r.done ? '#4FB6A9' : '#3A4150'}` },
+      labelStyle: { flex: 1, minWidth: 0, fontSize: '14px', color: r.done ? '#5A6272' : '#EDEFF3', textDecoration: r.done ? 'line-through' : 'none' },
+    }));
+
+    // ---- Calendar ----
+    const modeDef = [
+      { id: 'day', label: 'День' }, { id: '3day', label: '3 дні' },
+      { id: 'week', label: 'Тиждень' }, { id: 'month', label: 'Місяць' },
+    ];
+    const calModes = modeDef.map(m => {
+      const active = S.calMode === m.id;
+      return { label: m.label, onClick: () => this.setState({ calMode: m.id }),
+        style: { flex: 'none', padding: '6px 12px', borderRadius: '999px', fontSize: '11.5px', fontWeight: 500, cursor: 'pointer', whiteSpace: 'nowrap', background: active ? '#E8A33D' : '#1C222C', color: active ? '#0B0E13' : '#8B93A3', border: `1px solid ${active ? '#E8A33D' : '#262D39'}` } };
+    });
+    const calHours = [];
+    for (let h = this.CAL_START; h <= this.CAL_END; h++) calHours.push(`${h}:00`);
+    const calGrid = calHours.map((_, i) => ({ lineStyle: { position: 'absolute', left: 0, right: 0, top: `${i * this.CAL_HOUR + 20}px`, height: '1px', background: '#1C222C' } }));
+    const nowTop = (this.NOW_HOUR - this.CAL_START) * this.CAL_HOUR + 20;
+    const nowLineStyle = { position: 'absolute', left: 0, right: '2px', top: `${nowTop}px`, height: '2px', background: '#D9668B', zIndex: 5 };
+
+    const idxByMode = { day: [this.TODAY_IDX], '3day': [0, 1, 2], week: [0, 1, 2, 3, 4, 5, 6] };
+    const modeIdx = idxByMode[S.calMode] || [this.TODAY_IDX];
+    const multi = modeIdx.length > 1;
+    const calColumns = modeIdx.map(di => {
+      const isToday = di === this.TODAY_IDX;
+      return {
+        dow: this.DOWS[di], num: this.WEEK_DATES[di], isToday,
+        wrapStyle: { flex: '1 1 0', minWidth: 0, position: 'relative', borderLeft: '1px solid #1C222C' },
+        headStyle: { height: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px', position: 'sticky', top: 0, background: '#14181F', zIndex: 6 },
+        numStyle: { fontSize: '11px', fontWeight: 600, color: isToday ? '#E8A33D' : '#EDEFF3' },
+        events: this.buildCalendarColumn(di),
+        onEmpty: () => this.flashToast('Новий таймблок'),
+      };
+    });
+    const calTitleMap = { day: 'Tue, Jul 14', '3day': 'Mon–Wed, Jul 13–15', week: 'Week 29 · Jul 13–19', month: 'July 2026' };
+
+    // month grid: July 2026 starts on Wed (idx offset 2), 31 days
+    const monthOffset = 2; const monthDays = 31;
+    const calCells = [];
+    const totalCells = Math.ceil((monthOffset + monthDays) / 7) * 7;
+    for (let i = 0; i < totalCells; i++) {
+      const dayNum = i - monthOffset + 1;
+      const inMonth = dayNum >= 1 && dayNum <= monthDays;
+      const isToday = dayNum === 14;
+      let dots = [];
+      if (inMonth) {
+        const wi = ((i % 7)); // weekday col
+        const evs = this.CAL_EVENTS[wi] || [];
+        // show dots only for the current week row for realism
+        if (dayNum >= 13 && dayNum <= 19) dots = evs.slice(0, 3).map(e => ({ w: '5px', h: '5px', c: this.ctxOf(e.ctx).color }));
+      }
+      calCells.push({
+        num: inMonth ? String(dayNum) : '',
+        onClick: inMonth ? () => this.setState({ calMode: 'day' }) : () => {},
+        style: { aspectRatio: '1', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-start', paddingTop: '6px', borderRadius: '9px', cursor: inMonth ? 'pointer' : 'default', background: isToday ? 'rgba(232,163,61,.14)' : (inMonth ? '#1C222C' : 'transparent'), border: `1px solid ${isToday ? '#E8A33D' : 'transparent'}` },
+        numStyle: { fontSize: '12px', fontWeight: isToday ? 700 : 500, color: isToday ? '#E8A33D' : (inMonth ? '#EDEFF3' : '#3A4150') },
+        dots: dots.map(d => ({ width: d.w, height: d.h, borderRadius: '50%', background: d.c })),
+      });
+    }
+
+    let sheet = null;
+    const ot = S.tasks.find(t => t.id === S.openTaskId);
+    if (ot) {
+      const pillBase = (active, color) => ({ flex: 'none', display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '7px 13px', borderRadius: '999px', fontSize: '12px', fontWeight: 500, cursor: 'pointer', whiteSpace: 'nowrap', background: active ? (color || '#2A303C') : '#1C222C', color: active ? (color ? '#0B0E13' : '#EDEFF3') : '#8B93A3', border: `1px solid ${active ? (color || '#3A4150') : '#262D39'}` });
+      sheet = {
+        title: ot.title,
+        contextPills: S.contexts.map(c => {
+          const active = ot.context === c.id;
+          return { label: c.label, onClick: () => this.patch(ot.id, { context: c.id }), style: pillBase(active, active ? c.color : null) };
+        }),
+        priorityPills: this.PRIORITIES.map(p => {
+          const active = ot.priority === p.id;
+          return { label: p.label, onClick: () => this.patch(ot.id, { priority: p.id }), style: pillBase(active, active ? p.color : null) };
+        }),
+        recurrencePills: this.RECURRENCE.map(r => {
+          const active = ot.recurring === r.id;
+          return { label: r.label, onClick: () => this.patch(ot.id, { recurring: r.id, next: r.id && !ot.next ? '1 сер' : ot.next }), style: pillBase(active, null) };
+        }),
+        recurring: !!ot.recurring, notRecurring: !ot.recurring, next: ot.next || '1 сер',
+        dueLabel: ot.due || 'Додати', dueStyle: { fontSize: '13px', color: ot.due ? '#EDEFF3' : '#5A6272' },
+        remindLabel: ot.remind || 'Додати', remindStyle: { fontSize: '13px', color: ot.remind ? '#EDEFF3' : '#5A6272' }, remindIconColor: ot.remind ? '#9B7EDE' : '#8B93A3',
+        photoSlots: Array.from({ length: ot.photos }).map((_, i) => ({ onRemove: () => this.patch(ot.id, { photos: Math.max(0, ot.photos - 1) }) })),
+        addPhoto: () => this.patch(ot.id, { photos: ot.photos + 1 }),
+        comments: ot.comments,
+        newComment: S.newComment,
+        addComment: () => this.addComment(),
+        deleteTask: () => this.setState(s => ({ tasks: s.tasks.filter(t => t.id !== ot.id), openTaskId: null })),
+      };
+    }
+
+    return {
+      dateLabel: 'Tue, Jul 14',
+      headline: `${S.tasks.length} open tasks`,
+      isTasks: S.authed && S.activeTab === 'tasks', isRoutine: S.authed && S.activeTab === 'routine', isCalendar: S.authed && S.activeTab === 'calendar',
+      isSettings: S.authed && S.activeTab === 'settings',
+      notAuthed: !S.authed,
+      showTabBar: S.authed && S.activeTab !== 'settings',
+      openSettings: () => this.setState({ activeTab: 'settings' }),
+      closeSettings: () => this.setState({ activeTab: 'tasks' }),
+      // login
+      loginForm: !S.loginSent, loginSent: S.loginSent,
+      loginEmail: S.loginEmail,
+      onLoginEmail: (e) => this.setState({ loginEmail: e.target.value }),
+      onMagicKey: (e) => { if (e.key === 'Enter') this.sendMagic(); },
+      sendMagic: () => this.sendMagic(),
+      resend: () => this.resend(),
+      enterDemo: () => this.enterDemo(),
+      pinClosed: !S.pinMode, pinOpen: S.pinMode,
+      openPin: () => this.setState({ pinMode: true }),
+      focusPin: (e) => { const i = e.currentTarget.querySelector('input'); if (i) i.focus(); },
+      pin: S.pin,
+      onPin: (e) => this.onPin(e),
+      pinCells: Array.from({ length: 6 }).map((_, i) => ({
+        char: S.pin[i] ? '•' : '',
+        style: { width: '42px', height: '52px', borderRadius: '11px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '22px', color: '#EDEFF3', background: '#1C222C', border: `1.5px solid ${i === S.pin.length ? '#E8A33D' : '#262D39'}` },
+      })),
+      // settings
+      acctEmail: this.ACCT_EMAIL,
+      logout: () => this.logout(),
+      togglePush: () => this.setState(s => ({ pushReminders: !s.pushReminders })),
+      pushTrack: this.switchTrack(S.pushReminders), pushKnob: this.switchKnob(S.pushReminders),
+      toggleRepeat: () => this.setState(s => ({ repeatIfIncomplete: !s.repeatIfIncomplete })),
+      repeatTrack: this.switchTrack(S.repeatIfIncomplete), repeatKnob: this.switchKnob(S.repeatIfIncomplete),
+      repeatOn: S.repeatIfIncomplete,
+      repeatOpts: ['1h', '2h', '4h'].map(o => {
+        const active = S.repeatAfter === o;
+        return { label: `after ${o}`, onClick: () => this.setState({ repeatAfter: o }),
+          style: { flex: 1, padding: '8px', borderRadius: '9px', fontSize: '12px', fontWeight: 500, cursor: 'pointer', background: active ? '#262D39' : '#1C222C', color: active ? '#EDEFF3' : '#5A6272', border: `1px solid ${active ? '#3A4150' : '#262D39'}` } };
+      }),
+      ctxRows: S.contexts.map(c => ({
+        label: c.label,
+        onColor: () => this.cycleColor(c.id),
+        onRename: (e) => this.renameContext(c.id, e.target.value),
+        dotStyle: { flex: 'none', width: '18px', height: '18px', borderRadius: '50%', border: '2px solid rgba(255,255,255,.12)', cursor: 'pointer', background: c.color },
+      })),
+      addContext: () => this.addContext(),
+      exportData: () => this.flashToast('Експортовано JSON'),
+      openReset: () => this.setState({ resetOpen: true, resetText: '' }),
+      closeReset: () => this.setState({ resetOpen: false, resetText: '' }),
+      resetOpen: S.resetOpen, resetText: S.resetText,
+      onResetText: (e) => this.setState({ resetText: e.target.value }),
+      doReset: () => this.doReset(),
+      resetBtnStyle: { flex: 1, borderRadius: '11px', padding: '11px', fontSize: '13px', fontWeight: 600, border: 'none', cursor: S.resetText === 'RESET' ? 'pointer' : 'not-allowed', background: S.resetText === 'RESET' ? '#D9668B' : 'rgba(217,102,139,.18)', color: S.resetText === 'RESET' ? '#14181F' : 'rgba(217,102,139,.5)' },
+      goTasks: () => this.setState({ activeTab: 'tasks' }),
+      goRoutine: () => this.setState({ activeTab: 'routine' }),
+      goCalendar: () => this.setState({ activeTab: 'calendar' }),
+      tabTasksColor: S.activeTab === 'tasks' ? '#E8A33D' : '#5A6272',
+      tabRoutineColor: S.activeTab === 'routine' ? '#E8A33D' : '#5A6272',
+      tabCalColor: S.activeTab === 'calendar' ? '#E8A33D' : '#5A6272',
+      routine,
+      routineProgress: `${rDone}/${rTotal}`,
+      routineBarStyle: { width: `${Math.round((rDone / rTotal) * 100)}%`, height: '100%', borderRadius: '999px', background: '#4FB6A9', transition: 'width .3s ease' },
+      calModes, calHours, calGrid, calColumns, nowLineStyle,
+      calTitle: calTitleMap[S.calMode],
+      calTimeline: S.calMode !== 'month', calMonth: S.calMode === 'month',
+      calDows: this.DOWS,
+      calCells,
+      chips, tasks,
+      toast: S.toast,
+      timerTask: !!timer && S.authed && S.activeTab !== 'settings', timerTaskTitle: timer ? timer.title : '', timerElapsed: this.fmt(S.elapsed),
+      stopTimer: () => this.startTimer(S.timerTaskId),
+      showAdd: S.showAdd, notAdding: !S.showAdd,
+      newTitle: S.newTitle,
+      onNewTitle: (e) => this.setState({ newTitle: e.target.value }),
+      onAddKey: (e) => { if (e.key === 'Enter') this.commitAdd(); },
+      commitAdd: () => this.commitAdd(),
+      openAdd: () => this.setState({ showAdd: true }),
+      cancelAdd: () => this.setState({ showAdd: false, newTitle: '' }),
+      sheet,
+      closeSheet: () => this.setState({ openTaskId: null }),
+      onSheetTitle: (e) => this.patch(S.openTaskId, { title: e.target.value }),
+      onNewComment: (e) => this.setState({ newComment: e.target.value }),
+      onCommentKey: (e) => { if (e.key === 'Enter') this.addComment(); },
+    };
+  }
+}
+</script>
+</body>
+</html>

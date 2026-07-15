@@ -1,0 +1,49 @@
+# Render Blueprint — Task Manager "Log".
+# One Node web service (REST API) + one static site (Expo web export).
+# Both build from the monorepo root so the @task-manager/shared workspace resolves.
+services:
+  # ---- REST API (Express) ----
+  - type: web
+    name: log-api
+    runtime: node
+    plan: starter
+    region: frankfurt # near the Neon eu-central-1 DB
+    rootDir: .
+    buildCommand: npm install
+    # Run migrations (and the idempotent context seed) before traffic switches.
+    preDeployCommand: npm --workspace server run db:migrate && npm --workspace server run db:seed
+    startCommand: npm --workspace server run start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: TZ
+        value: Europe/Warsaw
+      - key: DATABASE_URL # Neon pooled connection string
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: OWNER_EMAIL
+        sync: false
+      - key: APP_URL # base URL of the deployed web app (for magic links)
+        sync: false
+      - key: RESEND_API_KEY # optional; without it, magic links are logged
+        sync: false
+
+  # ---- Web app (Expo static export) ----
+  - type: web
+    name: log-web
+    runtime: static
+    rootDir: .
+    buildCommand: npm install && npm --workspace app run build:web
+    staticPublishPath: app/dist
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: EXPO_PUBLIC_API_URL # set to the log-api service URL (inlined at build time)
+        sync: false
+    routes:
+      # Client-side routing fallback (existing static assets are served first).
+      - type: rewrite
+        source: /*
+        destination: /index.html
