@@ -113,7 +113,7 @@ export function TasksScreen() {
             context={item.contextId != null ? contextById.get(item.contextId) : undefined}
             onToggle={() => onToggle(item)}
             onOpen={() => setSelected(item)}
-            showGrip={!wide}
+            showGrip
             onDrag={drag}
           />
         )}
