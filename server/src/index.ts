@@ -14,6 +14,12 @@ import { oauthProvider, approveHandler } from './mcp/oauth';
 import { requireAuth } from './middleware/auth';
 import { errorHandler } from './middleware/error';
 
+// Safety net: a stray async rejection (e.g. a background job hitting a transient
+// DB/network error) should be logged, not crash the always-on service.
+process.on('unhandledRejection', (reason) => {
+  console.error('[process] unhandledRejection:', reason);
+});
+
 const app = express();
 // Behind Render's proxy: trust the first hop so req.ip / rate-limiting see the real client.
 app.set('trust proxy', 1);

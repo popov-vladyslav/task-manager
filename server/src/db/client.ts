@@ -10,4 +10,12 @@ export const pool = new Pool({
   max: 5,
 });
 
+// A dropped idle connection (Neon scale-to-zero, DNS/network blip) makes `pg`
+// emit 'error' on the idle client. With no listener, Node rethrows it as an
+// uncaught exception and kills the process — so we log and let the pool discard
+// the dead connection and reconnect on the next query.
+pool.on('error', (err) => {
+  console.error('[db] idle client error (recovered):', err.message);
+});
+
 export const db = drizzle(pool, { schema });

@@ -1,7 +1,8 @@
 {
   "expo": {
-    "name": "app",
-    "slug": "app",
+    "name": "task-manager",
+    "slug": "task-manager",
+    "owner": "vladyslavpopovpl",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -41,6 +42,11 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": "2e8c9a51-5bfe-4f91-887c-6931f8f1c199"
+      }
     }
   }
 }
