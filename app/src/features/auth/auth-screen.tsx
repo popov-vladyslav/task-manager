@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-native';
-import { colors, monoFont } from '../../theme';
+import { colors, monoFont, webInputReset } from '../../theme';
 import { useAuthStore } from '../../store/auth';
 
 const msg = (e: unknown) => (e instanceof Error ? e.message : 'Something went wrong');
@@ -15,6 +15,7 @@ const inputStyle = {
   backgroundColor: colors.bgCard,
   borderWidth: 1,
   borderColor: colors.borderSubtle,
+  ...webInputReset,
 };
 
 export function AuthScreen() {

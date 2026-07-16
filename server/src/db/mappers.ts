@@ -1,6 +1,6 @@
 import type { InferSelectModel } from 'drizzle-orm';
-import type { Context, Task, Comment } from '@task-manager/shared';
-import { contexts, tasks, comments } from './schema';
+import type { Context, Task, Comment, Routine } from '@task-manager/shared';
+import { contexts, tasks, comments, routines } from './schema';
 
 const iso = (d: Date | null): string | null => (d ? d.toISOString() : null);
 
@@ -40,6 +40,18 @@ export function toTask(r: InferSelectModel<typeof tasks>, extras: TaskExtras): T
     commentsCount: extras.commentsCount,
     photosCount: extras.photosCount,
     nextInstance: extras.nextInstance,
+  };
+}
+
+export function toRoutine(r: InferSelectModel<typeof routines>, done: boolean): Routine {
+  return {
+    id: r.id,
+    title: r.title,
+    // Postgres `time` comes back as 'HH:MM:SS' — trim to 'HH:MM'.
+    timeHint: r.timeHint ? String(r.timeHint).slice(0, 5) : null,
+    sortOrder: r.sortOrder,
+    active: r.active,
+    done,
   };
 }
 

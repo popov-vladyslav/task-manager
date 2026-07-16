@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { ChevronRight, MessageSquare, Trash2, X } from 'lucide-react-native';
 import type { Comment, Context, RecurrenceInput, Task, UpdateTaskInput } from '@task-manager/shared';
-import { colors, monoFont, nextInstanceLabel, radius, shortDateTime } from '../../theme';
+import { colors, monoFont, nextInstanceLabel, radius, shortDateTime, webInputReset } from '../../theme';
 import { api } from '../../lib/api';
 import { useTasksStore } from '../../store/tasks';
 import { DateFieldsSection, FieldLabel } from './date-fields-section';
@@ -156,7 +156,7 @@ function DetailBody({ task, contexts, onClose, onPatch, onDelete, wide }: Props 
               onChangeText={setTitle}
               onEndEditing={commitTitle}
               onBlur={commitTitle}
-              style={{ flex: 1, fontSize: 18, fontWeight: '600', color: colors.textPrimary }}
+              style={{ flex: 1, fontSize: 18, fontWeight: '600', color: colors.textPrimary, ...webInputReset }}
             />
             <Pressable onPress={onClose} hitSlop={8} style={{ padding: 6, borderRadius: 8, backgroundColor: colors.bgElevated }}>
               <X size={15} color={colors.textSecondary} />
@@ -168,7 +168,7 @@ function DetailBody({ task, contexts, onClose, onPatch, onDelete, wide }: Props 
             onChangeText={setTitle}
             onEndEditing={commitTitle}
             onBlur={commitTitle}
-            style={{ fontSize: 17, fontWeight: '600', color: colors.textPrimary }}
+            style={{ fontSize: 17, fontWeight: '600', color: colors.textPrimary, ...webInputReset }}
           />
         )}
 
@@ -259,7 +259,7 @@ function DetailBody({ task, contexts, onClose, onPatch, onDelete, wide }: Props 
                 onSubmitEditing={addComment}
                 placeholder="Add a comment…"
                 placeholderTextColor={colors.textMuted}
-                style={{ flex: 1, fontSize: 13, color: colors.textPrimary }}
+                style={{ flex: 1, fontSize: 13, color: colors.textPrimary, ...webInputReset }}
               />
             </View>
             <Pressable onPress={addComment} style={{ padding: 10, borderRadius: radius.card, backgroundColor: colors.accentPrimary }}>

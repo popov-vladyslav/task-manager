@@ -88,6 +88,29 @@ export interface Comment {
   createdAt: string;
 }
 
+// Routines — a fixed daily checklist. `done` reflects completion for the
+// current (Europe/Warsaw) day; GET /api/routines returns only active ones.
+export interface Routine {
+  id: number;
+  title: string;
+  timeHint: string | null; // 'HH:MM' — an approximate time, not a trigger
+  sortOrder: number;
+  active: boolean;
+  done: boolean;
+}
+
+export interface CreateRoutineInput {
+  title: string;
+  timeHint?: string | null; // 'HH:MM'
+}
+
+export interface UpdateRoutineInput {
+  title?: string;
+  timeHint?: string | null;
+  active?: boolean;
+  sortOrder?: number;
+}
+
 // Auth
 export interface AuthTokens {
   jwt: string;

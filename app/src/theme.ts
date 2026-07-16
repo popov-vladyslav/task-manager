@@ -2,6 +2,11 @@ import { colors, radius, contextStripWidth } from '@task-manager/shared';
 
 export { colors, radius, contextStripWidth };
 
+// Web-only: strip the default browser focus ring on text inputs — we show our own
+// (accent border) instead. Spread into a TextInput style; a no-op on native.
+export const webInputReset: object | undefined =
+  process.env.EXPO_OS === 'web' ? { outlineStyle: 'none' } : undefined;
+
 // Monospace family for the "engineering" labels/counters in the design.
 export const monoFont =
   process.env.EXPO_OS === 'ios'

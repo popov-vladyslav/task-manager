@@ -5,6 +5,7 @@ import authRouter from './routes/auth';
 import contextsRouter from './routes/contexts';
 import tasksRouter from './routes/tasks';
 import commentsRouter from './routes/comments';
+import routinesRouter from './routes/routines';
 import pushRouter from './routes/push';
 import mcpRouter from './routes/mcp';
 import { startScheduler } from './scheduler';
@@ -44,6 +45,7 @@ app.use('/auth', authRouter);
 app.use('/api/contexts', requireAuth, contextsRouter);
 app.use('/api/tasks', requireAuth, tasksRouter);
 app.use('/api/comments', requireAuth, commentsRouter);
+app.use('/api/routines', requireAuth, routinesRouter);
 app.use('/api/push', requireAuth, pushRouter);
 
 // MCP server for the claude.ai connector (Bearer MCP_TOKEN, not JWT).

@@ -4,6 +4,7 @@ import type { Task } from '@task-manager/shared';
 import * as tasksSvc from '../services/tasks';
 import * as contextsSvc from '../services/contexts';
 import * as commentsSvc from '../services/comments';
+import * as routinesSvc from '../services/routines';
 
 function text(s: string) {
   return { content: [{ type: 'text' as const, text: s }] };
@@ -109,18 +110,29 @@ export function buildMcpServer(): McpServer {
   server.registerTool(
     'get_today',
     {
-      description: "Today's agenda: open tasks due today or overdue. (Routines/timer coming soon.)",
+      description: "Today's agenda: open tasks due today or overdue, plus the daily routine. (Timer coming soon.)",
       inputSchema: {},
     },
     async () => {
-      const list = await tasksSvc.tasksDueToday();
-      const labels = await contextLabels();
-      return text(
-        list.length
-          ? 'Due today / overdue:\n' +
-              list.map((t) => fmtTask(t, t.contextId ? labels.get(t.contextId) : undefined)).join('\n')
-          : 'Nothing due today.',
-      );
+      const [list, labels, routineList] = await Promise.all([
+        tasksSvc.tasksDueToday(),
+        contextLabels(),
+        routinesSvc.listRoutines(),
+      ]);
+      const tasksSection = list.length
+        ? 'Due today / overdue:\n' +
+          list.map((t) => fmtTask(t, t.contextId ? labels.get(t.contextId) : undefined)).join('\n')
+        : 'Nothing due today.';
+      let routineSection = '';
+      if (routineList.length) {
+        const done = routineList.filter((r) => r.done).length;
+        routineSection =
+          `\n\nRoutine (${done}/${routineList.length}):\n` +
+          routineList
+            .map((r) => `${r.done ? '☑' : '☐'} ${r.title}${r.timeHint ? ` — ${r.timeHint}` : ''}`)
+            .join('\n');
+      }
+      return text(tasksSection + routineSection);
     },
   );
 
@@ -224,6 +236,19 @@ export function buildMcpServer(): McpServer {
       await tasksSvc.deleteTask(r.task.id);
       logWrite('delete_task', { id: r.task.id });
       return text(`Deleted: ${r.task.title}.`);
+    },
+  );
+
+  server.registerTool(
+    'add_routine',
+    {
+      description: 'Add a daily routine item. Optionally a time hint (HH:MM, approximate — not a trigger).',
+      inputSchema: { title: z.string().min(1), time_hint: z.string().optional() },
+    },
+    async ({ title, time_hint }) => {
+      const r = await routinesSvc.createRoutine({ title, timeHint: time_hint ?? null });
+      logWrite('add_routine', { id: r.id, title });
+      return text(`Added routine: ${r.title}${r.timeHint ? ` (${r.timeHint})` : ''}`);
     },
   );
 
