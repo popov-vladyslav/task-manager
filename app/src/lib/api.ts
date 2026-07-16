@@ -1,4 +1,5 @@
 import type {
+  ActiveTimer,
   Comment,
   Context,
   CreateRoutineInput,
@@ -6,6 +7,7 @@ import type {
   ReorderInput,
   Routine,
   Task,
+  TimeEntry,
   UpdateTaskInput,
 } from '@task-manager/shared';
 import { API_URL } from './config';
@@ -96,4 +98,8 @@ export const api = {
   toggleRoutine: (id: number, day?: string) =>
     request<Routine>(`/api/routines/${id}/toggle`, { method: 'POST', body: day ? { day } : {} }),
   deleteRoutine: (id: number) => request<void>(`/api/routines/${id}`, { method: 'DELETE' }),
+  getActiveTimer: () => request<ActiveTimer | null>('/api/timer'),
+  startTimer: (taskId: string) =>
+    request<ActiveTimer>('/api/timer/start', { method: 'POST', body: { taskId } }),
+  stopTimer: () => request<TimeEntry | null>('/api/timer/stop', { method: 'POST' }),
 };

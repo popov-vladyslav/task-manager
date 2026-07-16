@@ -19,6 +19,7 @@ import {
   shortDate,
   shortTime,
 } from '../../theme';
+import { useTimerStore } from '../../store/timer';
 
 interface Props {
   task: Task;
@@ -44,9 +45,16 @@ function TaskCardBase({ task, context, onToggle, onOpen, showGrip, onDrag }: Pro
   const remind = shortTime(task.remindAt);
   const next = task.recurrenceId ? nextInstanceLabel(task.nextInstance) : null;
 
+  const openTimer = useTimerStore((s) => s.open);
+
   const toggle = (e: GestureResponderEvent) => {
     e.stopPropagation?.();
     onToggle();
+  };
+
+  const onPlay = (e: GestureResponderEvent) => {
+    e.stopPropagation?.(); // Play never opens the detail (per the design)
+    openTimer(task.id, task.title);
   };
 
   return (
@@ -123,8 +131,11 @@ function TaskCardBase({ task, context, onToggle, onOpen, showGrip, onDrag }: Pro
         </View>
       </View>
 
-      {/* Timer Play is a Phase-3 feature — shown per the design, inert for now. */}
-      <View
+      {/* Tap Play → full-screen focus timer for this task. */}
+      <Pressable
+        onPress={onPlay}
+        hitSlop={6}
+        accessibilityLabel={`Start timer for ${task.title}`}
         style={{
           marginTop: 2,
           width: 26,
@@ -135,8 +146,8 @@ function TaskCardBase({ task, context, onToggle, onOpen, showGrip, onDrag }: Pro
           backgroundColor: colors.bgElevated,
         }}
       >
-        <Play size={11} color={colors.textSecondary} fill={colors.textSecondary} />
-      </View>
+        <Play size={11} color={colors.textSecondary} fill={colors.textSecondary} style={{ marginLeft: 1 }} />
+      </Pressable>
     </Pressable>
   );
 }

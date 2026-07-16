@@ -86,6 +86,13 @@ export const routineCompletions = pgTable(
   (t) => [primaryKey({ columns: [t.routineId, t.day] })],
 );
 
+export const timeEntries = pgTable('time_entries', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  taskId: uuid('task_id').references(() => tasks.id, { onDelete: 'cascade' }),
+  startedAt: timestamp('started_at', { withTimezone: true }).notNull().defaultNow(),
+  endedAt: timestamp('ended_at', { withTimezone: true }),
+});
+
 export const authTokens = pgTable('auth_tokens', {
   tokenHash: text('token_hash').primaryKey(),
   kind: text('kind', { enum: ['magic', 'refresh'] }),

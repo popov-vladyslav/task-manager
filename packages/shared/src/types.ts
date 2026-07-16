@@ -104,6 +104,22 @@ export interface CreateRoutineInput {
   timeHint?: string | null; // 'HH:MM'
 }
 
+// Timer — at most one running entry at a time (one_running_timer unique index).
+export interface TimeEntry {
+  id: string;
+  taskId: string;
+  startedAt: string;
+  endedAt: string | null;
+}
+
+// The running timer, enriched with its task title for the persistent timer bar.
+export interface ActiveTimer {
+  id: string;
+  taskId: string;
+  taskTitle: string;
+  startedAt: string;
+}
+
 export interface UpdateRoutineInput {
   title?: string;
   timeHint?: string | null;

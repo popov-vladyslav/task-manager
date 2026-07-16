@@ -5,7 +5,9 @@ import { Redirect } from 'expo-router';
 import { Tabs, TabList, TabTrigger, TabSlot } from 'expo-router/ui';
 import { useAuthStore } from '../../store/auth';
 import { registerForPush } from '../../lib/push';
+import { useTimerStore } from '../../store/timer';
 import { MobileTabBar } from '../../features/nav/nav-chrome';
+import { TimerScreen } from '../../features/timer/timer-screen';
 import { colors } from '../../theme';
 
 const WIDE_BREAKPOINT = 768;
@@ -24,9 +26,13 @@ export default function TabsLayout() {
     setTimeout(() => setToast(null), 2200);
   };
 
-  // Register this device for reminder push notifications once signed in.
+  // Once signed in: register for push, and adopt any timer already running on
+  // the backend (an orphan after a crash, or one started from the MCP tools).
   useEffect(() => {
-    if (jwt) registerForPush();
+    if (jwt) {
+      registerForPush();
+      useTimerStore.getState().load();
+    }
   }, [jwt]);
 
   if (!ready) {
@@ -52,6 +58,9 @@ export default function TabsLayout() {
         <TabTrigger name="index" href="/" />
         <TabTrigger name="routines" href="/routines" />
       </TabList>
+
+      {/* Full-screen focus timer — overlays everything when a session is open. */}
+      <TimerScreen />
 
       {toast ? (
         <View

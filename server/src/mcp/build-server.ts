@@ -5,6 +5,7 @@ import * as tasksSvc from '../services/tasks';
 import * as contextsSvc from '../services/contexts';
 import * as commentsSvc from '../services/comments';
 import * as routinesSvc from '../services/routines';
+import * as timerSvc from '../services/timer';
 
 function text(s: string) {
   return { content: [{ type: 'text' as const, text: s }] };
@@ -114,10 +115,11 @@ export function buildMcpServer(): McpServer {
       inputSchema: {},
     },
     async () => {
-      const [list, labels, routineList] = await Promise.all([
+      const [list, labels, routineList, active] = await Promise.all([
         tasksSvc.tasksDueToday(),
         contextLabels(),
         routinesSvc.listRoutines(),
+        timerSvc.getActiveTimer(),
       ]);
       const tasksSection = list.length
         ? 'Due today / overdue:\n' +
@@ -132,7 +134,10 @@ export function buildMcpServer(): McpServer {
             .map((r) => `${r.done ? '☑' : '☐'} ${r.title}${r.timeHint ? ` — ${r.timeHint}` : ''}`)
             .join('\n');
       }
-      return text(tasksSection + routineSection);
+      const timerSection = active
+        ? `\n\n⏱ Timer running: ${active.taskTitle} (since ${active.startedAt.slice(11, 16)} UTC)`
+        : '';
+      return text(tasksSection + routineSection + timerSection);
     },
   );
 
@@ -249,6 +254,34 @@ export function buildMcpServer(): McpServer {
       const r = await routinesSvc.createRoutine({ title, timeHint: time_hint ?? null });
       logWrite('add_routine', { id: r.id, title });
       return text(`Added routine: ${r.title}${r.timeHint ? ` (${r.timeHint})` : ''}`);
+    },
+  );
+
+  server.registerTool(
+    'start_timer',
+    {
+      description: 'Start the time tracker on a task (by id or title_match). Stops any timer already running.',
+      inputSchema: { id: z.string().optional(), title_match: z.string().optional() },
+    },
+    async ({ id, title_match }) => {
+      const r = await resolveTask(id, title_match);
+      if (!r.task) return text(unresolvedText(r.candidates, title_match));
+      const active = await timerSvc.startTimer(r.task.id);
+      logWrite('start_timer', { taskId: active.taskId });
+      return text(`Timer started for "${active.taskTitle}".`);
+    },
+  );
+
+  server.registerTool(
+    'stop_timer',
+    { description: 'Stop the running time tracker.', inputSchema: {} },
+    async () => {
+      const active = await timerSvc.getActiveTimer();
+      const stopped = await timerSvc.stopTimer();
+      if (!stopped || !stopped.endedAt) return text('No timer running.');
+      const mins = Math.round((Date.parse(stopped.endedAt) - Date.parse(stopped.startedAt)) / 60000);
+      logWrite('stop_timer', { taskId: stopped.taskId });
+      return text(`Timer stopped for "${active?.taskTitle ?? 'task'}" — ${mins} min.`);
     },
   );
 
