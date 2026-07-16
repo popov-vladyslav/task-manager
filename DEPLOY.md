@@ -45,5 +45,27 @@ Steps:
 3. On **log-web**, set `EXPO_PUBLIC_API_URL` to the **log-api** URL (inlined at build time).
 4. Deploy. `log-api`'s pre-deploy step runs migrations + the idempotent seed automatically.
 
-Mobile builds (EAS Update / TestFlight) are out of scope for Phase 1 — the web export
-covers the "use it by hand" milestone.
+## MCP connector (claude.ai)
+
+The API exposes an MCP server at `POST /mcp` (Streamable HTTP) with 8 thick tools:
+`list_contexts`, `list_tasks`, `get_today`, `create_task`, `update_task`, `complete_task`,
+`delete_task`, `add_comment` (`title_match` fuzzy-resolves open tasks). Routine/timer tools
+arrive with their phases.
+
+**Auth:** claude.ai connectors authenticate via OAuth, so the API runs a small OAuth 2.1
+authorization server (dynamic client registration + PKCE) at the app root
+(`/.well-known/oauth-*`, `/authorize`, `/token`, `/register`). `PUBLIC_URL` must be the API's
+public URL — auto on Render (from `RENDER_EXTERNAL_URL`); set it manually for an ngrok tunnel.
+
+To connect from claude.ai (web / desktop / mobile): **Settings → Connectors → Add custom
+connector** → enter `https://<log-api-host>/mcp` → Connect. You'll land on a **LOG approval
+page** — paste your `MCP_TOKEN` to authorize. It then works across all Claude surfaces.
+
+The server also accepts a static `Authorization: Bearer $MCP_TOKEN` as a bypass for
+header-capable dev clients (Claude Code, Cursor, scripts).
+
+Needs a **publicly reachable** URL — deploy, or `ngrok http 4000` for local testing (then set
+`PUBLIC_URL` to the tunnel URL).
+
+Mobile builds (EAS Update / TestFlight) are a later step — the web export covers the
+"use it by hand" milestone.

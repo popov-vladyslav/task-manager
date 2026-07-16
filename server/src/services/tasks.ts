@@ -1,4 +1,4 @@
-import { and, asc, eq, ne, sql } from 'drizzle-orm';
+import { and, asc, eq, ilike, isNotNull, lte, ne, sql } from 'drizzle-orm';
 import type {
   CreateTaskInput,
   ReorderInput,
@@ -16,6 +16,7 @@ import { badRequest, notFound } from '../lib/errors';
 interface ListFilter {
   contextId?: number;
   status?: TaskStatus;
+  dueBefore?: Date; // only tasks with a due date at/before this
 }
 
 // Task columns + derived comment/photo counts + the linked recurrence rule.
@@ -47,6 +48,10 @@ export async function listTasks(filter: ListFilter): Promise<Task[]> {
   if (filter.contextId != null) conds.push(eq(tasks.contextId, filter.contextId));
   if (filter.status) conds.push(eq(tasks.status, filter.status));
   else conds.push(ne(tasks.status, 'done')); // default: open tasks only
+  if (filter.dueBefore) {
+    conds.push(isNotNull(tasks.dueAt));
+    conds.push(lte(tasks.dueAt, filter.dueBefore));
+  }
 
   // "All" orders by sort_global; a single context orders by sort_context.
   const order = filter.contextId != null ? tasks.sortContext : tasks.sortGlobal;
@@ -69,6 +74,24 @@ export async function getTask(id: string): Promise<Task> {
     .where(eq(tasks.id, id));
   if (!rows[0]) throw notFound('Task not found');
   return rowToTask(rows[0]);
+}
+
+// Fuzzy title search over open tasks — used by MCP `title_match`.
+export async function searchOpenTasks(query: string): Promise<Task[]> {
+  const rows = await db
+    .select(selection)
+    .from(tasks)
+    .leftJoin(recurrenceRules, eq(tasks.recurrenceId, recurrenceRules.id))
+    .where(and(ne(tasks.status, 'done'), ilike(tasks.title, `%${query.trim()}%`)))
+    .orderBy(asc(tasks.sortGlobal));
+  return rows.map(rowToTask);
+}
+
+// Open tasks due today or overdue (Europe/Warsaw — the server runs in TZ).
+export async function tasksDueToday(now: Date = new Date()): Promise<Task[]> {
+  const end = new Date(now);
+  end.setHours(23, 59, 59, 999);
+  return listTasks({ status: 'active', dueBefore: end });
 }
 
 export async function createTask(input: CreateTaskInput): Promise<Task> {

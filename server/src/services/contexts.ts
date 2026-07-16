@@ -18,6 +18,14 @@ export async function listContexts(): Promise<Context[]> {
   return rows.map(toContext);
 }
 
+export async function findContextBySlug(slug: string): Promise<Context | null> {
+  const [row] = await db
+    .select()
+    .from(contexts)
+    .where(eq(contexts.slug, slug.trim().toLowerCase()));
+  return row ? toContext(row) : null;
+}
+
 export async function createContext(input: CreateContextInput): Promise<Context> {
   const slug = input.slug?.trim() || slugify(input.label);
   const [{ max }] = await db
