@@ -5,7 +5,9 @@ import authRouter from './routes/auth';
 import contextsRouter from './routes/contexts';
 import tasksRouter from './routes/tasks';
 import commentsRouter from './routes/comments';
+import pushRouter from './routes/push';
 import mcpRouter from './routes/mcp';
+import { startScheduler } from './scheduler';
 import { mcpAuthRouter } from '@modelcontextprotocol/sdk/server/auth/router.js';
 import { oauthProvider, approveHandler } from './mcp/oauth';
 import { requireAuth } from './middleware/auth';
@@ -42,6 +44,7 @@ app.use('/auth', authRouter);
 app.use('/api/contexts', requireAuth, contextsRouter);
 app.use('/api/tasks', requireAuth, tasksRouter);
 app.use('/api/comments', requireAuth, commentsRouter);
+app.use('/api/push', requireAuth, pushRouter);
 
 // MCP server for the claude.ai connector (Bearer MCP_TOKEN, not JWT).
 app.use('/mcp', mcpRouter);
@@ -50,4 +53,5 @@ app.use(errorHandler);
 
 app.listen(env.PORT, () => {
   console.log(`API listening on http://localhost:${env.PORT}`);
+  startScheduler();
 });

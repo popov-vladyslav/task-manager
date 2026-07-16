@@ -83,3 +83,16 @@ export const oauthClients = pgTable('oauth_clients', {
   data: jsonb('data').notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
+
+export const pushTokens = pgTable('push_tokens', {
+  token: text('token').primaryKey(),
+  device: text('device'),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const notificationLog = pgTable('notification_log', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  taskId: uuid('task_id').references(() => tasks.id, { onDelete: 'cascade' }),
+  kind: text('kind', { enum: ['initial', 'repeat'] }),
+  sentAt: timestamp('sent_at', { withTimezone: true }).notNull().defaultNow(),
+});

@@ -3,6 +3,7 @@ import { ActivityIndicator, View } from 'react-native';
 import { useAuthStore } from '../store/auth';
 import { AuthScreen } from '../features/auth/auth-screen';
 import { TasksScreen } from '../features/tasks/tasks-screen';
+import { registerForPush } from '../lib/push';
 import { colors } from '../theme';
 
 export default function Index() {
@@ -13,6 +14,11 @@ export default function Index() {
   useEffect(() => {
     load();
   }, [load]);
+
+  // Register this device for reminder push notifications once signed in.
+  useEffect(() => {
+    if (jwt) registerForPush();
+  }, [jwt]);
 
   if (!ready) {
     return (

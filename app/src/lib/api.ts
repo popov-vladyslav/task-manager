@@ -86,4 +86,6 @@ export const api = {
   addComment: (taskId: string, body: string) =>
     request<Comment>(`/api/tasks/${taskId}/comments`, { method: 'POST', body: { body } }),
   deleteComment: (id: string) => request<void>(`/api/comments/${id}`, { method: 'DELETE' }),
+  registerPush: (token: string, device?: string) =>
+    request<{ ok: boolean }>('/api/push/register', { method: 'POST', body: { token, device } }),
 };

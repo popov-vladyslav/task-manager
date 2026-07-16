@@ -18,6 +18,22 @@ function fmt(d: Date): string {
   return `${y}-${m}-${day}`;
 }
 
+// True if a recurring rule should spawn an instance on the given date.
+export function ruleMatchesToday(rule: string, date: Date): boolean {
+  if (rule === 'daily') return true;
+  const [kind, arg] = rule.split(':');
+  if (kind === 'weekly') return WEEKDAYS[(arg ?? '').toLowerCase()] === date.getDay();
+  if (kind === 'monthly') return Number.parseInt(arg ?? '', 10) === date.getDate();
+  return false;
+}
+
+// Expand title placeholders, e.g. 'Іпотека — {month}' -> 'Іпотека — липень'.
+export function expandTitle(template: string, date: Date): string {
+  return template
+    .replace(/\{month\}/gi, date.toLocaleString('uk-UA', { month: 'long' }))
+    .replace(/\{year\}/gi, String(date.getFullYear()));
+}
+
 export function nextInstance(rule: string, from: Date = new Date()): string | null {
   const base = new Date(from.getFullYear(), from.getMonth(), from.getDate());
 

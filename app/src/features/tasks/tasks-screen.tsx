@@ -37,6 +37,8 @@ export function TasksScreen() {
     patchTask,
     removeTask,
     reorder,
+    pendingOpenTaskId,
+    requestOpenTask,
   } = useTasksStore();
 
   const [selected, setSelected] = useState<Task | null>(null);
@@ -54,6 +56,16 @@ export function TasksScreen() {
     const fresh = tasks.find((t) => t.id === selected.id);
     if (fresh && fresh !== selected) setSelected(fresh);
   }, [tasks, selected]);
+
+  // Open the task from a tapped notification once its data is loaded.
+  useEffect(() => {
+    if (!pendingOpenTaskId) return;
+    const t = tasks.find((x) => x.id === pendingOpenTaskId);
+    if (t) {
+      setSelected(t);
+      requestOpenTask(null);
+    }
+  }, [pendingOpenTaskId, tasks, requestOpenTask]);
 
   const contextById = useMemo(() => {
     const m = new Map<number, Context>();

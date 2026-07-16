@@ -8,6 +8,7 @@ interface TasksState {
   activeContextId: number | null; // null = "All"
   loading: boolean;
   error: string | null;
+  pendingOpenTaskId: string | null; // set by a tapped notification; consumed by the screen
 
   load: () => Promise<void>;
   setActiveContext: (id: number | null) => void;
@@ -22,6 +23,7 @@ interface TasksState {
     beforeId: string | null,
     scope: ReorderScope,
   ) => Promise<void>;
+  requestOpenTask: (id: string | null) => void;
 }
 
 export const useTasksStore = create<TasksState>((set, get) => ({
@@ -30,6 +32,7 @@ export const useTasksStore = create<TasksState>((set, get) => ({
   activeContextId: null,
   loading: false,
   error: null,
+  pendingOpenTaskId: null,
 
   async load() {
     set({ loading: true, error: null });
@@ -88,6 +91,10 @@ export const useTasksStore = create<TasksState>((set, get) => ({
         t.id === id ? { ...t, commentsCount: Math.max(0, t.commentsCount + delta) } : t,
       ),
     });
+  },
+
+  requestOpenTask(id) {
+    set({ pendingOpenTaskId: id });
   },
 
   async reorder(id, afterId, beforeId, scope) {
