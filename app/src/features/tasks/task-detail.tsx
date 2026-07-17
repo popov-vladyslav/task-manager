@@ -9,6 +9,7 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
+import Animated, { SlideInDown } from 'react-native-reanimated';
 import { ChevronRight, MessageSquare, Trash2, X } from 'lucide-react-native';
 import type { Comment, Context, RecurrenceInput, Task, UpdateTaskInput } from '@task-manager/shared';
 import { colors, monoFont, nextInstanceLabel, radius, shortDateTime, webInputReset } from '../../theme';
@@ -26,6 +27,7 @@ interface Props {
 
 const WIDE_BREAKPOINT = 768;
 const isIOS = process.env.EXPO_OS === 'ios';
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 const WEEKDAYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
 type RecKind = 'none' | 'daily' | 'weekly' | 'monthly';
@@ -299,8 +301,10 @@ export function TaskDetail(props: Props) {
   const { width } = useWindowDimensions();
   const wide = width >= WIDE_BREAKPOINT;
 
+  // `fade` fades the dim backdrop in/out; the sheet additionally slides up via
+  // Reanimated (so it's a bottom-sheet, but the backdrop no longer slides).
   return (
-    <Modal transparent visible animationType={wide ? 'fade' : 'slide'} onRequestClose={props.onClose}>
+    <Modal transparent visible animationType="fade" statusBarTranslucent onRequestClose={props.onClose}>
       <Pressable
         onPress={props.onClose}
         style={{
@@ -310,7 +314,8 @@ export function TaskDetail(props: Props) {
           alignItems: wide ? 'center' : 'stretch',
         }}
       >
-        <Pressable
+        <AnimatedPressable
+          entering={wide ? undefined : SlideInDown.duration(280)}
           onPress={(e) => e.stopPropagation?.()}
           style={
             wide
@@ -339,7 +344,7 @@ export function TaskDetail(props: Props) {
             </View>
           ) : null}
           <DetailBody {...props} wide={wide} />
-        </Pressable>
+        </AnimatedPressable>
       </Pressable>
     </Modal>
   );

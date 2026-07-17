@@ -1,8 +1,8 @@
 export type CalMode = 'day' | '3day' | 'week' | 'month';
 
-// Timeline modes render an 8:00–22:00 hour grid (per the design brief).
-export const HOUR_START = 8;
-export const HOUR_END = 22;
+// Timeline modes render a full 24-hour grid (scrollable).
+export const HOUR_START = 0;
+export const HOUR_END = 24;
 
 export const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
 export const addDays = (d: Date, n: number) =>

@@ -126,7 +126,6 @@ export function TasksScreen() {
             context={item.contextId != null ? contextById.get(item.contextId) : undefined}
             onToggle={() => onToggle(item)}
             onOpen={() => setSelected(item)}
-            showGrip
             onDrag={drag}
           />
         )}
@@ -288,7 +287,7 @@ export function TasksScreen() {
               </View>
             )}
           </View>
-          <View style={{ flex: 1 }}>{list}</View>
+          <View style={{ flex: 1, minHeight: 0 }}>{list}</View>
         </View>
 
         {toastNode}

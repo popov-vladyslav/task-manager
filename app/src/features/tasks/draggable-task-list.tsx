@@ -16,8 +16,9 @@ function DragRow({ item, renderCard }: { item: Task; renderCard: Props['renderCa
   return <>{renderCard(item, drag)}</>;
 }
 
-// Native: variable-height reorderable list. Drag starts from the card's grip
-// (long-press), so tapping a card still opens it — no tap/drag conflict.
+// Variable-height reorderable list. Drag starts on a long-press of the card
+// (tap still opens it — no tap/drag conflict). `flex: 1` gives it a bounded
+// height so it scrolls internally (esp. on web) instead of overflowing.
 //
 // The list owns a local `data` copy that it reorders synchronously on drop, so
 // its internal indices never point past the array (the crash we saw on drag-off).
@@ -47,6 +48,7 @@ export function DraggableTaskList({ tasks, renderCard, onReorder }: Props) {
       keyExtractor={(item, index) => item?.id ?? `__${index}`}
       onReorder={handleReorder}
       renderItem={({ item }) => <DragRow item={item} renderCard={renderCard} />}
+      style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
       contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 4, paddingBottom: 24 }}
       showsVerticalScrollIndicator={false}
     />

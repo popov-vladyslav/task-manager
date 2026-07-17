@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { Pressable, ScrollView, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ChevronLeft, ChevronRight } from 'lucide-react-native';
@@ -159,6 +159,15 @@ function Timeline({
 }) {
   const days = visibleDays(mode, anchor);
   const now = new Date();
+  const scrollRef = useRef<ScrollView>(null);
+
+  // Start scrolled near the current hour instead of at midnight.
+  useEffect(() => {
+    const y = Math.max(0, (now.getHours() - 1) * HOUR_H);
+    const t = setTimeout(() => scrollRef.current?.scrollTo({ y, animated: false }), 50);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <View style={{ flex: 1 }}>
@@ -190,8 +199,9 @@ function Timeline({
         })}
       </View>
 
-      {/* scrollable hour grid */}
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 24 }}>
+      {/* scrollable hour grid (absolute-fill so the ScrollView bounds + scrolls on web) */}
+      <View style={{ flex: 1, minHeight: 0 }}>
+      <ScrollView ref={scrollRef} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 24 }}>
         <View style={{ flexDirection: 'row', height: GRID_H }}>
           {/* hour labels */}
           <View style={{ width: LABEL_W }}>
@@ -236,6 +246,7 @@ function Timeline({
           })}
         </View>
       </ScrollView>
+      </View>
     </View>
   );
 }

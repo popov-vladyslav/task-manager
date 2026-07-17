@@ -1,14 +1,6 @@
 import { memo, type ReactNode } from 'react';
 import { Pressable, Text, View, type GestureResponderEvent } from 'react-native';
-import {
-  Bell,
-  Clock,
-  GripVertical,
-  Image as ImageIcon,
-  MessageSquare,
-  Play,
-  Repeat,
-} from 'lucide-react-native';
+import { Bell, Clock, Image as ImageIcon, MessageSquare, Play, Repeat } from 'lucide-react-native';
 import type { Context, Task } from '@task-manager/shared';
 import {
   colors,
@@ -26,8 +18,7 @@ interface Props {
   context?: Context;
   onToggle: () => void;
   onOpen: () => void;
-  showGrip?: boolean;
-  onDrag?: () => void; // long-press the grip to start a reorder drag
+  onDrag?: () => void; // long-press the card to start a reorder drag
 }
 
 function Badge({ icon, text, color }: { icon: ReactNode; text: string; color: string }) {
@@ -39,7 +30,7 @@ function Badge({ icon, text, color }: { icon: ReactNode; text: string; color: st
   );
 }
 
-function TaskCardBase({ task, context, onToggle, onOpen, showGrip, onDrag }: Props) {
+function TaskCardBase({ task, context, onToggle, onOpen, onDrag }: Props) {
   const color = context?.color ?? colors.textMuted;
   const due = shortDate(task.dueAt);
   const remind = shortTime(task.remindAt);
@@ -60,6 +51,8 @@ function TaskCardBase({ task, context, onToggle, onOpen, showGrip, onDrag }: Pro
   return (
     <Pressable
       onPress={onOpen}
+      onLongPress={onDrag}
+      delayLongPress={220}
       style={{
         flexDirection: 'row',
         alignItems: 'flex-start',
@@ -73,18 +66,6 @@ function TaskCardBase({ task, context, onToggle, onOpen, showGrip, onDrag }: Pro
         borderLeftColor: color,
       }}
     >
-      {showGrip ? (
-        <Pressable
-          onLongPress={onDrag}
-          delayLongPress={180}
-          hitSlop={10}
-          accessibilityLabel="Drag to reorder"
-          style={{ marginTop: 3, paddingRight: 2 }}
-        >
-          <GripVertical size={16} color={colors.textFaint} />
-        </Pressable>
-      ) : null}
-
       <Pressable
         onPress={toggle}
         hitSlop={8}
