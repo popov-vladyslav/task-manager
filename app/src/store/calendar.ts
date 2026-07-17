@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import type { CalendarData } from '@task-manager/shared';
 import { api } from '../lib/api';
 import { rangeFor, shiftAnchor, startOfDay, type CalMode } from '../features/calendar/calendar-dates';
+import { useTasksStore } from './tasks';
 
 interface CalendarState {
   mode: CalMode;
@@ -14,6 +15,8 @@ interface CalendarState {
   shift: (dir: number) => void;
   goToDay: (d: Date) => void; // tap a month cell → day view
   goToToday: () => void;
+  moveBlock: (id: string, newStartISO: string) => Promise<void>;
+  createAt: (title: string, startISO: string, durationMin: number) => Promise<void>;
 }
 
 export const useCalendarStore = create<CalendarState>((set, get) => ({
@@ -49,5 +52,29 @@ export const useCalendarStore = create<CalendarState>((set, get) => ({
   goToToday() {
     set({ anchor: startOfDay(new Date()) });
     get().load();
+  },
+
+  async moveBlock(id, newStartISO) {
+    const prev = get().data;
+    if (!prev) return;
+    const blk = prev.blocks.find((b) => b.id === id);
+    if (!blk) return;
+    const durMs = new Date(blk.endAt).getTime() - new Date(blk.startAt).getTime();
+    const newEnd = new Date(new Date(newStartISO).getTime() + durMs).toISOString();
+    // optimistic
+    set({ data: { blocks: prev.blocks.map((b) => (b.id === id ? { ...b, startAt: newStartISO, endAt: newEnd } : b)) } });
+    try {
+      await useTasksStore.getState().patchTask(id, { dueAt: newStartISO });
+    } catch {
+      set({ data: prev }); // rollback
+    }
+  },
+
+  async createAt(title, startISO, durationMin) {
+    const t = title.trim();
+    if (!t) return;
+    await api.createTask({ title: t, dueAt: startISO, durationMin });
+    await get().load();
+    useTasksStore.getState().load();
   },
 }));

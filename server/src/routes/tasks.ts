@@ -51,6 +51,10 @@ router.get('/', async (req, res) => {
   );
 });
 
+router.get('/:id', async (req, res) => {
+  res.json(await svc.getTask(req.params.id));
+});
+
 router.post('/', async (req, res) => {
   res.status(201).json(await svc.createTask(createSchema.parse(req.body)));
 });

@@ -22,3 +22,6 @@ expo-env.d.ts
 
 # playwright mcp scratch
 .playwright-mcp/
+
+# stray screenshots at repo root (asset PNGs live under app/)
+/*.png

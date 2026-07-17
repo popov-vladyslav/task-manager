@@ -4,6 +4,30 @@ export type CalMode = 'day' | '3day' | 'week' | 'month';
 export const HOUR_START = 0;
 export const HOUR_END = 24;
 
+// Timeline geometry (single source; calendar-screen imports HOUR_H from here).
+export const HOUR_H = 48;
+export const SNAP_MIN = 15;
+
+// Pixel Y within the hour grid -> minutes past midnight.
+export const yToMinutes = (y: number, hourH: number = HOUR_H): number =>
+  HOUR_START * 60 + (y / hourH) * 60;
+
+// Snap minutes to the nearest `step`, clamped so a `durationMin` block stays in [0, 24h).
+export const snapMinutes = (min: number, step: number = SNAP_MIN, durationMin: number = 0): number => {
+  const snapped = Math.round(min / step) * step;
+  return Math.max(0, Math.min(24 * 60 - durationMin, snapped));
+};
+
+// Pixel X within the grid -> day column index (0-based), clamped to [0, dayCount-1].
+export const xToDayIndex = (x: number, labelW: number, colW: number, dayCount: number): number => {
+  const i = Math.floor((x - labelW) / colW);
+  return Math.max(0, Math.min(dayCount - 1, i));
+};
+
+// A local Date at `day`'s midnight + `minutes`.
+export const combineDayTime = (day: Date, minutes: number): Date =>
+  new Date(day.getFullYear(), day.getMonth(), day.getDate(), 0, 0, 0, 0 + minutes * 60000);
+
 export const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
 export const addDays = (d: Date, n: number) =>
   new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);

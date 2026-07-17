@@ -87,6 +87,7 @@ interface Props {
   onChangeDue: (iso: string | null) => void;
   onChangeRemind: (iso: string | null) => void;
   onChangeDuration: (min: number) => void;
+  showReminder?: boolean; // hide the Reminder field (e.g. the calendar create sheet)
 }
 
 // Two field buttons side by side; tapping one opens a single full-width picker
@@ -100,6 +101,7 @@ export function DateFieldsSection({
   onChangeDue,
   onChangeRemind,
   onChangeDuration,
+  showReminder = true,
 }: Props) {
   const [picker, setPicker] = useState<null | 'due' | 'remind'>(null);
   const isDue = picker === 'due';
@@ -130,6 +132,7 @@ export function DateFieldsSection({
             if (isDue) setPicker(null);
           }}
         />
+        {showReminder ? (
         <FieldButton
           label="Reminder"
           icon={<Bell size={13} color={remindAt ? colors.accentReminder : colors.textSecondary} />}
@@ -141,6 +144,7 @@ export function DateFieldsSection({
             if (picker === 'remind') setPicker(null);
           }}
         />
+        ) : null}
       </View>
 
       {picker && !isAndroid ? (

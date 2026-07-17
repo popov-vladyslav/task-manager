@@ -1,17 +1,24 @@
-import { useEffect, useMemo, useRef } from 'react';
-import { Pressable, ScrollView, Text, useWindowDimensions, View } from 'react-native';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Platform, Pressable, ScrollView, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Animated from 'react-native-reanimated';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import * as Haptics from 'expo-haptics';
 import { ChevronLeft, ChevronRight } from 'lucide-react-native';
-import type { CalendarBlock } from '@task-manager/shared';
+import type { CalendarBlock, Task } from '@task-manager/shared';
 import { colors, monoFont } from '../../theme';
 import { useCalendarStore } from '../../store/calendar';
 import { useTasksStore } from '../../store/tasks';
 import { SideNavLinks } from '../nav/nav-chrome';
 import { useAuthStore } from '../../store/auth';
-import { HOUR_END, HOUR_START, sameDay, visibleDays, type CalMode } from './calendar-dates';
+import { api } from '../../lib/api';
+import { TaskDetail } from '../tasks/task-detail';
+import { HOUR_END, HOUR_H, HOUR_START, SNAP_MIN, combineDayTime, sameDay, snapMinutes, visibleDays, yToMinutes, type CalMode } from './calendar-dates';
+import { DragPreview, overlayHeightForMin } from './calendar-overlay';
+import { resolveDrop } from './use-calendar-gestures';
+import { NewTaskSheet } from '../tasks/new-task-sheet';
 
 const WIDE_BREAKPOINT = 768;
-const HOUR_H = 48;
 const LABEL_W = 44;
 const HOURS = Array.from({ length: HOUR_END - HOUR_START }, (_, i) => HOUR_START + i);
 const GRID_H = HOURS.length * HOUR_H;
@@ -28,6 +35,12 @@ const timeToY = (d: Date) => {
   return (Math.max(HOUR_START, Math.min(HOUR_END, h)) - HOUR_START) * HOUR_H;
 };
 
+// A light selection tick when a block is grabbed / a slot is long-pressed to
+// create (mobile only; no-op on web where it isn't available anyway).
+const grabTick = () => {
+  if (Platform.OS !== 'web') Haptics.selectionAsync().catch(() => {});
+};
+
 export function CalendarScreen() {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
@@ -35,6 +48,15 @@ export function CalendarScreen() {
 
   const { mode, anchor, data, load, setMode, shift, goToDay, goToToday } = useCalendarStore();
   const contexts = useTasksStore((s) => s.contexts);
+
+  const [detailTask, setDetailTask] = useState<Task | null>(null);
+  const openBlock = async (taskId: string) => {
+    try {
+      setDetailTask(await api.getTask(taskId));
+    } catch {
+      /* ignore — task may have been deleted */
+    }
+  };
 
   useEffect(() => {
     load();
@@ -98,39 +120,65 @@ export function CalendarScreen() {
         anchor={anchor}
         blocks={data?.blocks ?? []}
         colorOf={colorOf}
+        onOpenBlock={openBlock}
       />
     );
+
+  const detailModal = detailTask ? (
+    <TaskDetail
+      task={detailTask}
+      contexts={contexts}
+      onClose={() => setDetailTask(null)}
+      onPatch={async (id, patch) => {
+        await useTasksStore.getState().patchTask(id, patch);
+        const fresh = await api.getTask(id).catch(() => null);
+        if (fresh) setDetailTask(fresh);
+        load();
+      }}
+      onDelete={async (id) => {
+        await useTasksStore.getState().removeTask(id);
+        setDetailTask(null);
+        load();
+      }}
+    />
+  ) : null;
 
   // ---- WEB / WIDE: sidebar + main ----
   if (wide) {
     return (
-      <View style={{ flex: 1, flexDirection: 'row', backgroundColor: colors.bgBase }}>
-        <View style={{ width: 240, paddingTop: insets.top + 16, paddingHorizontal: 16, paddingBottom: 16, backgroundColor: '#10141B', borderRightWidth: 1, borderRightColor: colors.bgCard }}>
-          <View style={{ paddingHorizontal: 8, paddingBottom: 20 }}>
-            <Text style={{ fontFamily: monoFont, fontSize: 10, letterSpacing: 2, color: colors.textMuted }}>LOG</Text>
+      <>
+        <View style={{ flex: 1, flexDirection: 'row', backgroundColor: colors.bgBase }}>
+          <View style={{ width: 240, paddingTop: insets.top + 16, paddingHorizontal: 16, paddingBottom: 16, backgroundColor: '#10141B', borderRightWidth: 1, borderRightColor: colors.bgCard }}>
+            <View style={{ paddingHorizontal: 8, paddingBottom: 20 }}>
+              <Text style={{ fontFamily: monoFont, fontSize: 10, letterSpacing: 2, color: colors.textMuted }}>LOG</Text>
+            </View>
+            <SideNavLinks />
+            <View style={{ flex: 1 }} />
+            <Pressable onPress={() => useAuthStore.getState().signOut()} style={{ paddingHorizontal: 8, paddingVertical: 8 }}>
+              <Text style={{ fontSize: 12, color: colors.textMuted }}>Sign out</Text>
+            </Pressable>
           </View>
-          <SideNavLinks />
-          <View style={{ flex: 1 }} />
-          <Pressable onPress={() => useAuthStore.getState().signOut()} style={{ paddingHorizontal: 8, paddingVertical: 8 }}>
-            <Text style={{ fontSize: 12, color: colors.textMuted }}>Sign out</Text>
-          </Pressable>
+          <View style={{ flex: 1, paddingTop: insets.top + 24, paddingHorizontal: 24 }}>
+            {header}
+            <View style={{ flex: 1 }}>{body}</View>
+          </View>
         </View>
-        <View style={{ flex: 1, paddingTop: insets.top + 24, paddingHorizontal: 24 }}>
-          {header}
-          <View style={{ flex: 1 }}>{body}</View>
-        </View>
-      </View>
+        {detailModal}
+      </>
     );
   }
 
   // ---- MOBILE ----
   return (
-    <View style={{ flex: 1, backgroundColor: colors.bgSurface, paddingTop: insets.top + 8 }}>
-      <View style={{ paddingHorizontal: 16, flex: 1 }}>
-        {header}
-        <View style={{ flex: 1 }}>{body}</View>
+    <>
+      <View style={{ flex: 1, backgroundColor: colors.bgSurface, paddingTop: insets.top + 8 }}>
+        <View style={{ paddingHorizontal: 16, flex: 1 }}>
+          {header}
+          <View style={{ flex: 1 }}>{body}</View>
+        </View>
       </View>
-    </View>
+      {detailModal}
+    </>
   );
 }
 
@@ -148,15 +196,24 @@ function Timeline({
   anchor,
   blocks,
   colorOf,
+  onOpenBlock,
 }: {
   mode: CalMode;
   anchor: Date;
   blocks: CalendarBlock[];
   colorOf: (id: number | null) => string;
+  onOpenBlock: (id: string) => void;
 }) {
   const days = visibleDays(mode, anchor);
   const now = new Date();
   const scrollRef = useRef<ScrollView>(null);
+
+  const moveBlock = useCalendarStore((s) => s.moveBlock);
+  const createAt = useCalendarStore((s) => s.createAt);
+  const [gridW, setGridW] = useState(0);
+  const [drag, setDrag] = useState<null | { id: string; durMin: number; left: number; top: number; color: string; title: string }>(null);
+  const [draft, setDraft] = useState<null | { startISO: string; left: number; top: number; day: Date }>(null);
+  const colW = gridW > 0 ? (gridW - LABEL_W) / days.length : 0;
 
   // Start scrolled near the current hour instead of at midnight.
   useEffect(() => {
@@ -165,6 +222,35 @@ function Timeline({
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const colLeft = (dayIndex: number) => LABEL_W + dayIndex * colW;
+
+  const computeDrop = (ex: number, ey: number, b: CalendarBlock, durMin: number) => {
+    const startDay = new Date(b.startAt);
+    const curCol = Math.max(0, days.findIndex((d) => sameDay(d, startDay)));
+    const gridX = colLeft(curCol) + 2 + ex;
+    const gridY = timeToY(new Date(b.startAt)) + ey;
+    return resolveDrop(days, gridX, gridY, LABEL_W, colW, durMin);
+  };
+
+  const updateDrag = (ex: number, ey: number, b: CalendarBlock, durMin: number, color: string) => {
+    const drop = computeDrop(ex, ey, b, durMin);
+    setDrag({ id: b.id, durMin, left: colLeft(drop.dayIndex) + 2, top: (drop.minutes / 60) * HOUR_H, color, title: b.title });
+  };
+
+  const commitDrag = (ex: number, ey: number, b: CalendarBlock, durMin: number) => {
+    const drop = computeDrop(ex, ey, b, durMin);
+    setDrag(null);
+    if (drop.startISO !== b.startAt) moveBlock(b.id, drop.startISO);
+  };
+
+  const DEFAULT_DUR = 30;
+  const openDraft = (day: Date, y: number) => {
+    const minutes = snapMinutes(yToMinutes(y, HOUR_H), SNAP_MIN, DEFAULT_DUR);
+    const startISO = combineDayTime(day, minutes).toISOString();
+    const col = days.findIndex((dd) => sameDay(dd, day));
+    setDraft({ startISO, left: LABEL_W + Math.max(0, col) * colW + 2, top: (minutes / 60) * HOUR_H, day });
+  };
 
   return (
     <View style={{ flex: 1 }}>
@@ -189,7 +275,7 @@ function Timeline({
       {/* scrollable hour grid (absolute-fill so the ScrollView bounds + scrolls on web) */}
       <View style={{ flex: 1, minHeight: 0 }}>
       <ScrollView ref={scrollRef} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 24 }}>
-        <View style={{ flexDirection: 'row', height: GRID_H }}>
+        <View style={{ flexDirection: 'row', height: GRID_H }} onLayout={(e) => setGridW(e.nativeEvent.layout.width)}>
           {/* hour labels */}
           <View style={{ width: LABEL_W }}>
             {HOURS.map((h) => (
@@ -202,47 +288,76 @@ function Timeline({
           {days.map((d) => {
             const isToday = sameDay(d, now);
             const dayBlocks = blocks.filter((b) => sameDay(new Date(b.startAt), d));
+            // runOnJS(true): handlers run on the JS thread (they only call setState/
+            // store actions), so nothing — notably the `Date` `d` — is serialized to a
+            // worklet. Serializing a Date crashes on native ("Cannot copy value of type Date").
+            const bgTap = Gesture.Tap().runOnJS(true).onEnd((e) => openDraft(d, e.y));
+            const bgLong = Gesture.LongPress()
+              .minDuration(300)
+              .runOnJS(true)
+              .onStart((e) => {
+                grabTick();
+                openDraft(d, e.y);
+              });
+            const bgGesture = Platform.OS === 'web' ? bgTap : bgLong;
             return (
               <View key={d.toISOString()} style={{ flex: 1, borderLeftWidth: 1, borderLeftColor: colors.bgCard }}>
-                {HOURS.map((h) => (
-                  <View key={h} style={{ height: HOUR_H, borderTopWidth: 1, borderTopColor: '#151A22' }} />
-                ))}
+                <GestureDetector gesture={bgGesture}>
+                  <View>
+                    {HOURS.map((h) => (
+                      <View key={h} style={{ height: HOUR_H, borderTopWidth: 1, borderTopColor: '#151A22' }} />
+                    ))}
+                  </View>
+                </GestureDetector>
                 {dayBlocks.map((b) => {
                   const start = new Date(b.startAt);
                   const end = new Date(b.endAt);
                   const top = timeToY(start);
                   const height = Math.max(timeToY(end) - top, 15);
                   const c = colorOf(b.contextId);
+                  const durMin = (end.getTime() - start.getTime()) / 60000;
+                  const panBase = Gesture.Pan()
+                    .runOnJS(true)
+                    .onStart(() => grabTick())
+                    .onUpdate((e) => updateDrag(e.x, e.y, b, durMin, c))
+                    .onEnd((e) => commitDrag(e.x, e.y, b, durMin));
+                  const pan =
+                    Platform.OS === 'web'
+                      ? panBase.activeOffsetX([-4, 4]).activeOffsetY([-4, 4])
+                      : panBase.activateAfterLongPress(220);
+                  const tap = Gesture.Tap().runOnJS(true).onEnd(() => onOpenBlock(b.id));
+                  const gesture = Gesture.Exclusive(pan, tap);
                   return (
-                    <View
-                      key={b.id}
-                      style={{
-                        position: 'absolute',
-                        left: 2,
-                        right: 2,
-                        top,
-                        height,
-                        borderRadius: 5,
-                        paddingHorizontal: 5,
-                        paddingTop: 2,
-                        overflow: 'hidden',
-                        backgroundColor: b.done ? `${c}12` : `${c}26`,
-                        borderLeftWidth: 2.5,
-                        borderLeftColor: c,
-                        opacity: b.done ? 0.6 : 1,
-                      }}
-                    >
-                      <Text
-                        numberOfLines={2}
+                    <GestureDetector key={b.id} gesture={gesture}>
+                      <Animated.View
                         style={{
-                          fontSize: 10,
-                          color: b.done ? colors.textMuted : colors.textPrimary,
-                          textDecorationLine: b.done ? 'line-through' : 'none',
+                          position: 'absolute',
+                          left: 2,
+                          right: 2,
+                          top,
+                          height,
+                          borderRadius: 5,
+                          paddingHorizontal: 5,
+                          paddingTop: 2,
+                          overflow: 'hidden',
+                          backgroundColor: b.done ? `${c}12` : `${c}26`,
+                          borderLeftWidth: 2.5,
+                          borderLeftColor: c,
+                          opacity: drag?.id === b.id ? 0.35 : b.done ? 0.6 : 1,
                         }}
                       >
-                        {b.title}
-                      </Text>
-                    </View>
+                        <Text
+                          numberOfLines={2}
+                          style={{
+                            fontSize: 10,
+                            color: b.done ? colors.textMuted : colors.textPrimary,
+                            textDecorationLine: b.done ? 'line-through' : 'none',
+                          }}
+                        >
+                          {b.title}
+                        </Text>
+                      </Animated.View>
+                    </GestureDetector>
                   );
                 })}
                 {isToday && now.getHours() >= HOUR_START && now.getHours() < HOUR_END ? (
@@ -254,9 +369,23 @@ function Timeline({
               </View>
             );
           })}
+          {drag ? (
+            <DragPreview left={drag.left} top={drag.top} width={colW - 4} height={overlayHeightForMin(drag.durMin)} color={drag.color} title={drag.title} />
+          ) : null}
+          {draft ? (
+            <View pointerEvents="none" style={{ position: 'absolute', left: draft.left, top: draft.top, width: colW - 4, height: overlayHeightForMin(30), borderRadius: 5, borderWidth: 1.5, borderStyle: 'dashed', borderColor: colors.accentPrimary, backgroundColor: `${colors.accentPrimary}18` }} />
+          ) : null}
         </View>
       </ScrollView>
       </View>
+      {draft ? (
+        <NewTaskSheet
+          startISO={draft.startISO}
+          durationMin={30}
+          onCreate={createAt}
+          onClose={() => setDraft(null)}
+        />
+      ) : null}
     </View>
   );
 }

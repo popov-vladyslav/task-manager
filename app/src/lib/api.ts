@@ -82,6 +82,7 @@ export const api = {
   listTasks: (params?: { context?: number; status?: string }) =>
     request<Task[]>(`/api/tasks${qs(params)}`),
   createTask: (input: CreateTaskInput) => request<Task>('/api/tasks', { method: 'POST', body: input }),
+  getTask: (id: string) => request<Task>(`/api/tasks/${id}`),
   updateTask: (id: string, patch: UpdateTaskInput) =>
     request<Task>(`/api/tasks/${id}`, { method: 'PATCH', body: patch }),
   deleteTask: (id: string) => request<void>(`/api/tasks/${id}`, { method: 'DELETE' }),

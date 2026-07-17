@@ -96,6 +96,7 @@ interface Props {
   onChangeDue: (iso: string | null) => void;
   onChangeRemind: (iso: string | null) => void;
   onChangeDuration: (min: number) => void;
+  showReminder?: boolean; // hide the Reminder field (e.g. the calendar create sheet)
 }
 
 export function DateFieldsSection({
@@ -105,6 +106,7 @@ export function DateFieldsSection({
   onChangeDue,
   onChangeRemind,
   onChangeDuration,
+  showReminder = true,
 }: Props) {
   return (
     <View style={{ gap: 16 }}>
@@ -116,13 +118,15 @@ export function DateFieldsSection({
           value={dueAt}
           onChange={onChangeDue}
         />
-        <WebField
-          label="Reminder"
-          icon={<Bell size={13} color={remindAt ? colors.accentReminder : colors.textSecondary} />}
-          mode="datetime"
-          value={remindAt}
-          onChange={onChangeRemind}
-        />
+        {showReminder ? (
+          <WebField
+            label="Reminder"
+            icon={<Bell size={13} color={remindAt ? colors.accentReminder : colors.textSecondary} />}
+            mode="datetime"
+            value={remindAt}
+            onChange={onChangeRemind}
+          />
+        ) : null}
       </View>
       {dueAt ? <DurationField value={durationMin} onChange={onChangeDuration} /> : null}
     </View>
