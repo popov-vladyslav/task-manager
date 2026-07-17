@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, Text, TextInput, View } from 'react-native';
 import { colors, monoFont, webInputReset } from '../../theme';
 import { useAuthStore } from '../../store/auth';
 
@@ -54,7 +54,10 @@ export function AuthScreen() {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.bgBase, alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+    <KeyboardAvoidingView
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      style={{ flex: 1, backgroundColor: colors.bgBase, alignItems: 'center', justifyContent: 'center', padding: 24 }}
+    >
       <View
         style={{
           width: '100%',
@@ -118,6 +121,6 @@ export function AuthScreen() {
 
         {error ? <Text selectable style={{ fontSize: 12, textAlign: 'center', color: colors.accentNow }}>{error}</Text> : null}
       </View>
-    </View>
+    </KeyboardAvoidingView>
   );
 }

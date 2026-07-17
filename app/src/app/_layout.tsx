@@ -1,12 +1,14 @@
 import { useEffect } from 'react';
-import { router, Stack } from 'expo-router';
+import { Platform } from 'react-native';
+import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import * as Notifications from 'expo-notifications';
+import * as ScreenOrientation from 'expo-screen-orientation';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { colors } from '../theme';
 import { useAuthStore } from '../store/auth';
-import { useTasksStore } from '../store/tasks';
+import { ReminderModal } from '../features/reminders/reminder-modal';
+import { NotificationBridge } from '../features/reminders/notification-bridge';
 
 export default function RootLayout() {
   // Restore the persisted session on cold start.
@@ -14,16 +16,11 @@ export default function RootLayout() {
     useAuthStore.getState().load();
   }, []);
 
-  // Tapping a reminder notification opens that task on the Tasks tab.
+  // App config allows all orientations (so the timer can rotate); lock everything
+  // else to portrait. The timer screen unlocks/relocks around itself.
   useEffect(() => {
-    const sub = Notifications.addNotificationResponseReceivedListener((response) => {
-      const taskId = response.notification.request.content.data?.taskId;
-      if (typeof taskId === 'string') {
-        router.navigate('/'); // Tasks tab
-        useTasksStore.getState().requestOpenTask(taskId);
-      }
-    });
-    return () => sub.remove();
+    if (Platform.OS === 'web') return;
+    ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP).catch(() => {});
   }, []);
 
   return (
@@ -36,6 +33,8 @@ export default function RootLayout() {
             contentStyle: { backgroundColor: colors.bgBase },
           }}
         />
+        {Platform.OS !== 'web' ? <NotificationBridge /> : null}
+        <ReminderModal />
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

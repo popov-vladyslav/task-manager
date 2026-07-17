@@ -7,7 +7,7 @@ import type {
   UpdateTaskInput,
 } from '@task-manager/shared';
 import { db } from '../db/client';
-import { tasks, recurrenceRules } from '../db/schema';
+import { tasks, recurrenceRules, notificationLog } from '../db/schema';
 import { toTask } from '../db/mappers';
 import { between } from '../lib/frac-index';
 import { nextInstance as computeNext } from '../lib/recurrence';
@@ -236,6 +236,20 @@ export async function updateTask(id: string, patch: UpdateTaskInput): Promise<Ta
 export async function deleteTask(id: string): Promise<void> {
   const [row] = await db.delete(tasks).where(eq(tasks.id, id)).returning({ id: tasks.id });
   if (!row) throw notFound('Task not found');
+}
+
+// Snooze a task's reminder by `minutes` from now, and clear its notification log
+// so the scheduler re-sends when the new remind_at arrives.
+export async function snoozeTask(id: string, minutes: number): Promise<Task> {
+  const remindAt = new Date(Date.now() + minutes * 60_000);
+  const [row] = await db
+    .update(tasks)
+    .set({ remindAt })
+    .where(eq(tasks.id, id))
+    .returning({ id: tasks.id });
+  if (!row) throw notFound('Task not found');
+  await db.delete(notificationLog).where(eq(notificationLog.taskId, id));
+  return getTask(id);
 }
 
 export async function reorderTask(id: string, input: ReorderInput): Promise<Task> {

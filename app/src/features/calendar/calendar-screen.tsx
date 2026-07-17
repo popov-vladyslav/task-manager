@@ -16,6 +16,7 @@ import { TaskDetail } from '../tasks/task-detail';
 import { HOUR_END, HOUR_H, HOUR_START, SNAP_MIN, combineDayTime, sameDay, snapMinutes, visibleDays, yToMinutes, type CalMode } from './calendar-dates';
 import { DragPreview, overlayHeightForMin } from './calendar-overlay';
 import { resolveDrop } from './use-calendar-gestures';
+import { layoutDayBlocks } from './calendar-layout';
 import { NewTaskSheet } from '../tasks/new-task-sheet';
 
 const WIDE_BREAKPOINT = 768;
@@ -300,6 +301,7 @@ function Timeline({
                 openDraft(d, e.y);
               });
             const bgGesture = Platform.OS === 'web' ? bgTap : bgLong;
+            const dayLayout = layoutDayBlocks(dayBlocks);
             return (
               <View key={d.toISOString()} style={{ flex: 1, borderLeftWidth: 1, borderLeftColor: colors.bgCard }}>
                 <GestureDetector gesture={bgGesture}>
@@ -316,6 +318,14 @@ function Timeline({
                   const height = Math.max(timeToY(end) - top, 15);
                   const c = colorOf(b.contextId);
                   const durMin = (end.getTime() - start.getTime()) / 60000;
+                  // Overlapping blocks split the column into side-by-side lanes.
+                  const lay = dayLayout.get(b.id);
+                  const cols = lay?.cols ?? 1;
+                  const usable = colW > 0 ? colW - 4 : 0;
+                  const laneStyle =
+                    cols > 1 && usable > 0
+                      ? { left: 2 + (lay!.col * usable) / cols, width: usable / cols - 1 }
+                      : { left: 2, right: 2 };
                   const panBase = Gesture.Pan()
                     .runOnJS(true)
                     .onStart(() => grabTick())
@@ -332,8 +342,7 @@ function Timeline({
                       <Animated.View
                         style={{
                           position: 'absolute',
-                          left: 2,
-                          right: 2,
+                          ...laneStyle,
                           top,
                           height,
                           borderRadius: 5,
@@ -390,7 +399,7 @@ function Timeline({
   );
 }
 
-// ---- Month (dot grid) ----
+// ---- Month (mini event bars per day) ----
 function MonthView({
   anchor,
   blocks,
@@ -420,7 +429,10 @@ function MonthView({
         {days.map((d) => {
           const inMonth = d.getMonth() === month;
           const isToday = sameDay(d, now);
-          const dayBlocks = blocks.filter((b) => sameDay(new Date(b.startAt), d));
+          const dayBlocks = blocks
+            .filter((b) => sameDay(new Date(b.startAt), d))
+            .sort((a, b) => a.startAt.localeCompare(b.startAt));
+          const MAX_BARS = 3;
           return (
             <Pressable
               key={d.toISOString()}
@@ -432,10 +444,41 @@ function MonthView({
                   {d.getDate()}
                 </Text>
               </View>
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 2, marginTop: 3 }}>
-                {dayBlocks.slice(0, 4).map((b) => (
-                  <View key={b.id} style={{ width: 5, height: 5, borderRadius: 2.5, backgroundColor: colorOf(b.contextId), opacity: b.done ? 0.5 : 1 }} />
-                ))}
+              <View style={{ marginTop: 3, gap: 1.5 }}>
+                {dayBlocks.slice(0, MAX_BARS).map((b) => {
+                  const c = colorOf(b.contextId);
+                  return (
+                    <View
+                      key={b.id}
+                      style={{
+                        borderRadius: 2,
+                        paddingHorizontal: 3,
+                        paddingVertical: 0.5,
+                        backgroundColor: `${c}2E`,
+                        borderLeftWidth: 2,
+                        borderLeftColor: c,
+                        opacity: b.done ? 0.5 : 1,
+                      }}
+                    >
+                      <Text
+                        numberOfLines={1}
+                        style={{
+                          fontSize: 8,
+                          lineHeight: 11,
+                          color: b.done ? colors.textMuted : colors.textSecondary,
+                          textDecorationLine: b.done ? 'line-through' : 'none',
+                        }}
+                      >
+                        {b.title}
+                      </Text>
+                    </View>
+                  );
+                })}
+                {dayBlocks.length > MAX_BARS ? (
+                  <Text style={{ fontSize: 7.5, color: colors.textMuted, paddingLeft: 3 }}>
+                    +{dayBlocks.length - MAX_BARS}
+                  </Text>
+                ) : null}
               </View>
             </Pressable>
           );

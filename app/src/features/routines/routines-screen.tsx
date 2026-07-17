@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, Text, TextInput, useWindowDimensions, View } from 'react-native';
+import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Check, ChevronRight, Plus, Trash2, X } from 'lucide-react-native';
 import type { Routine } from '@task-manager/shared';
@@ -203,7 +203,11 @@ export function RoutinesScreen() {
 
   // ---- MOBILE / NARROW: header + progress + list + add + tabs ----
   return (
-    <View style={{ flex: 1, backgroundColor: colors.bgSurface, paddingTop: insets.top + 8 }}>
+    <KeyboardAvoidingView
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      keyboardVerticalOffset={insets.bottom + 8}
+      style={{ flex: 1, backgroundColor: colors.bgSurface, paddingTop: insets.top + 8 }}
+    >
       <View style={{ paddingHorizontal: 20, paddingBottom: 12 }}>
         <Text style={{ fontFamily: monoFont, fontSize: 10.5, letterSpacing: 1.5, color: colors.textMuted }}>{headerDate()}</Text>
         <Text style={{ fontSize: 22, fontWeight: '600', letterSpacing: -0.4, color: colors.textPrimary }}>Daily routine</Text>
@@ -214,7 +218,7 @@ export function RoutinesScreen() {
       <View style={{ flex: 1, paddingHorizontal: 20 }}>{list}</View>
 
       <View style={{ paddingHorizontal: 20, paddingBottom: 8 }}>{adding ? addInput : bigAddButton}</View>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 

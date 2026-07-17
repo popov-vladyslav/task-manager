@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
   Pressable,
   Text,
   TextInput,
@@ -43,6 +45,7 @@ export function TasksScreen() {
   } = useTasksStore();
 
   const [selected, setSelected] = useState<Task | null>(null);
+  const [focusTitle, setFocusTitle] = useState(false); // autofocus the title for a just-created task
   const [toast, setToast] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState('');
@@ -64,6 +67,7 @@ export function TasksScreen() {
     if (!pendingOpenTaskId) return;
     const t = tasks.find((x) => x.id === pendingOpenTaskId);
     if (t) {
+      setFocusTitle(false);
       setSelected(t);
       requestOpenTask(null);
     }
@@ -106,7 +110,11 @@ export function TasksScreen() {
     }
     setDraft('');
     setAdding(false);
-    await addTask(title); // just add to the list — no auto-open of the detail
+    const created = await addTask(title);
+    if (created) {
+      setFocusTitle(true); // open the new task's detail with the title focused
+      setSelected(created);
+    }
   };
 
   const list =
@@ -125,7 +133,10 @@ export function TasksScreen() {
             task={item}
             context={item.contextId != null ? contextById.get(item.contextId) : undefined}
             onToggle={() => onToggle(item)}
-            onOpen={() => setSelected(item)}
+            onOpen={() => {
+              setFocusTitle(false);
+              setSelected(item);
+            }}
             onDrag={drag}
           />
         )}
@@ -216,6 +227,7 @@ export function TasksScreen() {
     <TaskDetail
       task={selected}
       contexts={contexts}
+      autoFocusTitle={focusTitle}
       onClose={() => setSelected(null)}
       onPatch={patchTask}
       onDelete={removeTask}
@@ -298,7 +310,11 @@ export function TasksScreen() {
 
   // ---- MOBILE / NARROW: header + chips + list + add + tabs ----
   return (
-    <View style={{ flex: 1, backgroundColor: colors.bgSurface, paddingTop: insets.top + 8 }}>
+    <KeyboardAvoidingView
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      keyboardVerticalOffset={insets.bottom + 8}
+      style={{ flex: 1, backgroundColor: colors.bgSurface, paddingTop: insets.top + 8 }}
+    >
       <View style={{ paddingHorizontal: 20, paddingBottom: 12 }}>
         <Text style={{ fontFamily: monoFont, fontSize: 10.5, letterSpacing: 1.5, color: colors.textMuted }}>{headerDate()}</Text>
         <Text style={{ fontSize: 22, fontWeight: '600', letterSpacing: -0.4, color: colors.textPrimary }}>
@@ -314,7 +330,7 @@ export function TasksScreen() {
 
       {toastNode}
       {detailNode}
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 

@@ -72,6 +72,11 @@ router.post('/:id/reorder', async (req, res) => {
   res.json(await svc.reorderTask(req.params.id, reorderSchema.parse(req.body)));
 });
 
+router.post('/:id/snooze', async (req, res) => {
+  const { minutes } = z.object({ minutes: z.number().int().positive() }).parse(req.body);
+  res.json(await svc.snoozeTask(req.params.id, minutes));
+});
+
 // ---- comments ----
 router.get('/:id/comments', async (req, res) => {
   res.json(await commentsSvc.listComments(req.params.id));

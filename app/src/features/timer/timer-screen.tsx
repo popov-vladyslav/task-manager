@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
-import { AppState, Modal, Pressable, Text, useWindowDimensions, View } from 'react-native';
+import { AppState, Modal, Platform, Pressable, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useKeepAwake } from 'expo-keep-awake';
+import * as ScreenOrientation from 'expo-screen-orientation';
 import { Pause, Play, X } from 'lucide-react-native';
 import { useTimerStore } from '../../store/timer';
 
@@ -25,8 +26,18 @@ export function TimerScreen() {
 
 function TimerModal() {
   const insets = useSafeAreaInsets();
-  const { width } = useWindowDimensions();
-  const wide = width >= 768;
+  const { width, height } = useWindowDimensions();
+  const landscape = width > height;
+
+  // Allow the timer to rotate freely; lock back to portrait when it closes.
+  // (Native only — screen orientation isn't a thing on web.)
+  useEffect(() => {
+    if (Platform.OS === 'web') return;
+    ScreenOrientation.unlockAsync().catch(() => {});
+    return () => {
+      ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP).catch(() => {});
+    };
+  }, []);
 
   const running = useTimerStore((s) => s.running);
   const runningSince = useTimerStore((s) => s.runningSince);
@@ -56,15 +67,9 @@ function TimerModal() {
   const mm = pad(Math.floor(totalSec / 60));
   const ss = pad(totalSec % 60);
 
-  const size = wide ? 210 : 148;
-  const digitStyle = {
-    fontSize: size,
-    lineHeight: size * 1.08,
-    fontWeight: '200' as const,
-    color: DIGIT,
-    fontVariant: ['tabular-nums' as const],
-    letterSpacing: 2,
-  };
+  // One MM:SS line; adjustsFontSizeToFit caps it to fit the (padded) width, so it
+  // reads the same in portrait and landscape without filling the whole screen.
+  const maxSize = landscape ? 240 : 108;
 
   return (
     <Modal visible transparent={false} animationType="fade" onRequestClose={close} statusBarTranslucent>
@@ -78,17 +83,23 @@ function TimerModal() {
           <X size={26} color={MUTED} />
         </Pressable>
 
-        <View
-          style={{
-            flex: 1,
-            alignItems: 'center',
-            justifyContent: 'center',
-            flexDirection: wide ? 'row' : 'column',
-            gap: wide ? 48 : 0,
-          }}
-        >
-          <Text style={digitStyle}>{mm}</Text>
-          <Text style={digitStyle}>{ss}</Text>
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 40 }}>
+          <Text
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            allowFontScaling={false}
+            style={{
+              alignSelf: 'stretch',
+              textAlign: 'center',
+              fontSize: maxSize,
+              fontWeight: '200',
+              color: DIGIT,
+              fontVariant: ['tabular-nums'],
+              letterSpacing: 2,
+            }}
+          >
+            {mm}:{ss}
+          </Text>
         </View>
 
         <View style={{ position: 'absolute', left: 0, right: 0, bottom: insets.bottom + 44, alignItems: 'center' }}>

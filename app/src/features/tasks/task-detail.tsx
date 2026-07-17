@@ -23,6 +23,7 @@ interface Props {
   onClose: () => void;
   onPatch: (id: string, patch: UpdateTaskInput) => void;
   onDelete: (id: string) => void;
+  autoFocusTitle?: boolean; // focus the title on open (e.g. just-created task)
 }
 
 const WIDE_BREAKPOINT = 768;
@@ -94,7 +95,7 @@ function Pill({
   );
 }
 
-function DetailBody({ task, contexts, onClose, onPatch, onDelete, wide }: Props & { wide: boolean }) {
+function DetailBody({ task, contexts, onClose, onPatch, onDelete, autoFocusTitle, wide }: Props & { wide: boolean }) {
   const adjustCommentCount = useTasksStore((s) => s.adjustCommentCount);
   const [title, setTitle] = useState(task.title);
   const [comments, setComments] = useState<Comment[]>([]);
@@ -149,8 +150,11 @@ function DetailBody({ task, contexts, onClose, onPatch, onDelete, wide }: Props 
   };
 
   return (
-    <KeyboardAvoidingView behavior={isIOS ? 'padding' : undefined}>
-      <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 28, gap: 16 }} keyboardShouldPersistTaps="handled">
+    <ScrollView
+      contentContainerStyle={{ padding: 20, paddingBottom: 28, gap: 16 }}
+      keyboardShouldPersistTaps="handled"
+      keyboardDismissMode="interactive"
+    >
         {wide ? (
           <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
             <TextInput
@@ -158,9 +162,12 @@ function DetailBody({ task, contexts, onClose, onPatch, onDelete, wide }: Props 
               onChangeText={setTitle}
               onEndEditing={commitTitle}
               onBlur={commitTitle}
+              autoFocus={autoFocusTitle}
+              multiline
+              scrollEnabled={false}
               style={{ flex: 1, fontSize: 18, fontWeight: '600', color: colors.textPrimary, ...webInputReset }}
             />
-            <Pressable onPress={onClose} hitSlop={8} style={{ padding: 6, borderRadius: 8, backgroundColor: colors.bgElevated }}>
+            <Pressable onPress={onClose} hitSlop={8} style={{ padding: 6, borderRadius: 8, backgroundColor: colors.bgElevated, marginLeft: 8 }}>
               <X size={15} color={colors.textSecondary} />
             </Pressable>
           </View>
@@ -170,6 +177,9 @@ function DetailBody({ task, contexts, onClose, onPatch, onDelete, wide }: Props 
             onChangeText={setTitle}
             onEndEditing={commitTitle}
             onBlur={commitTitle}
+            autoFocus={autoFocusTitle}
+            multiline
+            scrollEnabled={false}
             style={{ fontSize: 17, fontWeight: '600', color: colors.textPrimary, ...webInputReset }}
           />
         )}
@@ -294,7 +304,6 @@ function DetailBody({ task, contexts, onClose, onPatch, onDelete, wide }: Props 
           <Text style={{ fontSize: 13, fontWeight: '500', color: colors.accentNow }}>Delete task</Text>
         </Pressable>
       </ScrollView>
-    </KeyboardAvoidingView>
   );
 }
 
@@ -307,6 +316,7 @@ export function TaskDetail(props: Props) {
   // Reanimated (so it's a bottom-sheet, but the backdrop no longer slides).
   return (
     <Modal transparent visible animationType="fade" statusBarTranslucent onRequestClose={props.onClose}>
+      <KeyboardAvoidingView behavior={isIOS ? 'padding' : undefined} style={{ flex: 1 }}>
       <Pressable
         onPress={props.onClose}
         style={{
@@ -348,6 +358,7 @@ export function TaskDetail(props: Props) {
           <DetailBody {...props} wide={wide} />
         </AnimatedPressable>
       </Pressable>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }

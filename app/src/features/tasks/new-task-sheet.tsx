@@ -42,6 +42,7 @@ export function NewTaskSheet({
 
   return (
     <Modal transparent visible animationType="fade" statusBarTranslucent onRequestClose={onClose}>
+      <KeyboardAvoidingView behavior={isIOS ? 'padding' : undefined} style={{ flex: 1 }}>
       <Pressable onPress={onClose} style={{ flex: 1, backgroundColor: 'rgba(5,6,10,0.6)', justifyContent: wide ? 'center' : 'flex-end', alignItems: wide ? 'center' : 'stretch' }}>
         <AnimatedPressable
           entering={wide ? undefined : SlideInDown.duration(260)}
@@ -50,8 +51,7 @@ export function NewTaskSheet({
             ? { width: 460, maxWidth: '92%', borderRadius: 20, borderCurve: 'continuous', backgroundColor: colors.bgCardWeb, borderWidth: 1, borderColor: colors.borderSubtle }
             : { borderTopLeftRadius: radius.sheet, borderTopRightRadius: radius.sheet, borderCurve: 'continuous', backgroundColor: colors.bgCardWeb }}
         >
-          <KeyboardAvoidingView behavior={isIOS ? 'padding' : undefined}>
-            <View style={{ padding: 20, gap: 16 }}>
+          <View style={{ padding: 20, gap: 16 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                 <Text style={{ flex: 1, fontSize: 16, fontWeight: '600', color: colors.textPrimary }}>New task · {shortDateTime(startISO)}</Text>
                 <Pressable onPress={onClose} hitSlop={8} style={{ padding: 6, borderRadius: 8, backgroundColor: colors.bgElevated }}>
@@ -80,9 +80,9 @@ export function NewTaskSheet({
                 <Text style={{ fontSize: 14, fontWeight: '600', color: title.trim() ? colors.bgSurface : colors.textMuted }}>Create</Text>
               </Pressable>
             </View>
-          </KeyboardAvoidingView>
         </AnimatedPressable>
       </Pressable>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }

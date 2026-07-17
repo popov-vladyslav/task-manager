@@ -55,6 +55,15 @@ User feedback split into batches, all committed & verified.
 - **Batch D — calendar interactions** (#3, #4) — direct manipulation on the timeline (spec/plan in `docs/superpowers/{specs,plans}/2026-07-17-calendar-interactions.*`): **tap** block → detail; **drag** block → reschedule (cross-day, snap 15m, optimistic `PATCH {dueAt}`, keeps duration); **press empty slot** → dashed ghost + minimal `NewTaskSheet` (title + deadline/duration, saved on confirm); **haptic** tick on grab/long-press-create (mobile). Web = click-drag / click-create; mobile = long-press-grab / long-press-create. Month view unchanged. **Edge-resize deliberately deferred.** New files: `use-calendar-gestures.ts`, `calendar-overlay.tsx`, `new-task-sheet.tsx`; `GET /api/tasks/:id` added for tap-to-open. Verified on web (drag/create/tap + all modes); mobile verified by user.
   - **Gotcha (fixed):** RNGH workletizes gesture callbacks on native, so a captured `Date` crashed the device (`[Worklets] Cannot copy value of type Date`). Fix: all timeline gestures use **`.runOnJS(true)`** (handlers are JS-only: setState/store) — no worklet serialization. No-op on web.
 
+## Pre-Settings polish — ✅ done (2026-07-18, 7 items)
+- **#1 Overlapping calendar blocks** split the column into side-by-side lanes (`calendar-layout.ts`, lane-packing) instead of stacking.
+- **#2/#3 Task create + title** — the inline "+ Task" add now opens the new task's detail with the title focused (routines unchanged); the detail title is `multiline` so long titles wrap.
+- **#4 Month view** shows up to 3 context-colored **event bars** (truncated titles, chronological) + `+N` overflow, instead of dots.
+- **#5 Timer** — one `adjustsFontSizeToFit` `MM:SS` line with a colon (kept the gray thin digits), centered, moderate size; **timer-only landscape** via `expo-screen-orientation` (app allows all orientations, root locks portrait, timer unlocks/relocks).
+- **#6 Rich notifications** — reminders carry snooze action buttons (10m/30m/1h), **time-sensitive** priority, and a **blocking in-app modal** when foregrounded (`features/reminders/`, native-only `NotificationBridge`). Snooze reschedules server-side: `POST /api/tasks/:id/snooze {minutes}` sets `remind_at = now+minutes` and clears `notification_log` so the scheduler re-fires. iOS time-sensitive entitlement added.
+- **#7 Keyboard** no longer covers inputs — `KeyboardAvoidingView` moved to wrap each modal (so the bottom-anchored sheet lifts) + the tasks/routines mobile roots + the auth card.
+- **⚠️ Needs a dev-client rebuild** to test on device: `expo-screen-orientation` (#5), notification category + entitlement (#6), and the earlier `expo-haptics`. `#7` works after a JS reload but is best confirmed post-rebuild.
+
 ## Left / next (in order)
 1. **Settings** (Phase 3 §12) — PIN (6-digit bcrypt in `settings`), repeat-reminders toggle, JSON export (`GET /api/export`), data reset (`DELETE /api/data {confirm:'RESET'}`).
 2. Optional calendar polish: **edge-resize** blocks to change `duration_min` (deferred from Batch D); drag auto-scroll at viewport edges.

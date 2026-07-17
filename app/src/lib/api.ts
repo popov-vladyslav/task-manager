@@ -88,6 +88,8 @@ export const api = {
   deleteTask: (id: string) => request<void>(`/api/tasks/${id}`, { method: 'DELETE' }),
   reorderTask: (id: string, input: ReorderInput) =>
     request<Task>(`/api/tasks/${id}/reorder`, { method: 'POST', body: input }),
+  snoozeTask: (id: string, minutes: number) =>
+    request<Task>(`/api/tasks/${id}/snooze`, { method: 'POST', body: { minutes } }),
   listComments: (taskId: string) => request<Comment[]>(`/api/tasks/${taskId}/comments`),
   addComment: (taskId: string, body: string) =>
     request<Comment>(`/api/tasks/${taskId}/comments`, { method: 'POST', body: { body } }),
