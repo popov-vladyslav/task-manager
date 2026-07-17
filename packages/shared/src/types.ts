@@ -22,6 +22,10 @@ export interface Task {
   status: TaskStatus;
   dueAt: string | null;
   remindAt: string | null;
+  // Deadline (dueAt) is a point in time (date + time). When it's set, the task
+  // is a scheduled calendar block of `durationMin` minutes (defaults to 30).
+  // durationMin is non-null iff dueAt is non-null (enforced in the service).
+  durationMin: number | null;
   sortGlobal: number;
   sortContext: number;
   recurrenceId: string | null;
@@ -46,6 +50,7 @@ export interface CreateTaskInput {
   contextId?: number | null;
   dueAt?: string | null;
   remindAt?: string | null;
+  durationMin?: number | null;
   recurrence?: RecurrenceInput | null;
 }
 
@@ -55,6 +60,7 @@ export interface UpdateTaskInput {
   status?: TaskStatus;
   dueAt?: string | null;
   remindAt?: string | null;
+  durationMin?: number | null;
   completed?: boolean; // true => run complete-logic
   recurrence?: RecurrenceInput | null; // set/change a rule, or null to remove
 }
@@ -120,27 +126,21 @@ export interface ActiveTimer {
   startedAt: string;
 }
 
-// Calendar (GET /api/calendar?from=&to=): tracked time blocks + task deadlines
-// overlapping the range, each carrying its task's context for coloring.
-export interface CalendarEntry {
-  id: string;
-  taskId: string;
-  taskTitle: string;
-  contextId: number | null;
-  startedAt: string;
-  endedAt: string | null; // null = still running
-}
-
-export interface CalendarDeadline {
+// Calendar (GET /api/calendar?from=&to=): scheduled task time-blocks overlapping
+// the range, each carrying its task's context for coloring. Sourced from tasks
+// (due_at + duration_min) — NOT from timer time_entries. Completed tasks are
+// included (rendered as done), not filtered out.
+export interface CalendarBlock {
   id: string; // task id
   title: string;
   contextId: number | null;
-  dueAt: string;
+  startAt: string; // = the deadline (due_at)
+  endAt: string; // = due_at + duration_min minutes
+  done: boolean;
 }
 
 export interface CalendarData {
-  entries: CalendarEntry[];
-  deadlines: CalendarDeadline[];
+  blocks: CalendarBlock[];
 }
 
 export interface UpdateRoutineInput {

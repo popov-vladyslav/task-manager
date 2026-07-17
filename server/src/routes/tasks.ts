@@ -17,6 +17,7 @@ const createSchema = z.object({
   contextId: z.number().int().nullish(),
   dueAt: z.string().nullish(),
   remindAt: z.string().nullish(),
+  durationMin: z.number().int().positive().nullish(),
   recurrence: recurrenceSchema.nullish(),
 });
 
@@ -26,6 +27,7 @@ const updateSchema = z.object({
   status: z.enum(['active', 'waiting', 'done']).optional(),
   dueAt: z.string().nullable().optional(),
   remindAt: z.string().nullable().optional(),
+  durationMin: z.number().int().positive().nullable().optional(),
   completed: z.boolean().optional(),
   recurrence: recurrenceSchema.nullish(),
 });

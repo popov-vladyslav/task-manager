@@ -46,6 +46,7 @@ export const tasks = pgTable('tasks', {
     .default('active'),
   dueAt: timestamp('due_at', { withTimezone: true }),
   remindAt: timestamp('remind_at', { withTimezone: true }),
+  durationMin: integer('duration_min'),
   sortGlobal: real('sort_global').notNull().default(0),
   sortContext: real('sort_context').notNull().default(0),
   recurrenceId: uuid('recurrence_id'),

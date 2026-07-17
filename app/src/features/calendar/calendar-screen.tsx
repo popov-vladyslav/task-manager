@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef } from 'react';
 import { Pressable, ScrollView, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ChevronLeft, ChevronRight } from 'lucide-react-native';
-import type { CalendarDeadline, CalendarEntry } from '@task-manager/shared';
+import type { CalendarBlock } from '@task-manager/shared';
 import { colors, monoFont } from '../../theme';
 import { useCalendarStore } from '../../store/calendar';
 import { useTasksStore } from '../../store/tasks';
@@ -88,7 +88,7 @@ export function CalendarScreen() {
     mode === 'month' ? (
       <MonthView
         anchor={anchor}
-        deadlines={data?.deadlines ?? []}
+        blocks={data?.blocks ?? []}
         colorOf={colorOf}
         onPickDay={goToDay}
       />
@@ -96,8 +96,7 @@ export function CalendarScreen() {
       <Timeline
         mode={mode}
         anchor={anchor}
-        entries={data?.entries ?? []}
-        deadlines={data?.deadlines ?? []}
+        blocks={data?.blocks ?? []}
         colorOf={colorOf}
       />
     );
@@ -147,14 +146,12 @@ function NavBtn({ children, onPress }: { children: React.ReactNode; onPress: () 
 function Timeline({
   mode,
   anchor,
-  entries,
-  deadlines,
+  blocks,
   colorOf,
 }: {
   mode: CalMode;
   anchor: Date;
-  entries: CalendarEntry[];
-  deadlines: CalendarDeadline[];
+  blocks: CalendarBlock[];
   colorOf: (id: number | null) => string;
 }) {
   const days = visibleDays(mode, anchor);
@@ -171,12 +168,11 @@ function Timeline({
 
   return (
     <View style={{ flex: 1 }}>
-      {/* day headers + all-day deadlines */}
+      {/* day headers */}
       <View style={{ flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: colors.bgCard, paddingBottom: 6 }}>
         <View style={{ width: LABEL_W }} />
         {days.map((d) => {
           const isToday = sameDay(d, now);
-          const dayDeadlines = deadlines.filter((dl) => sameDay(new Date(dl.dueAt), d));
           return (
             <View key={d.toISOString()} style={{ flex: 1, alignItems: 'center', gap: 4, paddingHorizontal: 2 }}>
               <Text style={{ fontFamily: monoFont, fontSize: 9.5, letterSpacing: 0.5, color: colors.textMuted }}>
@@ -185,15 +181,6 @@ function Timeline({
               <View style={{ width: 26, height: 26, borderRadius: 13, alignItems: 'center', justifyContent: 'center', backgroundColor: isToday ? colors.accentPrimary : 'transparent' }}>
                 <Text style={{ fontSize: 13, fontWeight: '600', color: isToday ? colors.bgBase : colors.textPrimary }}>{d.getDate()}</Text>
               </View>
-              {dayDeadlines.slice(0, 2).map((dl) => (
-                <View key={dl.id} style={{ maxWidth: '100%', flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 4, paddingVertical: 1, borderRadius: 4, backgroundColor: `${colorOf(dl.contextId)}22` }}>
-                  <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: colorOf(dl.contextId) }} />
-                  <Text numberOfLines={1} style={{ fontSize: 8.5, color: colors.textSecondary }}>{dl.title}</Text>
-                </View>
-              ))}
-              {dayDeadlines.length > 2 ? (
-                <Text style={{ fontSize: 8, color: colors.textMuted }}>+{dayDeadlines.length - 2}</Text>
-              ) : null}
             </View>
           );
         })}
@@ -214,24 +201,47 @@ function Timeline({
           {/* day columns */}
           {days.map((d) => {
             const isToday = sameDay(d, now);
-            const dayEntries = entries.filter((e) => sameDay(new Date(e.startedAt), d));
+            const dayBlocks = blocks.filter((b) => sameDay(new Date(b.startAt), d));
             return (
               <View key={d.toISOString()} style={{ flex: 1, borderLeftWidth: 1, borderLeftColor: colors.bgCard }}>
                 {HOURS.map((h) => (
                   <View key={h} style={{ height: HOUR_H, borderTopWidth: 1, borderTopColor: '#151A22' }} />
                 ))}
-                {dayEntries.map((e) => {
-                  const start = new Date(e.startedAt);
-                  const end = e.endedAt ? new Date(e.endedAt) : now;
+                {dayBlocks.map((b) => {
+                  const start = new Date(b.startAt);
+                  const end = new Date(b.endAt);
                   const top = timeToY(start);
                   const height = Math.max(timeToY(end) - top, 15);
-                  const c = colorOf(e.contextId);
+                  const c = colorOf(b.contextId);
                   return (
                     <View
-                      key={e.id}
-                      style={{ position: 'absolute', left: 2, right: 2, top, height, borderRadius: 5, paddingHorizontal: 5, paddingTop: 2, overflow: 'hidden', backgroundColor: `${c}26`, borderLeftWidth: 2.5, borderLeftColor: c }}
+                      key={b.id}
+                      style={{
+                        position: 'absolute',
+                        left: 2,
+                        right: 2,
+                        top,
+                        height,
+                        borderRadius: 5,
+                        paddingHorizontal: 5,
+                        paddingTop: 2,
+                        overflow: 'hidden',
+                        backgroundColor: b.done ? `${c}12` : `${c}26`,
+                        borderLeftWidth: 2.5,
+                        borderLeftColor: c,
+                        opacity: b.done ? 0.6 : 1,
+                      }}
                     >
-                      <Text numberOfLines={2} style={{ fontSize: 10, color: colors.textPrimary }}>{e.taskTitle}</Text>
+                      <Text
+                        numberOfLines={2}
+                        style={{
+                          fontSize: 10,
+                          color: b.done ? colors.textMuted : colors.textPrimary,
+                          textDecorationLine: b.done ? 'line-through' : 'none',
+                        }}
+                      >
+                        {b.title}
+                      </Text>
                     </View>
                   );
                 })}
@@ -254,12 +264,12 @@ function Timeline({
 // ---- Month (dot grid) ----
 function MonthView({
   anchor,
-  deadlines,
+  blocks,
   colorOf,
   onPickDay,
 }: {
   anchor: Date;
-  deadlines: CalendarDeadline[];
+  blocks: CalendarBlock[];
   colorOf: (id: number | null) => string;
   onPickDay: (d: Date) => void;
 }) {
@@ -281,7 +291,7 @@ function MonthView({
         {days.map((d) => {
           const inMonth = d.getMonth() === month;
           const isToday = sameDay(d, now);
-          const dayDeadlines = deadlines.filter((dl) => sameDay(new Date(dl.dueAt), d));
+          const dayBlocks = blocks.filter((b) => sameDay(new Date(b.startAt), d));
           return (
             <Pressable
               key={d.toISOString()}
@@ -294,8 +304,8 @@ function MonthView({
                 </Text>
               </View>
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 2, marginTop: 3 }}>
-                {dayDeadlines.slice(0, 4).map((dl) => (
-                  <View key={dl.id} style={{ width: 5, height: 5, borderRadius: 2.5, backgroundColor: colorOf(dl.contextId) }} />
+                {dayBlocks.slice(0, 4).map((b) => (
+                  <View key={b.id} style={{ width: 5, height: 5, borderRadius: 2.5, backgroundColor: colorOf(b.contextId), opacity: b.done ? 0.5 : 1 }} />
                 ))}
               </View>
             </Pressable>

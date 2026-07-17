@@ -195,8 +195,10 @@ function DetailBody({ task, contexts, onClose, onPatch, onDelete, wide }: Props 
         <DateFieldsSection
           dueAt={task.dueAt}
           remindAt={task.remindAt}
+          durationMin={task.durationMin}
           onChangeDue={(iso) => onPatch(task.id, { dueAt: iso })}
           onChangeRemind={(iso) => onPatch(task.id, { remindAt: iso })}
+          onChangeDuration={(min) => onPatch(task.id, { durationMin: min })}
         />
 
         <View>

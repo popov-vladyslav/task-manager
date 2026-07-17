@@ -18,7 +18,10 @@ function logWrite(tool: string, data: Record<string, unknown>) {
 function fmtTask(t: Task, contextLabel?: string): string {
   const bits = [`• ${t.title}`, `[${t.id}]`];
   if (contextLabel) bits.push(`(${contextLabel})`);
-  if (t.dueAt) bits.push(`due ${t.dueAt.slice(0, 10)}`);
+  if (t.dueAt) {
+    bits.push(`due ${t.dueAt.slice(0, 16).replace('T', ' ')}`);
+    if (t.durationMin) bits.push(`${t.durationMin}min`);
+  }
   if (t.remindAt) bits.push(`remind ${t.remindAt.slice(0, 16).replace('T', ' ')}`);
   if (t.recurrenceRule) {
     bits.push(`repeats ${t.recurrenceRule}${t.nextInstance ? ` (next ${t.nextInstance})` : ''}`);
@@ -145,19 +148,20 @@ export function buildMcpServer(): McpServer {
     'create_task',
     {
       description:
-        'Create a task. Optionally set context (slug), due_at, remind_at (ISO), recurrence, and an initial comment.',
+        'Create a task. Optionally set context (slug), due_at (ISO — the deadline, also the calendar block start), remind_at (ISO), duration_min (block length in minutes; a task with a due_at is shown on the calendar, default 30 min), recurrence, and an initial comment.',
       inputSchema: {
         title: z.string().min(1),
         context: z.string().optional(),
         due_at: z.string().optional(),
         remind_at: z.string().optional(),
+        duration_min: z.number().int().positive().optional(),
         recurrence: z
           .object({ rule: z.string().min(1), remind_time: z.string().optional() })
           .optional(),
         comment: z.string().optional(),
       },
     },
-    async ({ title, context, due_at, remind_at, recurrence, comment }) => {
+    async ({ title, context, due_at, remind_at, duration_min, recurrence, comment }) => {
       let contextId: number | null = null;
       if (context) {
         const c = await contextsSvc.findContextBySlug(context);
@@ -169,6 +173,7 @@ export function buildMcpServer(): McpServer {
         contextId,
         dueAt: due_at ?? null,
         remindAt: remind_at ?? null,
+        durationMin: duration_min ?? null,
         recurrence: recurrence
           ? { rule: recurrence.rule, remindTime: recurrence.remind_time ?? null }
           : null,
@@ -183,7 +188,7 @@ export function buildMcpServer(): McpServer {
     'update_task',
     {
       description:
-        'Update a task by id or title_match. Set any of: title, context (slug), due_at, remind_at, status.',
+        'Update a task by id or title_match. Set any of: title, context (slug), due_at (deadline / calendar block start; pass null to clear), remind_at, duration_min (block length in minutes), status.',
       inputSchema: {
         id: z.string().optional(),
         title_match: z.string().optional(),
@@ -191,6 +196,7 @@ export function buildMcpServer(): McpServer {
         context: z.string().optional(),
         due_at: z.string().nullable().optional(),
         remind_at: z.string().nullable().optional(),
+        duration_min: z.number().int().positive().nullable().optional(),
         status: z.enum(['active', 'waiting', 'done']).optional(),
       },
     },
@@ -201,6 +207,7 @@ export function buildMcpServer(): McpServer {
       if (a.title !== undefined) patch.title = a.title;
       if (a.due_at !== undefined) patch.dueAt = a.due_at;
       if (a.remind_at !== undefined) patch.remindAt = a.remind_at;
+      if (a.duration_min !== undefined) patch.durationMin = a.duration_min;
       if (a.status !== undefined) patch.status = a.status;
       if (a.context !== undefined) {
         const c = await contextsSvc.findContextBySlug(a.context);

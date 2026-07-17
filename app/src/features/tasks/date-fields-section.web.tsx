@@ -2,6 +2,7 @@ import { type ReactNode } from 'react';
 import { Text, View } from 'react-native';
 import { Bell, Clock } from 'lucide-react-native';
 import { colors, monoFont, radius } from '../../theme';
+import { DurationField } from './duration-field';
 
 export function FieldLabel({ children }: { children: string }) {
   return (
@@ -91,27 +92,39 @@ function WebField({
 interface Props {
   dueAt: string | null;
   remindAt: string | null;
+  durationMin: number | null;
   onChangeDue: (iso: string | null) => void;
   onChangeRemind: (iso: string | null) => void;
+  onChangeDuration: (min: number) => void;
 }
 
-export function DateFieldsSection({ dueAt, remindAt, onChangeDue, onChangeRemind }: Props) {
+export function DateFieldsSection({
+  dueAt,
+  remindAt,
+  durationMin,
+  onChangeDue,
+  onChangeRemind,
+  onChangeDuration,
+}: Props) {
   return (
-    <View style={{ flexDirection: 'row', gap: 12 }}>
-      <WebField
-        label="Deadline"
-        icon={<Clock size={13} color={colors.textSecondary} />}
-        mode="date"
-        value={dueAt}
-        onChange={onChangeDue}
-      />
-      <WebField
-        label="Reminder"
-        icon={<Bell size={13} color={remindAt ? colors.accentReminder : colors.textSecondary} />}
-        mode="datetime"
-        value={remindAt}
-        onChange={onChangeRemind}
-      />
+    <View style={{ gap: 16 }}>
+      <View style={{ flexDirection: 'row', gap: 12 }}>
+        <WebField
+          label="Deadline"
+          icon={<Clock size={13} color={colors.textSecondary} />}
+          mode="datetime"
+          value={dueAt}
+          onChange={onChangeDue}
+        />
+        <WebField
+          label="Reminder"
+          icon={<Bell size={13} color={remindAt ? colors.accentReminder : colors.textSecondary} />}
+          mode="datetime"
+          value={remindAt}
+          onChange={onChangeRemind}
+        />
+      </View>
+      {dueAt ? <DurationField value={durationMin} onChange={onChangeDuration} /> : null}
     </View>
   );
 }

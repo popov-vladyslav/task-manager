@@ -19,6 +19,15 @@ interface ListFilter {
   dueBefore?: Date; // only tasks with a due date at/before this
 }
 
+const DEFAULT_DURATION_MIN = 30; // a task with a deadline gets a 30-min block unless set
+
+// A scheduled task (has a deadline) always has a duration; a task with no
+// deadline has none. Returns the duration_min to store for a given (due, dur).
+function resolveDuration(due: Date | null, durationMin: number | null | undefined): number | null {
+  if (!due) return null;
+  return durationMin ?? DEFAULT_DURATION_MIN;
+}
+
 // Task columns + derived comment/photo counts + the linked recurrence rule.
 const selection = {
   task: tasks,
@@ -122,13 +131,16 @@ export async function createTask(input: CreateTaskInput): Promise<Task> {
     recurrenceId = rule.id;
   }
 
+  const dueAt = input.dueAt ? new Date(input.dueAt) : null;
+
   const [row] = await db
     .insert(tasks)
     .values({
       title,
       contextId,
-      dueAt: input.dueAt ? new Date(input.dueAt) : null,
+      dueAt,
       remindAt: input.remindAt ? new Date(input.remindAt) : null,
+      durationMin: resolveDuration(dueAt, input.durationMin),
       sortGlobal: Number(mins.ming) - 1,
       sortContext: Number(mins.minc) - 1,
       recurrenceId,
@@ -141,7 +153,13 @@ export async function createTask(input: CreateTaskInput): Promise<Task> {
 
 export async function updateTask(id: string, patch: UpdateTaskInput): Promise<Task> {
   const [cur] = await db
-    .select({ recurrenceId: tasks.recurrenceId, title: tasks.title, contextId: tasks.contextId })
+    .select({
+      recurrenceId: tasks.recurrenceId,
+      title: tasks.title,
+      contextId: tasks.contextId,
+      dueAt: tasks.dueAt,
+      durationMin: tasks.durationMin,
+    })
     .from(tasks)
     .where(eq(tasks.id, id));
   if (!cur) throw notFound('Task not found');
@@ -152,6 +170,14 @@ export async function updateTask(id: string, patch: UpdateTaskInput): Promise<Ta
   if (patch.status !== undefined) set.status = patch.status;
   if (patch.dueAt !== undefined) set.dueAt = patch.dueAt ? new Date(patch.dueAt) : null;
   if (patch.remindAt !== undefined) set.remindAt = patch.remindAt ? new Date(patch.remindAt) : null;
+
+  // Deadline ⇒ duration invariant: recompute whenever either changes so a task
+  // with a deadline always has a duration (default 30), and one without has none.
+  if (patch.dueAt !== undefined || patch.durationMin !== undefined) {
+    const nextDue = patch.dueAt !== undefined ? (patch.dueAt ? new Date(patch.dueAt) : null) : cur.dueAt;
+    const nextDur = patch.durationMin !== undefined ? patch.durationMin : cur.durationMin;
+    set.durationMin = resolveDuration(nextDue, nextDur);
+  }
 
   // { completed: true } runs the complete-logic (spec §3).
   if (patch.completed !== undefined) {

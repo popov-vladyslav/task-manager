@@ -2,7 +2,8 @@ import { useState, type ReactNode } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { Bell, Clock, X } from 'lucide-react-native';
-import { colors, monoFont, radius, shortDate, shortDateTime } from '../../theme';
+import { colors, monoFont, radius, shortDateTime } from '../../theme';
+import { DurationField } from './duration-field';
 
 const isAndroid = process.env.EXPO_OS === 'android';
 
@@ -82,18 +83,29 @@ function FieldButton({
 interface Props {
   dueAt: string | null;
   remindAt: string | null;
+  durationMin: number | null;
   onChangeDue: (iso: string | null) => void;
   onChangeRemind: (iso: string | null) => void;
+  onChangeDuration: (min: number) => void;
 }
 
 // Two field buttons side by side; tapping one opens a single full-width picker
-// below the row (mutually exclusive — never two spinners at once).
-export function DateFieldsSection({ dueAt, remindAt, onChangeDue, onChangeRemind }: Props) {
+// below the row (mutually exclusive — never two spinners at once). Deadline and
+// Reminder are both date+time. When a deadline is set, a Duration picker appears
+// (the deadline + duration define the task's calendar block).
+export function DateFieldsSection({
+  dueAt,
+  remindAt,
+  durationMin,
+  onChangeDue,
+  onChangeRemind,
+  onChangeDuration,
+}: Props) {
   const [picker, setPicker] = useState<null | 'due' | 'remind'>(null);
   const isDue = picker === 'due';
   const value = isDue ? dueAt : remindAt;
   const onChange = isDue ? onChangeDue : onChangeRemind;
-  const mode: 'date' | 'datetime' = isDue ? 'date' : 'datetime';
+  const mode: 'date' | 'datetime' = 'datetime';
 
   const onPickerChange = (e: DateTimePickerEvent, d?: Date) => {
     if (isAndroid) {
@@ -110,7 +122,7 @@ export function DateFieldsSection({ dueAt, remindAt, onChangeDue, onChangeRemind
         <FieldButton
           label="Deadline"
           icon={<Clock size={13} color={colors.textSecondary} />}
-          display={shortDate(dueAt)}
+          display={shortDateTime(dueAt)}
           active={isDue}
           onPress={() => setPicker((p) => (p === 'due' ? null : 'due'))}
           onClear={() => {
@@ -173,6 +185,12 @@ export function DateFieldsSection({ dueAt, remindAt, onChangeDue, onChangeRemind
           mode={mode === 'datetime' ? 'date' : mode}
           onChange={onPickerChange}
         />
+      ) : null}
+
+      {dueAt ? (
+        <View style={{ marginTop: 16 }}>
+          <DurationField value={durationMin} onChange={onChangeDuration} />
+        </View>
       ) : null}
     </View>
   );
