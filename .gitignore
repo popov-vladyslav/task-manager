@@ -5,6 +5,9 @@ node_modules/
 .env
 .env.*
 !.env.example
+# Apple / EAS credentials (never commit)
+*.p8
+secrets/
 
 # builds
 dist/
