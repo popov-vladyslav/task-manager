@@ -246,7 +246,7 @@ export function TasksScreen() {
             </Text>
           </View>
 
-          <SideNavLinks onUnavailable={flash} />
+          <SideNavLinks />
 
           <Text style={{ fontFamily: monoFont, fontSize: 10, letterSpacing: 1, color: colors.textFaint, marginTop: 20, marginBottom: 8, paddingHorizontal: 8 }}>
             CONTEXTS

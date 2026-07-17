@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { ActivityIndicator, Text, useWindowDimensions, View } from 'react-native';
+import { useEffect } from 'react';
+import { ActivityIndicator, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Redirect } from 'expo-router';
 import { Tabs, TabList, TabTrigger, TabSlot } from 'expo-router/ui';
@@ -19,12 +19,6 @@ export default function TabsLayout() {
 
   const ready = useAuthStore((s) => s.ready);
   const jwt = useAuthStore((s) => s.jwt);
-
-  const [toast, setToast] = useState<string | null>(null);
-  const flash = (msg: string) => {
-    setToast(msg);
-    setTimeout(() => setToast(null), 2200);
-  };
 
   // Once signed in: register for push, and adopt any timer already running on
   // the backend (an orphan after a crash, or one started from the MCP tools).
@@ -51,34 +45,17 @@ export default function TabsLayout() {
       </View>
 
       {/* Mobile keeps the bottom bar here; wide viewports use each screen's sidebar. */}
-      {!wide ? <MobileTabBar bottomInset={insets.bottom} onUnavailable={flash} /> : null}
+      {!wide ? <MobileTabBar bottomInset={insets.bottom} /> : null}
 
       {/* Route registration for the custom bar — declared but not displayed. */}
       <TabList style={{ display: 'none' }}>
         <TabTrigger name="index" href="/" />
         <TabTrigger name="routines" href="/routines" />
+        <TabTrigger name="calendar" href="/calendar" />
       </TabList>
 
       {/* Full-screen focus timer — overlays everything when a session is open. */}
       <TimerScreen />
-
-      {toast ? (
-        <View
-          style={{
-            position: 'absolute',
-            alignSelf: 'center',
-            bottom: insets.bottom + 72,
-            paddingHorizontal: 16,
-            paddingVertical: 8,
-            borderRadius: 999,
-            backgroundColor: colors.bgElevated,
-            borderWidth: 1,
-            borderColor: colors.borderStrong,
-          }}
-        >
-          <Text style={{ fontSize: 12, color: colors.textPrimary }}>{toast}</Text>
-        </View>
-      ) : null}
     </Tabs>
   );
 }

@@ -13,13 +13,7 @@ import { colors } from '../../theme';
 type IconType = ComponentType<LucideProps>;
 
 // ---- Mobile bottom bar (rendered by the tabs layout) ----
-export function MobileTabBar({
-  bottomInset,
-  onUnavailable,
-}: {
-  bottomInset: number;
-  onUnavailable: (msg: string) => void;
-}) {
+export function MobileTabBar({ bottomInset }: { bottomInset: number }) {
   return (
     <View
       style={{
@@ -36,17 +30,15 @@ export function MobileTabBar({
       <TabTrigger name="routines" asChild>
         <BottomTabButton label="Routine" icon={RotateCcw} />
       </TabTrigger>
-      <BottomTabButton
-        label="Calendar"
-        icon={CalendarDays}
-        onPress={() => onUnavailable('Calendar arrives in a later phase')}
-      />
+      <TabTrigger name="calendar" asChild>
+        <BottomTabButton label="Calendar" icon={CalendarDays} />
+      </TabTrigger>
     </View>
   );
 }
 
 // ---- Web sidebar nav links (rendered inside each screen's sidebar) ----
-export function SideNavLinks({ onUnavailable }: { onUnavailable: (msg: string) => void }) {
+export function SideNavLinks() {
   return (
     <>
       <TabTrigger name="index" asChild>
@@ -55,11 +47,9 @@ export function SideNavLinks({ onUnavailable }: { onUnavailable: (msg: string) =
       <TabTrigger name="routines" asChild>
         <SideNavButton label="Routine" icon={RotateCcw} />
       </TabTrigger>
-      <SideNavButton
-        label="Calendar"
-        icon={CalendarDays}
-        onPress={() => onUnavailable('Calendar arrives in a later phase')}
-      />
+      <TabTrigger name="calendar" asChild>
+        <SideNavButton label="Calendar" icon={CalendarDays} />
+      </TabTrigger>
     </>
   );
 }

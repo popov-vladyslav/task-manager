@@ -120,6 +120,29 @@ export interface ActiveTimer {
   startedAt: string;
 }
 
+// Calendar (GET /api/calendar?from=&to=): tracked time blocks + task deadlines
+// overlapping the range, each carrying its task's context for coloring.
+export interface CalendarEntry {
+  id: string;
+  taskId: string;
+  taskTitle: string;
+  contextId: number | null;
+  startedAt: string;
+  endedAt: string | null; // null = still running
+}
+
+export interface CalendarDeadline {
+  id: string; // task id
+  title: string;
+  contextId: number | null;
+  dueAt: string;
+}
+
+export interface CalendarData {
+  entries: CalendarEntry[];
+  deadlines: CalendarDeadline[];
+}
+
 export interface UpdateRoutineInput {
   title?: string;
   timeHint?: string | null;

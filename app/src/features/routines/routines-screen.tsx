@@ -17,7 +17,6 @@ export function RoutinesScreen() {
 
   const { routines, loading, load, toggle, add, remove } = useRoutinesStore();
 
-  const [toast, setToast] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState('');
   const [inputFocused, setInputFocused] = useState(false);
@@ -28,11 +27,6 @@ export function RoutinesScreen() {
   }, [load]);
 
   const done = useMemo(() => routines.filter((r) => r.done).length, [routines]);
-
-  const flash = (msg: string) => {
-    setToast(msg);
-    setTimeout(() => setToast(null), 2200);
-  };
 
   const submitAdd = async () => {
     const title = draft.trim();
@@ -151,24 +145,6 @@ export function RoutinesScreen() {
     </Pressable>
   );
 
-  const toastNode = toast ? (
-    <View
-      style={{
-        position: 'absolute',
-        alignSelf: 'center',
-        bottom: 96,
-        paddingHorizontal: 16,
-        paddingVertical: 8,
-        borderRadius: 999,
-        backgroundColor: colors.bgElevated,
-        borderWidth: 1,
-        borderColor: colors.borderStrong,
-      }}
-    >
-      <Text style={{ fontSize: 12, color: colors.textPrimary }}>{toast}</Text>
-    </View>
-  ) : null;
-
   // ---- WEB / WIDE: sidebar + main ----
   if (wide) {
     return (
@@ -191,7 +167,7 @@ export function RoutinesScreen() {
             </Text>
           </View>
 
-          <SideNavLinks onUnavailable={flash} />
+          <SideNavLinks />
 
           <View style={{ flex: 1 }} />
           <Pressable onPress={() => useAuthStore.getState().signOut()} style={{ paddingHorizontal: 8, paddingVertical: 8 }}>
@@ -221,8 +197,6 @@ export function RoutinesScreen() {
           {progress}
           <View style={{ flex: 1 }}>{list}</View>
         </View>
-
-        {toastNode}
       </View>
     );
   }
@@ -240,8 +214,6 @@ export function RoutinesScreen() {
       <View style={{ flex: 1, paddingHorizontal: 20 }}>{list}</View>
 
       <View style={{ paddingHorizontal: 20, paddingBottom: 8 }}>{adding ? addInput : bigAddButton}</View>
-
-      {toastNode}
     </View>
   );
 }

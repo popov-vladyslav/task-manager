@@ -1,5 +1,6 @@
 import type {
   ActiveTimer,
+  CalendarData,
   Comment,
   Context,
   CreateRoutineInput,
@@ -102,4 +103,6 @@ export const api = {
   startTimer: (taskId: string) =>
     request<ActiveTimer>('/api/timer/start', { method: 'POST', body: { taskId } }),
   stopTimer: () => request<TimeEntry | null>('/api/timer/stop', { method: 'POST' }),
+  getCalendar: (fromISO: string, toISO: string) =>
+    request<CalendarData>(`/api/calendar${qs({ from: fromISO, to: toISO })}`),
 };
