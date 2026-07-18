@@ -11,7 +11,10 @@ import { unauthorized } from '../lib/errors';
 const MAGIC_TTL_MS = 15 * 60 * 1000; // 15 min
 const REFRESH_TTL_MS = 180 * 24 * 60 * 60 * 1000; // 180 days
 
-export async function requestMagicLink(email: string): Promise<void> {
+// Native deep-link scheme — must match app/app.json `scheme`.
+const APP_SCHEME = 'app';
+
+export async function requestMagicLink(email: string, platform?: string): Promise<void> {
   // Single-user app: only the owner email gets a link. Silently no-op otherwise
   // so we don't reveal which address is the owner.
   if (email.trim().toLowerCase() !== env.OWNER_EMAIL.toLowerCase()) return;
@@ -23,7 +26,11 @@ export async function requestMagicLink(email: string): Promise<void> {
     expiresAt: new Date(Date.now() + MAGIC_TTL_MS),
   });
 
-  const link = `${env.APP_URL}/auth?token=${token}`;
+  // Open the platform the request came from: native → app deep link, else web.
+  const isNative = platform === 'ios' || platform === 'android';
+  const link = isNative
+    ? `${APP_SCHEME}://auth?token=${token}`
+    : `${env.APP_URL}/auth?token=${token}`;
   await sendMagicLink(env.OWNER_EMAIL, link);
 }
 

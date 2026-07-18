@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import { create } from 'zustand';
 import type { AuthTokens } from '@task-manager/shared';
 import { API_URL } from '../lib/config';
@@ -46,7 +47,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   async requestLink(email: string) {
-    await post('/auth/magic-link', { email });
+    // Tell the server which platform asked, so the emailed link opens here
+    // (native → app deep link, web → web page).
+    await post('/auth/magic-link', { email, platform: Platform.OS });
   },
 
   async signInWithToken(magicToken: string) {

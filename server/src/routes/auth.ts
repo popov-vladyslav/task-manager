@@ -5,8 +5,10 @@ import * as svc from '../services/auth';
 const router = Router();
 
 router.post('/magic-link', async (req, res) => {
-  const { email } = z.object({ email: z.email() }).parse(req.body);
-  await svc.requestMagicLink(email);
+  const { email, platform } = z
+    .object({ email: z.email(), platform: z.string().optional() })
+    .parse(req.body);
+  await svc.requestMagicLink(email, platform);
   res.json({ ok: true });
 });
 
