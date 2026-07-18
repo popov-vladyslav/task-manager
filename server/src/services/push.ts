@@ -20,8 +20,9 @@ async function sendPush(title: string, body: string, data: Record<string, unknow
   const tokens = rows.map((r) => r.token).filter((t) => Expo.isExpoPushToken(t));
   if (tokens.length === 0) return;
 
-  // categoryId → the app's snooze action buttons; time-sensitive breaks through
-  // Focus and keeps the reminder prominent on the lock screen.
+  // categoryId → the app's snooze action buttons. (interruptionLevel 'active';
+  // 'time-sensitive' is deferred — it needs the Time Sensitive Notifications
+  // capability enabled on the App ID + a regenerated provisioning profile.)
   const messages: ExpoPushMessage[] = tokens.map((to) => ({
     to,
     sound: 'default',
@@ -30,7 +31,7 @@ async function sendPush(title: string, body: string, data: Record<string, unknow
     data,
     categoryId: 'reminder',
     priority: 'high',
-    interruptionLevel: 'time-sensitive',
+    interruptionLevel: 'active',
   }));
   for (const chunk of expo.chunkPushNotifications(messages)) {
     try {
