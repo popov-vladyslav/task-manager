@@ -163,6 +163,7 @@ function DetailBody({ task, contexts, onClose, onPatch, onDelete, autoFocusTitle
               onEndEditing={commitTitle}
               onBlur={commitTitle}
               autoFocus={autoFocusTitle}
+              selectTextOnFocus={autoFocusTitle}
               multiline
               scrollEnabled={false}
               style={{ flex: 1, fontSize: 18, fontWeight: '600', color: colors.textPrimary, ...webInputReset }}

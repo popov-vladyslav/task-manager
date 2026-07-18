@@ -5,15 +5,14 @@ import {
   Platform,
   Pressable,
   Text,
-  TextInput,
   useWindowDimensions,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ChevronRight, Plus, X } from 'lucide-react-native';
+import { Plus } from 'lucide-react-native';
 import { DraggableTaskList } from './draggable-task-list';
 import type { Context, Task } from '@task-manager/shared';
-import { colors, headerDate, monoFont, webInputReset } from '../../theme';
+import { colors, headerDate, monoFont } from '../../theme';
 import { useTasksStore } from '../../store/tasks';
 import { useAuthStore } from '../../store/auth';
 import { SideNavLinks } from '../nav/nav-chrome';
@@ -47,9 +46,6 @@ export function TasksScreen() {
   const [selected, setSelected] = useState<Task | null>(null);
   const [focusTitle, setFocusTitle] = useState(false); // autofocus the title for a just-created task
   const [toast, setToast] = useState<string | null>(null);
-  const [adding, setAdding] = useState(false);
-  const [draft, setDraft] = useState('');
-  const [inputFocused, setInputFocused] = useState(false);
 
   useEffect(() => {
     load();
@@ -102,17 +98,12 @@ export function TasksScreen() {
     flash(task.recurrenceId ? 'Done. Next instance scheduled.' : 'Done ✓');
   };
 
-  const submitAdd = async () => {
-    const title = draft.trim();
-    if (!title) {
-      setAdding(false);
-      return;
-    }
-    setDraft('');
-    setAdding(false);
-    const created = await addTask(title);
+  // "+ Task" creates a blank task and opens its detail with the title focused
+  // (no inline add field). The default title is selected so typing replaces it.
+  const onAddTask = async () => {
+    const created = await addTask('New task');
     if (created) {
-      setFocusTitle(true); // open the new task's detail with the title focused
+      setFocusTitle(true);
       setSelected(created);
     }
   };
@@ -143,52 +134,9 @@ export function TasksScreen() {
       />
     );
 
-  // The inline add input — a roomy field (real height + larger font) sitting on
-  // one line with the submit / cancel buttons.
-  const addInput = (
-    <View
-      style={{
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 8,
-        borderRadius: 12,
-        borderCurve: 'continuous',
-        paddingLeft: 14,
-        paddingRight: 6,
-        backgroundColor: colors.bgCard,
-        borderWidth: 1,
-        borderColor: inputFocused ? colors.accentPrimary : colors.borderStrong,
-      }}
-    >
-      <TextInput
-        autoFocus
-        value={draft}
-        onChangeText={setDraft}
-        onSubmitEditing={submitAdd}
-        onFocus={() => setInputFocused(true)}
-        onBlur={() => setInputFocused(false)}
-        placeholder="New task…"
-        placeholderTextColor={colors.textMuted}
-        style={{ flex: 1, paddingVertical: 14, fontSize: 16, color: colors.textPrimary, ...webInputReset }}
-      />
-      <Pressable onPress={submitAdd} style={{ padding: 10, borderRadius: 8, backgroundColor: colors.accentPrimary }}>
-        <ChevronRight size={16} color={colors.bgSurface} />
-      </Pressable>
-      <Pressable
-        onPress={() => {
-          setAdding(false);
-          setDraft('');
-        }}
-        style={{ padding: 10, borderRadius: 8, backgroundColor: colors.bgElevated }}
-      >
-        <X size={16} color={colors.textSecondary} />
-      </Pressable>
-    </View>
-  );
-
   const bigAddButton = (
     <Pressable
-      onPress={() => setAdding(true)}
+      onPress={onAddTask}
       style={{
         flexDirection: 'row',
         alignItems: 'center',
@@ -281,23 +229,17 @@ export function TasksScreen() {
         </View>
 
         <View style={{ flex: 1, paddingTop: insets.top + 24, paddingHorizontal: 24 }}>
-          {/* When adding, the input takes over the header line; otherwise title + add button.
-              Fixed min-height so switching between the two states doesn't shift the list. */}
           <View style={{ marginBottom: 16, minHeight: 50, justifyContent: 'center' }}>
-            {adding ? (
-              addInput
-            ) : (
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                <Text style={{ fontSize: 22, fontWeight: '600', letterSpacing: -0.4, color: colors.textPrimary }}>{activeLabel}</Text>
-                <Pressable
-                  onPress={() => setAdding(true)}
-                  style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 12, backgroundColor: colors.accentPrimary }}
-                >
-                  <Plus size={14} color={colors.bgSurface} />
-                  <Text style={{ fontSize: 13, fontWeight: '600', color: colors.bgSurface }}>Task</Text>
-                </Pressable>
-              </View>
-            )}
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <Text style={{ fontSize: 22, fontWeight: '600', letterSpacing: -0.4, color: colors.textPrimary }}>{activeLabel}</Text>
+              <Pressable
+                onPress={onAddTask}
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 12, backgroundColor: colors.accentPrimary }}
+              >
+                <Plus size={14} color={colors.bgSurface} />
+                <Text style={{ fontSize: 13, fontWeight: '600', color: colors.bgSurface }}>Task</Text>
+              </Pressable>
+            </View>
           </View>
           <View style={{ flex: 1, minHeight: 0 }}>{list}</View>
         </View>
@@ -326,7 +268,7 @@ export function TasksScreen() {
 
       <View style={{ flex: 1 }}>{list}</View>
 
-      <View style={{ paddingHorizontal: 20, paddingBottom: 8 }}>{adding ? addInput : bigAddButton}</View>
+      <View style={{ paddingHorizontal: 20, paddingBottom: 8 }}>{bigAddButton}</View>
 
       {toastNode}
       {detailNode}
