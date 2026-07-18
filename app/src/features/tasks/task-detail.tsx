@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import {
-  KeyboardAvoidingView,
   Modal,
   Pressable,
   ScrollView,
@@ -9,6 +8,7 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import Animated, { SlideInDown } from 'react-native-reanimated';
 import { ChevronRight, MessageSquare, Trash2, X } from 'lucide-react-native';
 import type { Comment, Context, RecurrenceInput, Task, UpdateTaskInput } from '@task-manager/shared';

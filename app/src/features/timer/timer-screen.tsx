@@ -33,7 +33,7 @@ function TimerModal() {
   // (Native only — screen orientation isn't a thing on web.)
   useEffect(() => {
     if (Platform.OS === 'web') return;
-    ScreenOrientation.unlockAsync().catch(() => {});
+    ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.ALL).catch(() => {});
     return () => {
       ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP).catch(() => {});
     };

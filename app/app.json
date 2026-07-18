@@ -4,7 +4,6 @@
     "slug": "task-manager",
     "owner": "vladyslavpopovpl",
     "version": "1.0.0",
-    "orientation": "default",
     "icon": "./assets/images/icon.png",
     "scheme": "app",
     "userInterfaceStyle": "automatic",
@@ -13,6 +12,13 @@
       "bundleIdentifier": "com.vladyslavpopovpl.app",
       "config": {
         "usesNonExemptEncryption": false
+      },
+      "infoPlist": {
+        "UISupportedInterfaceOrientations": [
+          "UIInterfaceOrientationPortrait",
+          "UIInterfaceOrientationLandscapeLeft",
+          "UIInterfaceOrientationLandscapeRight"
+        ]
       }
     },
     "android": {
