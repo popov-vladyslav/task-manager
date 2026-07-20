@@ -47,7 +47,7 @@ export function CalendarScreen() {
   const { width } = useWindowDimensions();
   const wide = width >= WIDE_BREAKPOINT;
 
-  const { mode, anchor, data, load, setMode, shift, goToDay, goToToday } = useCalendarStore();
+  const { mode, anchor, data, load, hydrateMode, setMode, shift, goToDay, goToToday } = useCalendarStore();
   const contexts = useTasksStore((s) => s.contexts);
 
   const [detailTask, setDetailTask] = useState<Task | null>(null);
@@ -60,9 +60,9 @@ export function CalendarScreen() {
   };
 
   useEffect(() => {
-    load();
+    hydrateMode(); // restore last-selected mode (defaults to Day), then load
     if (useTasksStore.getState().contexts.length === 0) useTasksStore.getState().load();
-  }, [load]);
+  }, [hydrateMode]);
 
   const colorOf = (id: number | null) =>
     (id != null && contexts.find((c) => c.id === id)?.color) || colors.textMuted;

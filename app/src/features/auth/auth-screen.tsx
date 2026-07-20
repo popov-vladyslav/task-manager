@@ -87,6 +87,8 @@ export function AuthScreen() {
           autoCapitalize="none"
           keyboardType="email-address"
           inputMode="email"
+          textContentType="emailAddress"
+          autoComplete="email"
           style={inputStyle}
         />
         <Pressable

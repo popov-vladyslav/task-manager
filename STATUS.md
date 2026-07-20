@@ -8,7 +8,7 @@ deploy details in `DEPLOY.md`. Last updated: 2026-07-20.
 - **Phase 2** — MCP (9 tools) ✅, OAuth ✅, Scheduler ✅, Routines screen ✅ — all committed & deployed.
 - **Phase 3** — **Timer ✅**, **Push ✅** (verified on iPhone), **Calendar ✅**.
   Calendar/UX refinement pass **✅ done** — Batches **A, B, C, D** all committed & verified (see "Calendar refinement pass" below). **Photos descoped.**
-- **Change Request 01 + Settings** — 🚧 IN PROGRESS (started 2026-07-20). See "**Change Request 01 + Settings**" section below for the live batch ledger. (Old tech_spec §12 Settings — PIN / export / repeat-toggle — **dropped**; not wanted.)
+- **Change Request 01 + Settings** — all batches **B1–B7 built & web-verified** (started 2026-07-20). ⚠️ **Pending: device pass** on native-only behaviors (B6 gestures/@gorhom sheet/keyboard-accessory). See the "**Change Request 01 + Settings**" section below for the batch ledger. (Old tech_spec §12 Settings — PIN / export / repeat-toggle — **dropped**; not wanted.)
 - Prod auto-deploys from `main` (Render). Local `.env` `DATABASE_URL` = the **same Neon DB as prod**.
 
 ## Live infra
@@ -65,7 +65,7 @@ User feedback split into batches, all committed & verified.
 - **#7 Keyboard** no longer covers inputs — `KeyboardAvoidingView` moved to wrap each modal (so the bottom-anchored sheet lifts) + the tasks/routines mobile roots + the auth card.
 - **⚠️ Needs a dev-client rebuild** to test on device: `expo-screen-orientation` (#5), notification category + entitlement (#6), and the earlier `expo-haptics`. `#7` works after a JS reload but is best confirmed post-rebuild.
 
-## Change Request 01 + Settings — 🚧 IN PROGRESS (started 2026-07-20)
+## Change Request 01 + Settings — B1–B7 BUILT (⚠️ device pass pending) — started 2026-07-20
 Source: `change_request_01.md` (**wins on conflict** with tech_spec) + a verbal Settings ask
 (context CRUD / sign out / reset). **This is the resume ledger — tick the boxes as batches land.**
 
@@ -156,11 +156,11 @@ Source: `change_request_01.md` (**wins on conflict** with tech_spec) + a verbal 
     - verified on web: top input create (wide + narrow), accessory row renders when focused, input matches card height (50) & width. Native keyboard flow (accessory → dismiss → panel → refocus) is soft-keyboard behavior — **verify on device; expect tuning like B6b**.
   - **B6 done pending device verification** (B6a/b/c all web-verified; native gestures/keyboard to confirm on device).
   - **Calendar drag-preview fix (2026-07-21):** the lifted-block preview (`calendar-overlay.tsx`) had `transform: scale(1.02)` — scaling from center shifts the left edge out by ~1% of width; invisible in narrow columns but ~10px in full-width **Day** view. Removed the scale (shadow still conveys lift); found while testing B6.
-- [ ] **B7 — Polish (CR §3, §5, §6)**
-  - [ ] login email autofill (`textContentType`/`autoComplete`/`keyboardType`/`autoCapitalize`; web `type=email`)
-  - [ ] calendar default Day + persist last-selected mode
-  - [ ] hide empty contexts from the Tasks chip row
-  - [ ] verify
+- [x] **B7 — Polish (CR §3, §5, §6)** — ✅ done & web-verified 2026-07-21 (uncommitted)
+  - [x] login email autofill: added `textContentType="emailAddress"` + `autoComplete="email"` (email input already had `autoCapitalize`/`keyboardType`/`inputMode`) — `auth-screen.tsx`
+  - [x] calendar default **Day** + persist last-selected mode: store default `mode: 'day'`; `setMode` persists to `storage` key `log.calMode`; `hydrateMode()` restores it on mount (screen calls it instead of `load`) — verified: cleared → Day, switch to Week → reload stays Week
+  - [x] hide empty contexts from the Tasks chip row: `ContextChips` filters out contexts with 0 open tasks (keeps "All" + the active context) — verified: only non-empty chips show
+  - [x] verified on web; login autofill attributes are standard (confirm on device)
 
 ## Left / next (after CR01)
 1. Optional calendar polish: **edge-resize** blocks to change `duration_min` (deferred from Batch D); drag auto-scroll at viewport edges.

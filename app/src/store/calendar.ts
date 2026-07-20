@@ -1,8 +1,12 @@
 import { create } from 'zustand';
 import type { CalendarData } from '@task-manager/shared';
 import { api } from '../lib/api';
+import { storage } from '../lib/storage';
 import { rangeFor, shiftAnchor, startOfDay, type CalMode } from '../features/calendar/calendar-dates';
 import { useTasksStore } from './tasks';
+
+const MODE_KEY = 'log.calMode';
+const MODES: CalMode[] = ['day', '3day', 'week', 'month'];
 
 interface CalendarState {
   mode: CalMode;
@@ -11,6 +15,7 @@ interface CalendarState {
   loading: boolean;
 
   load: () => Promise<void>;
+  hydrateMode: () => Promise<void>; // restore the last-selected mode (defaults to Day)
   setMode: (m: CalMode) => void;
   shift: (dir: number) => void;
   goToDay: (d: Date) => void; // tap a month cell → day view
@@ -20,10 +25,18 @@ interface CalendarState {
 }
 
 export const useCalendarStore = create<CalendarState>((set, get) => ({
-  mode: 'week',
+  mode: 'day',
   anchor: startOfDay(new Date()),
   data: null,
   loading: false,
+
+  async hydrateMode() {
+    const saved = await storage.get(MODE_KEY);
+    if (saved && MODES.includes(saved as CalMode) && saved !== get().mode) {
+      set({ mode: saved as CalMode });
+    }
+    get().load();
+  },
 
   async load() {
     const { mode, anchor } = get();
@@ -39,6 +52,7 @@ export const useCalendarStore = create<CalendarState>((set, get) => ({
 
   setMode(mode) {
     set({ mode });
+    void storage.set(MODE_KEY, mode);
     get().load();
   },
   shift(dir) {

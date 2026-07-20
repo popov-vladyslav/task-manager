@@ -10,9 +10,13 @@ interface Props {
 }
 
 export function ContextChips({ contexts, counts, activeContextId, onSelect }: Props) {
+  // Hide contexts with no open tasks (CR §6). "All" is always shown; the active
+  // context stays visible even if it's empty (so you can see where you are).
   const items: { id: number | null; label: string; color: string }[] = [
     { id: null, label: 'All', color: colors.textSecondary },
-    ...contexts.map((c) => ({ id: c.id, label: c.label, color: c.color })),
+    ...contexts
+      .filter((c) => (counts[String(c.id)] ?? 0) > 0 || activeContextId === c.id)
+      .map((c) => ({ id: c.id, label: c.label, color: c.color })),
   ];
 
   return (
