@@ -155,6 +155,7 @@ Source: `change_request_01.md` (**wins on conflict** with tech_spec) + a verbal 
     - store `addTask(title, extra?)` generalized to carry `contextId`/`dueAt`/`remindAt`/`durationMin`; replaced the "+ Task"/"+ Add task" buttons
     - verified on web: top input create (wide + narrow), accessory row renders when focused, input matches card height (50) & width. Native keyboard flow (accessory → dismiss → panel → refocus) is soft-keyboard behavior — **verify on device; expect tuning like B6b**.
   - **B6 done pending device verification** (B6a/b/c all web-verified; native gestures/keyboard to confirm on device).
+  - **Calendar drag-preview fix (2026-07-21):** the lifted-block preview (`calendar-overlay.tsx`) had `transform: scale(1.02)` — scaling from center shifts the left edge out by ~1% of width; invisible in narrow columns but ~10px in full-width **Day** view. Removed the scale (shadow still conveys lift); found while testing B6.
 - [ ] **B7 — Polish (CR §3, §5, §6)**
   - [ ] login email autofill (`textContentType`/`autoComplete`/`keyboardType`/`autoCapitalize`; web `type=email`)
   - [ ] calendar default Day + persist last-selected mode
