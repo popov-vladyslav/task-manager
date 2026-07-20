@@ -2,8 +2,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Platform, Pressable, Text, useWindowDimensions, View } from 'react-native';
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Check, ChevronDown, ChevronRight, Plus } from 'lucide-react-native';
+import { Check, ChevronDown, ChevronRight } from 'lucide-react-native';
 import { DraggableTaskList } from './draggable-task-list';
+import { QuickAddInput, QuickAddBar } from './quick-add';
 import type { Context, Task } from '@task-manager/shared';
 import { colors, headerDate, monoFont } from '../../theme';
 import { useTasksStore } from '../../store/tasks';
@@ -123,14 +124,21 @@ export function TasksScreen() {
     flash(task.recurrenceId ? 'Done. Next instance scheduled.' : 'Done ✓');
   };
 
-  // "+ Task" creates a blank task and opens its detail with the title focused
-  // (no inline add field). The default title is selected so typing replaces it.
-  const onAddTask = async () => {
-    const created = await addTask('New task');
-    if (created) {
-      setFocusTitle(true);
-      setSelected(created);
-    }
+  // Quick-add: create straight from the top input with any attributes picked in
+  // the keyboard-accessory panels. Stays on the list (no auto-open of the detail).
+  const onQuickCreate = async (input: {
+    title: string;
+    contextId?: number | null;
+    dueAt?: string | null;
+    remindAt?: string | null;
+    durationMin?: number | null;
+  }) => {
+    await addTask(input.title, {
+      contextId: input.contextId,
+      dueAt: input.dueAt,
+      remindAt: input.remindAt,
+      durationMin: input.durationMin,
+    });
   };
 
   const completedSection = (
@@ -195,25 +203,6 @@ export function TasksScreen() {
         )}
       />
     );
-
-  const bigAddButton = (
-    <Pressable
-      onPress={onAddTask}
-      style={{
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 8,
-        borderRadius: 12,
-        borderCurve: 'continuous',
-        paddingVertical: 13,
-        backgroundColor: colors.accentPrimary,
-      }}
-    >
-      <Plus size={16} color={colors.bgSurface} />
-      <Text style={{ fontSize: 14, fontWeight: '600', color: colors.bgSurface }}>Add task</Text>
-    </Pressable>
-  );
 
   const toastNode = toast ? (
     <View
@@ -291,18 +280,8 @@ export function TasksScreen() {
         </View>
 
         <View style={{ flex: 1, paddingTop: insets.top + 24, paddingHorizontal: 24 }}>
-          <View style={{ marginBottom: 16, minHeight: 50, justifyContent: 'center' }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-              <Text style={{ fontSize: 22, fontWeight: '600', letterSpacing: -0.4, color: colors.textPrimary }}>{activeLabel}</Text>
-              <Pressable
-                onPress={onAddTask}
-                style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 12, backgroundColor: colors.accentPrimary }}
-              >
-                <Plus size={14} color={colors.bgSurface} />
-                <Text style={{ fontSize: 13, fontWeight: '600', color: colors.bgSurface }}>Task</Text>
-              </Pressable>
-            </View>
-          </View>
+          <Text style={{ fontSize: 22, fontWeight: '600', letterSpacing: -0.4, color: colors.textPrimary, marginBottom: 12 }}>{activeLabel}</Text>
+          <QuickAddInput activeContextId={activeContextId} onCreate={onQuickCreate} />
           <View style={{ flex: 1, minHeight: 0 }}>{list}</View>
         </View>
 
@@ -328,9 +307,11 @@ export function TasksScreen() {
 
       <ContextChips contexts={contexts} counts={counts} activeContextId={activeContextId} onSelect={setActiveContext} />
 
+      <QuickAddInput activeContextId={activeContextId} onCreate={onQuickCreate} />
+
       <View style={{ flex: 1 }}>{list}</View>
 
-      <View style={{ paddingHorizontal: 20, paddingBottom: 8 }}>{bigAddButton}</View>
+      <QuickAddBar contexts={contexts} />
 
       {toastNode}
       {detailNode}

@@ -22,7 +22,10 @@ interface TasksState {
   ) => Promise<void>;
   deleteContext: (id: number) => Promise<void>; // throws (409 message) if still referenced
   resetData: () => Promise<void>; // wipes tasks/recurrence/timers; keeps contexts
-  addTask: (title: string) => Promise<Task | null>;
+  addTask: (
+    title: string,
+    extra?: { contextId?: number | null; dueAt?: string | null; remindAt?: string | null; durationMin?: number | null },
+  ) => Promise<Task | null>;
   toggleComplete: (task: Task) => Promise<void>;
   patchTask: (id: string, patch: Parameters<typeof api.updateTask>[1]) => Promise<void>;
   removeTask: (id: string) => Promise<void>;
@@ -106,9 +109,17 @@ export const useTasksStore = create<TasksState>((set, get) => ({
     await get().load();
   },
 
-  async addTask(title) {
-    const contextId = get().activeContextId ?? undefined;
-    const created = await api.createTask({ title, contextId });
+  async addTask(title, extra) {
+    // Default to the active context; an explicit extra.contextId (incl. null) wins.
+    const contextId =
+      extra && 'contextId' in extra ? extra.contextId : (get().activeContextId ?? undefined);
+    const created = await api.createTask({
+      title,
+      contextId,
+      dueAt: extra?.dueAt ?? undefined,
+      remindAt: extra?.remindAt ?? undefined,
+      durationMin: extra?.durationMin ?? undefined,
+    });
     set({ tasks: [created, ...get().tasks] });
     return created;
   },

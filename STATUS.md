@@ -129,7 +129,7 @@ Source: `change_request_01.md` (**wins on conflict** with tech_spec) + a verbal 
   - [x] Calendar: `services/calendar.ts` left-joins contexts and filters out excluded-context tasks
   - [x] app api client + store `createContext`/`updateContext` pass `excludeFromAll`
   - [x] verified: both workspaces typecheck clean; service test on Neon branch `br-noisy-queen-as0gywtn` (migration applied there) — flag round-trips on create/update, calendar hides-then-shows on toggle (ALL PASS); real browser against a throwaway API on that branch — excluding "Home" dropped **All 39 → 24**, Home chip still shows count 15 and selecting it lists its tasks, Settings shows the "hidden" badge. Prod untouched.
-- [ ] **B6 — Detail bottom sheet + Task-UX overhaul (CR §4 + Revision B)** — mobile-first; web keeps plain input + existing modal
+- [~] **B6 — Detail bottom sheet + Task-UX overhaul (CR §4 + Revision B)** — B6a/b/c ✅ built & web-verified (uncommitted); ⚠️ native gestures/keyboard need a device pass; mobile-first, web keeps plain input + existing modal
   - [x] **B6a — Detail sheet** — ✅ done & web-verified 2026-07-20 (uncommitted); ⚠️ native swipe/snap/keyboard needs device check
     - mobile task detail → `@gorhom/bottom-sheet` `BottomSheetModal` (present-on-mount, `onDismiss`→close, `BottomSheetBackdrop` press-to-close, `keyboardBehavior="interactive"`); `BottomSheetModalProvider` added in root `_layout`
     - **dynamic sizing** (`enableDynamicSizing`, NOT fixed 60/92 snaps — per user) → sheet grows to fit content, `BottomSheetScrollView` scrolls if it overflows; fixes the clipping/last-field bug
@@ -145,9 +145,16 @@ Source: `change_request_01.md` (**wins on conflict** with tech_spec) + a verbal 
     - long-press = reorder (kept), checkbox = complete (kept)
     - **show/hide completed**: collapsible footer (`ListFooterComponent`) → `loadCompleted()` fetches done tasks; `CompletedRow` (dimmed + strikethrough, teal check to re-open via `uncomplete`); scoped to the active context + exclude-from-All
     - store: `completed`/`loadCompleted`/`uncomplete`; `toggleComplete` keeps `completed` in sync
+    - **card layout polish** (per user): title-only rows are vertically centered (`alignItems: 'center'`, no `marginTop` offsets); the badges row renders **only when there are badges** (no empty trailing space)
     - verified on web: inline edit persists (DB), Play works, show/hide completed toggles + lists + re-opens. Swipe gestures + reorder-vs-swipe coexistence are native-touch — verify on device.
-  - [ ] **B6c — Quick-add:** title-only top input + keyboard-accessory shortcut row (Deadline · Reminder · Duration · Context); tapping a shortcut → dismiss keyboard, slide up ≈keyboard-height picker panel (date+time w/ quick chips + month grid; context list; duration list; duration needs a deadline); replaces the current "+ Task" button; web = plain input
-  - [ ] verify device + web (each sub-batch)
+  - [x] **B6c — Quick-add** — ✅ done & web-verified 2026-07-21 (uncommitted); ⚠️ native keyboard-accessory + swap-in panels need device check
+    - `features/tasks/quick-add.tsx`: `useQuickAdd` zustand draft store shared by the top input and the bottom bar; `QuickAddInput` (top of list) + `QuickAddBar` (native-only accessory + panel)
+    - **top input** sized to match a task card exactly (`height: 50` = card padding + 26px control) and full card width; on web = plain input, Enter creates (DB-verified "QA B6c web task")
+    - **native accessory** via `KeyboardStickyView` — Deadline · Reminder · Duration · Context icons above the keyboard when focused (gated on `focused` so it doesn't show over the detail sheet)
+    - **swap-in panel**: tapping a shortcut → `Keyboard.dismiss()` + an absolute bottom panel (`PANEL_HEIGHT` 300) with the picker — date+time (Today/Tomorrow/+7d chips + `DateTimePicker` spinner), context pill list, `DurationField`; picked values apply on create (duration defaults 30 when a deadline is set)
+    - store `addTask(title, extra?)` generalized to carry `contextId`/`dueAt`/`remindAt`/`durationMin`; replaced the "+ Task"/"+ Add task" buttons
+    - verified on web: top input create (wide + narrow), accessory row renders when focused, input matches card height (50) & width. Native keyboard flow (accessory → dismiss → panel → refocus) is soft-keyboard behavior — **verify on device; expect tuning like B6b**.
+  - **B6 done pending device verification** (B6a/b/c all web-verified; native gestures/keyboard to confirm on device).
 - [ ] **B7 — Polish (CR §3, §5, §6)**
   - [ ] login email autofill (`textContentType`/`autoComplete`/`keyboardType`/`autoCapitalize`; web `type=email`)
   - [ ] calendar default Day + persist last-selected mode
