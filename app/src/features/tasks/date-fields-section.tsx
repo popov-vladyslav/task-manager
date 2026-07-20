@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import { Pressable, Text, View } from 'react-native';
-import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
+import DateTimePicker, { type DateTimePickerChangeEvent } from '@react-native-community/datetimepicker';
 import { Bell, Clock, X } from 'lucide-react-native';
 import { colors, monoFont, radius, shortDateTime } from '../../theme';
 import { DurationField } from './duration-field';
@@ -109,13 +109,10 @@ export function DateFieldsSection({
   const onChange = isDue ? onChangeDue : onChangeRemind;
   const mode: 'date' | 'datetime' = 'datetime';
 
-  const onPickerChange = (e: DateTimePickerEvent, d?: Date) => {
-    if (isAndroid) {
-      setPicker(null);
-      if (e.type === 'set' && d) onChange(d.toISOString());
-      return;
-    }
-    if (d) onChange(d.toISOString()); // iOS inline spinner commits live
+  // onValueChange fires only when a value is picked (Android cancel → onDismiss).
+  const onPickerChange = (_e: DateTimePickerChangeEvent, d: Date) => {
+    if (isAndroid) setPicker(null); // the dialog closes after a pick
+    onChange(d.toISOString()); // iOS inline spinner commits live
   };
 
   return (
@@ -167,7 +164,7 @@ export function DateFieldsSection({
             display="spinner"
             themeVariant="dark"
             style={{ alignSelf: 'stretch' }}
-            onChange={onPickerChange}
+            onValueChange={onPickerChange}
           />
           <Pressable
             onPress={() => setPicker(null)}
@@ -187,7 +184,8 @@ export function DateFieldsSection({
         <DateTimePicker
           value={value ? new Date(value) : new Date()}
           mode={mode === 'datetime' ? 'date' : mode}
-          onChange={onPickerChange}
+          onValueChange={onPickerChange}
+          onDismiss={() => setPicker(null)}
         />
       ) : null}
 

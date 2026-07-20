@@ -1,16 +1,20 @@
 import { useRef } from 'react';
 import { Keyboard, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { KeyboardStickyView } from 'react-native-keyboard-controller';
-import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import DateTimePicker, { type DateTimePickerChangeEvent } from '@react-native-community/datetimepicker';
 import { create } from 'zustand';
 import { Bell, CalendarClock, Hourglass, Plus, Tag, X } from 'lucide-react-native';
 import type { Context } from '@task-manager/shared';
-import { colors, monoFont, radius, shortDateTime, webInputReset } from '../../theme';
+import { colors, radius, shortDateTime, webInputReset } from '../../theme';
 import { DurationField } from './duration-field';
 
 const isWeb = process.env.EXPO_OS === 'web';
 const isAndroid = process.env.EXPO_OS === 'android';
 const PANEL_HEIGHT = 300;
+// The Tasks screen ends at the top of the bottom tab bar, so the sticky accessory
+// lands one tab-bar-height above the keyboard — push it back down by that much.
+const TAB_BAR_CONTENT = 52;
 
 type Panel = 'deadline' | 'reminder' | 'duration' | 'context' | null;
 
@@ -127,6 +131,7 @@ export function QuickAddInput({
 // ---- Bottom bar: keyboard-accessory shortcuts + swap-in picker panel (native only) ----
 export function QuickAddBar({ contexts }: { contexts: Context[] }) {
   const { focused, panel, dueAt, remindAt, durationMin, contextId, patch } = useQuickAdd();
+  const insets = useSafeAreaInsets();
 
   const openPanel = (p: Panel) => {
     Keyboard.dismiss();
@@ -137,7 +142,6 @@ export function QuickAddBar({ contexts }: { contexts: Context[] }) {
     inputRef.current?.focus();
   };
 
-  const ctx = contexts.find((c) => c.id === contextId);
   const shortcuts: { key: Panel; icon: typeof Bell; on: boolean }[] = [
     { key: 'deadline', icon: CalendarClock, on: !!dueAt },
     { key: 'reminder', icon: Bell, on: !!remindAt },
@@ -148,13 +152,13 @@ export function QuickAddBar({ contexts }: { contexts: Context[] }) {
   return (
     <>
       {focused && !panel ? (
-        <KeyboardStickyView>
+        <KeyboardStickyView offset={{ opened: TAB_BAR_CONTENT + insets.bottom }}>
           <View
             style={{
               flexDirection: 'row',
               alignItems: 'center',
-              gap: 6,
-              paddingHorizontal: 16,
+              justifyContent: 'space-between',
+              paddingHorizontal: 24,
               paddingVertical: 8,
               backgroundColor: colors.bgSurface,
               borderTopWidth: 1,
@@ -167,7 +171,7 @@ export function QuickAddBar({ contexts }: { contexts: Context[] }) {
                 onPress={() => openPanel(key)}
                 hitSlop={6}
                 style={{
-                  width: 40,
+                  width: 44,
                   height: 34,
                   borderRadius: 9,
                   alignItems: 'center',
@@ -178,10 +182,6 @@ export function QuickAddBar({ contexts }: { contexts: Context[] }) {
                 <Icon size={18} color={on ? colors.accentPrimary : colors.textSecondary} />
               </Pressable>
             ))}
-            <View style={{ flex: 1 }} />
-            {ctx ? (
-              <Text style={{ fontFamily: monoFont, fontSize: 11, color: colors.textMuted }}>{ctx.label}</Text>
-            ) : null}
           </View>
         </KeyboardStickyView>
       ) : null}
@@ -297,8 +297,8 @@ function PanelBody({
   const setValue = (iso: string | null) =>
     patch(panel === 'deadline' ? { dueAt: iso, durationMin: iso ? (durationMin ?? 30) : durationMin } : { remindAt: iso });
 
-  const onPickerChange = (_e: DateTimePickerEvent, d?: Date) => {
-    if (d) setValue(d.toISOString());
+  const onPickerChange = (_e: DateTimePickerChangeEvent, d: Date) => {
+    setValue(d.toISOString());
   };
 
   return (
@@ -336,7 +336,7 @@ function PanelBody({
           display="spinner"
           themeVariant="dark"
           style={{ alignSelf: 'stretch' }}
-          onChange={onPickerChange}
+          onValueChange={onPickerChange}
         />
       ) : null}
     </View>

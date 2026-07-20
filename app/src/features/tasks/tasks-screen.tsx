@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Platform, Pressable, Text, useWindowDimensions, View } from 'react-native';
-import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
+import { ActivityIndicator, Pressable, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Check, ChevronDown, ChevronRight } from 'lucide-react-native';
 import { DraggableTaskList } from './draggable-task-list';
@@ -291,13 +290,13 @@ export function TasksScreen() {
     );
   }
 
-  // ---- MOBILE / NARROW: header + chips + list + add + tabs ----
+  // ---- MOBILE / NARROW: header + chips + quick-add + list + tabs ----
+  // Plain View (NOT KeyboardAvoidingView): the quick-add input sits at the top
+  // (never covered) and the accessory row rides the keyboard via QuickAddBar's
+  // KeyboardStickyView. A KeyboardAvoidingView here would double-compensate with
+  // the sticky view and fling the accessory to the top of the screen.
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={insets.bottom + 8}
-      style={{ flex: 1, backgroundColor: colors.bgSurface, paddingTop: insets.top + 8 }}
-    >
+    <View style={{ flex: 1, backgroundColor: colors.bgSurface, paddingTop: insets.top + 8 }}>
       <View style={{ paddingHorizontal: 20, paddingBottom: 12 }}>
         <Text style={{ fontFamily: monoFont, fontSize: 10.5, letterSpacing: 1.5, color: colors.textMuted }}>{headerDate()}</Text>
         <Text style={{ fontSize: 22, fontWeight: '600', letterSpacing: -0.4, color: colors.textPrimary }}>
@@ -315,7 +314,7 @@ export function TasksScreen() {
 
       {toastNode}
       {detailNode}
-    </KeyboardAvoidingView>
+    </View>
   );
 }
 
