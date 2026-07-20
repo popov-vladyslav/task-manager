@@ -68,18 +68,31 @@ export function TasksScreen() {
     return m;
   }, [contexts]);
 
+  // Contexts flagged "exclude from All" — their tasks are kept out of the All
+  // view (and its count), but stay visible when that context's chip is selected.
+  const excludedIds = useMemo(() => {
+    const s = new Set<number>();
+    for (const c of contexts) if (c.excludeFromAll) s.add(c.id);
+    return s;
+  }, [contexts]);
+
+  const inAll = (t: Task) => t.contextId == null || !excludedIds.has(t.contextId);
+
   const counts = useMemo(() => {
-    const c: Record<string, number> = { all: tasks.length };
-    for (const t of tasks) if (t.contextId != null) c[String(t.contextId)] = (c[String(t.contextId)] ?? 0) + 1;
+    const c: Record<string, number> = { all: 0 };
+    for (const t of tasks) {
+      if (t.contextId != null) c[String(t.contextId)] = (c[String(t.contextId)] ?? 0) + 1;
+      if (inAll(t)) c.all += 1;
+    }
     return c;
-  }, [tasks]);
+  }, [tasks, excludedIds]);
 
   const visible = useMemo(() => {
     const list =
-      activeContextId == null ? [...tasks] : tasks.filter((t) => t.contextId === activeContextId);
+      activeContextId == null ? tasks.filter(inAll) : tasks.filter((t) => t.contextId === activeContextId);
     const key = activeContextId == null ? 'sortGlobal' : 'sortContext';
     return list.sort((a, b) => a[key] - b[key]);
-  }, [tasks, activeContextId]);
+  }, [tasks, activeContextId, excludedIds]);
 
   const flash = (msg: string) => {
     setToast(msg);

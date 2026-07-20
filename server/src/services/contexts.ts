@@ -46,7 +46,13 @@ export async function createContext(input: CreateContextInput): Promise<Context>
     .from(contexts);
   const [row] = await db
     .insert(contexts)
-    .values({ slug, label: input.label, color: input.color, sortOrder: Number(max) + 1 })
+    .values({
+      slug,
+      label: input.label,
+      color: input.color,
+      sortOrder: Number(max) + 1,
+      excludeFromAll: input.excludeFromAll ?? false,
+    })
     .returning();
   return toContext(row);
 }

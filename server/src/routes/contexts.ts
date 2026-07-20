@@ -8,12 +8,14 @@ const createSchema = z.object({
   label: z.string().min(1),
   color: z.string().min(1),
   slug: z.string().optional(),
+  excludeFromAll: z.boolean().optional(),
 });
 
 const updateSchema = z.object({
   label: z.string().min(1).optional(),
   color: z.string().min(1).optional(),
   archived: z.boolean().optional(),
+  excludeFromAll: z.boolean().optional(),
 });
 
 router.get('/', async (_req, res) => {

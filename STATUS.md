@@ -115,20 +115,20 @@ Source: `change_request_01.md` (**wins on conflict** with tech_spec) + a verbal 
   - [x] reset: dropped `routines` from the `resetData()` TRUNCATE (`services/data.ts`)
   - [x] migration `server/drizzle/0003_drop_routines.sql` → `DROP TABLE IF EXISTS routine_completions; DROP TABLE IF EXISTS routines;`
   - [x] verified: both workspaces typecheck clean; migration + updated reset SQL run on Neon branch `br-restless-mouse-aszyk1yy` (auto-expires 2026-07-21) — tables dropped, rest of schema intact, reset works
-  - [ ] **⏸ PROD migration applies on deploy**: Render `preDeployCommand` auto-runs `db:migrate` before starting the new server, so pushing B3 to `main` drops the 2 tables on the shared Neon DB (loses 3 real routines) and then boots the routine-free server — correct ordering, no manual step. **Do NOT run `db:migrate` locally beforehand** (it'd drop the tables while the old deployed app still calls `/api/routines`). Awaiting go-ahead to commit/push.
+  - [x] **PROD migration APPLIED** ✅ — B3 was pushed + deployed; Render `preDeployCommand` ran `db:migrate` and dropped `routines`/`routine_completions` on prod (confirmed 2026-07-20: a fresh branch off prod shows `0003` already in `_migrations`). Routines are gone from prod.
 - [x] **B4 — Settings: header gear → rightmost tab (Revision A)** — ✅ done & verified 2026-07-20 (uncommitted)
   - [x] `settings` registered as a tab: `(tabs)/settings.tsx` + `<TabTrigger name="settings" href="/settings" />` in `(tabs)/_layout`; deleted the stacked `app/settings.tsx`
   - [x] nav-chrome: Settings (gear icon) added to `MobileTabBar` (last) + `SideNavLinks` (both as `TabTrigger`s); **removed `SettingsGearButton`** component + its use in Tasks/Calendar headers; reverted those header layout tweaks; dropped the now-unused `useRouter` import
   - [x] `SettingsScreen` made **responsive**: wide = LOG sidebar (`SideNavLinks` + Sign out) + main; mobile = LOG/date header (no back chevron) + sections. Kept the deep-link contexts load-guard
   - [x] verified in real browser — **web (wide):** Settings is a highlighted sidebar tab, screen shows its own sidebar (navigable), no header gears; **mobile (390px):** bottom bar = Tasks · Calendar · Settings, tapping Settings navigates, no header gear. Tabs = Tasks · Calendar · Settings (no Routine). App typecheck clean.
-- [ ] **B5 — Exclude-from-All context flag (Revision A)**
-  - [ ] migration `0004_context_exclude.sql` → `contexts.exclude_from_all boolean NOT NULL DEFAULT false`; drizzle schema + `Context` type + mapper
-  - [ ] service/API: `updateContext` accepts `excludeFromAll`; MCP `create_context`/`update_context` gain it
-  - [ ] Settings editor: an **Exclude from All** toggle per context (+ create form)
-  - [ ] Tasks: **All** view (activeContextId == null) + its counts filter out excluded-context tasks; the context still shows as a chip (if non-empty) and works when selected
-  - [ ] Calendar: `services/calendar.ts` excludes tasks whose context is excluded
-  - [ ] app api client: pass `excludeFromAll`
-  - [ ] verify: Neon branch service test + web browser (task in excluded context absent from All & Calendar, present under its chip)
+- [x] **B5 — Exclude-from-All context flag (Revision A)** — ✅ done & verified 2026-07-20 (uncommitted); **prod migration `0004` applies on next deploy**
+  - [x] migration `0004_context_exclude.sql` → `contexts.exclude_from_all boolean NOT NULL DEFAULT false`; drizzle schema + `Context`/`Create`/`UpdateContextInput` types + `toContext` mapper
+  - [x] service/API: `createSchema`/`updateSchema` + `createContext` carry `excludeFromAll` (`updateContext` passes it via `.set(patch)`); MCP `create_context`/`update_context` gained `exclude_from_all`
+  - [x] Settings editor: **"Hide from All view"** `Switch` per context (+ create form); excluded rows show an `EyeOff` "hidden" badge
+  - [x] Tasks: `excludedIds` set → `inAll()` filters the **All** view (activeContextId == null) and its `all` count; excluded context still shows as a chip and works when selected
+  - [x] Calendar: `services/calendar.ts` left-joins contexts and filters out excluded-context tasks
+  - [x] app api client + store `createContext`/`updateContext` pass `excludeFromAll`
+  - [x] verified: both workspaces typecheck clean; service test on Neon branch `br-noisy-queen-as0gywtn` (migration applied there) — flag round-trips on create/update, calendar hides-then-shows on toggle (ALL PASS); real browser against a throwaway API on that branch — excluding "Home" dropped **All 39 → 24**, Home chip still shows count 15 and selecting it lists its tasks, Settings shows the "hidden" badge. Prod untouched.
 - [ ] **B6 — Detail bottom sheet + Task-UX overhaul (CR §4 + Revision B)** — mobile-first; web keeps plain input + existing modal
   - [ ] **B6a — Detail sheet:** mobile task detail → `@gorhom/bottom-sheet` (snap 60/92, swipe-dismiss, `BottomSheetScrollView`, keyboard interactive, safe-area + tab padding); fix the clipping/last-field bug; **regroup fields** into Date & time / Organization sections; web centered modal unchanged
   - [ ] **B6b — Task row interactions:** tap = inline title edit (not open detail); Play → **(i)** while editing → opens detail sheet; **swipe-left = delete** (confirm/undo); keep long-press reorder + checkbox complete; **show/hide completed** collapsible section

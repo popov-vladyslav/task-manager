@@ -23,6 +23,7 @@ export const contexts = pgTable('contexts', {
   color: text('color').notNull(),
   sortOrder: integer('sort_order').notNull().default(0),
   archived: boolean('archived').notNull().default(false),
+  excludeFromAll: boolean('exclude_from_all').notNull().default(false),
 });
 
 export const recurrenceRules = pgTable('recurrence_rules', {

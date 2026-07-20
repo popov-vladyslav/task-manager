@@ -82,11 +82,16 @@ export function buildMcpServer(): McpServer {
   server.registerTool(
     'create_context',
     {
-      description: 'Create a work context. Provide a label and a hex color (e.g. #4FB6A9). Slug is auto-generated.',
-      inputSchema: { label: z.string().min(1), color: z.string().min(1) },
+      description:
+        'Create a work context. Provide a label and a hex color (e.g. #4FB6A9). Slug is auto-generated. Set exclude_from_all to hide its tasks from the All view and Calendar (reachable via its own chip) — good for routines / repeated payments.',
+      inputSchema: {
+        label: z.string().min(1),
+        color: z.string().min(1),
+        exclude_from_all: z.boolean().optional(),
+      },
     },
-    async ({ label, color }) => {
-      const c = await contextsSvc.createContext({ label, color });
+    async ({ label, color, exclude_from_all }) => {
+      const c = await contextsSvc.createContext({ label, color, excludeFromAll: exclude_from_all });
       logWrite('create_context', { id: c.id, slug: c.slug });
       return text(`Created context: ${c.slug} — ${c.label} (${c.color})`);
     },
@@ -95,19 +100,22 @@ export function buildMcpServer(): McpServer {
   server.registerTool(
     'update_context',
     {
-      description: 'Rename or recolor a context, identified by its slug. Set label and/or color.',
+      description:
+        'Rename, recolor, or toggle exclude_from_all on a context, identified by its slug.',
       inputSchema: {
         slug: z.string().min(1),
         label: z.string().min(1).optional(),
         color: z.string().min(1).optional(),
+        exclude_from_all: z.boolean().optional(),
       },
     },
-    async ({ slug, label, color }) => {
+    async ({ slug, label, color, exclude_from_all }) => {
       const c = await contextsSvc.findContextBySlug(slug);
       if (!c) return text(`Unknown context '${slug}'.`);
-      const patch: { label?: string; color?: string } = {};
+      const patch: { label?: string; color?: string; excludeFromAll?: boolean } = {};
       if (label !== undefined) patch.label = label;
       if (color !== undefined) patch.color = color;
+      if (exclude_from_all !== undefined) patch.excludeFromAll = exclude_from_all;
       const updated = await contextsSvc.updateContext(c.id, patch);
       logWrite('update_context', { id: updated.id, slug: updated.slug });
       return text(`Updated context: ${updated.slug} — ${updated.label} (${updated.color})`);

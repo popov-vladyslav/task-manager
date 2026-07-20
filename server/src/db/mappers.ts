@@ -12,6 +12,7 @@ export function toContext(r: InferSelectModel<typeof contexts>): Context {
     color: r.color,
     sortOrder: r.sortOrder,
     archived: r.archived,
+    excludeFromAll: r.excludeFromAll,
   };
 }
 

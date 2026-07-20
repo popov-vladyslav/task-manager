@@ -13,6 +13,9 @@ export interface Context {
   color: string;
   sortOrder: number;
   archived: boolean;
+  // When true, this context's tasks are hidden from the "All" view and the
+  // Calendar; reachable only by selecting the context's own chip.
+  excludeFromAll: boolean;
 }
 
 export interface Task {
@@ -79,12 +82,14 @@ export interface CreateContextInput {
   label: string;
   color: string;
   slug?: string;
+  excludeFromAll?: boolean;
 }
 
 export interface UpdateContextInput {
   label?: string;
   color?: string;
   archived?: boolean;
+  excludeFromAll?: boolean;
 }
 
 export interface Comment {

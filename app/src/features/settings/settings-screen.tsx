@@ -4,6 +4,7 @@ import {
   Platform,
   Pressable,
   ScrollView,
+  Switch,
   Text,
   TextInput,
   useWindowDimensions,
@@ -12,7 +13,7 @@ import {
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { Plus, Trash2, X } from 'lucide-react-native';
+import { EyeOff, Plus, Trash2, X } from 'lucide-react-native';
 import type { Context } from '@task-manager/shared';
 import { colors, headerDate, monoFont, webInputReset } from '../../theme';
 import { useTasksStore } from '../../store/tasks';
@@ -186,7 +187,14 @@ function ContextRow({ context, onPress }: { context: Context; onPress: () => voi
       }}
     >
       <View style={{ width: 14, height: 14, borderRadius: 7, backgroundColor: context.color }} />
-      <Text style={{ flex: 1, fontSize: 15, color: colors.textPrimary }}>{context.label}</Text>
+      <Text style={{ fontSize: 15, color: colors.textPrimary }}>{context.label}</Text>
+      {context.excludeFromAll ? (
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+          <EyeOff size={12} color={colors.textMuted} />
+          <Text style={{ fontSize: 11, color: colors.textMuted }}>hidden</Text>
+        </View>
+      ) : null}
+      <View style={{ flex: 1 }} />
       <Text style={{ fontFamily: monoFont, fontSize: 11, color: colors.textMuted }}>{context.slug}</Text>
     </Pressable>
   );
@@ -197,6 +205,7 @@ function ContextEditor({ context, onClose }: { context?: Context; onClose: () =>
   const { createContext, updateContext, deleteContext } = useTasksStore();
   const [label, setLabel] = useState(context?.label ?? '');
   const [color, setColor] = useState(context?.color ?? PALETTE[0]);
+  const [excludeFromAll, setExcludeFromAll] = useState(context?.excludeFromAll ?? false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
@@ -207,8 +216,8 @@ function ContextEditor({ context, onClose }: { context?: Context; onClose: () =>
     setBusy(true);
     setError(null);
     try {
-      if (context) await updateContext(context.id, { label: trimmed, color });
-      else await createContext(trimmed, color);
+      if (context) await updateContext(context.id, { label: trimmed, color, excludeFromAll });
+      else await createContext(trimmed, color, excludeFromAll);
       onClose();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not save');
@@ -260,6 +269,22 @@ function ContextEditor({ context, onClose }: { context?: Context; onClose: () =>
         <Pressable onPress={onClose} hitSlop={8} style={{ padding: 4 }}>
           <X size={18} color={colors.textMuted} />
         </Pressable>
+      </View>
+
+      {/* Exclude from All toggle */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+        <View style={{ flex: 1 }}>
+          <Text style={{ fontSize: 14, color: colors.textPrimary }}>Hide from All view</Text>
+          <Text style={{ fontSize: 11.5, color: colors.textMuted, marginTop: 2 }}>
+            Also hidden from the Calendar; still opens via its chip.
+          </Text>
+        </View>
+        <Switch
+          value={excludeFromAll}
+          onValueChange={setExcludeFromAll}
+          trackColor={{ false: colors.bgElevated, true: colors.accentPrimary }}
+          thumbColor={colors.textPrimary}
+        />
       </View>
 
       {/* Palette */}

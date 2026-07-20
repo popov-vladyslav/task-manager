@@ -1,7 +1,7 @@
-import { and, isNotNull, lte } from 'drizzle-orm';
+import { and, eq, isNotNull, lte } from 'drizzle-orm';
 import type { CalendarData } from '@task-manager/shared';
 import { db } from '../db/client';
-import { tasks } from '../db/schema';
+import { contexts, tasks } from '../db/schema';
 import { badRequest } from '../lib/errors';
 
 const DEFAULT_DURATION_MIN = 30;
@@ -28,11 +28,16 @@ export async function getCalendar(fromISO: string, toISO: string): Promise<Calen
       dueAt: tasks.dueAt,
       durationMin: tasks.durationMin,
       status: tasks.status,
+      // null when the task has no context; used to hide excluded-context tasks.
+      excludeFromAll: contexts.excludeFromAll,
     })
     .from(tasks)
+    .leftJoin(contexts, eq(tasks.contextId, contexts.id))
     .where(and(isNotNull(tasks.dueAt), lte(tasks.dueAt, to)));
 
   const blocks = rows
+    // Excluded-from-All contexts are also hidden from the Calendar.
+    .filter((r) => !r.excludeFromAll)
     .map((r) => {
       const start = r.dueAt as Date;
       const end = new Date(start.getTime() + (r.durationMin ?? DEFAULT_DURATION_MIN) * 60_000);

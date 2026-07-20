@@ -12,8 +12,11 @@ interface TasksState {
 
   load: () => Promise<void>;
   setActiveContext: (id: number | null) => void;
-  createContext: (label: string, color: string) => Promise<void>;
-  updateContext: (id: number, patch: { label?: string; color?: string }) => Promise<void>;
+  createContext: (label: string, color: string, excludeFromAll?: boolean) => Promise<void>;
+  updateContext: (
+    id: number,
+    patch: { label?: string; color?: string; excludeFromAll?: boolean },
+  ) => Promise<void>;
   deleteContext: (id: number) => Promise<void>; // throws (409 message) if still referenced
   resetData: () => Promise<void>; // wipes tasks/recurrence/timers; keeps contexts
   addTask: (title: string) => Promise<Task | null>;
@@ -52,8 +55,8 @@ export const useTasksStore = create<TasksState>((set, get) => ({
     set({ activeContextId: id });
   },
 
-  async createContext(label, color) {
-    const created = await api.createContext({ label, color });
+  async createContext(label, color, excludeFromAll) {
+    const created = await api.createContext({ label, color, excludeFromAll });
     set({ contexts: [...get().contexts, created].sort((a, b) => a.sortOrder - b.sortOrder) });
   },
 
