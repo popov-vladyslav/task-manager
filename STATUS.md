@@ -137,7 +137,15 @@ Source: `change_request_01.md` (**wins on conflict** with tech_spec) + a verbal 
     - **regrouped** fields: title → **Date & time** (deadline/reminder/duration) → **Organization** (context/repeat) → Comments → Delete; shared `DetailContent` used by both paths
     - web (wide) keeps the centered RN `Modal` (unchanged); `TaskDetail` now picks modal-vs-sheet by width
     - verified in browser: web-wide modal shows regrouped layout; web-narrow @gorhom sheet presents, dynamic-sizes to fit (Delete reachable), no crash
-  - [ ] **B6b — Task row interactions:** tap = inline title edit (not open detail); Play → **(i)** while editing → opens detail sheet; **swipe-left = delete** (confirm/undo); keep long-press reorder + checkbox complete; **show/hide completed** collapsible section
+  - [x] **B6b — Task row interactions** — ✅ done & web-verified 2026-07-21 (uncommitted); ⚠️ swipe + reorder gestures need device check
+    - **tap row = inline-edit the title** (`TextInput` in the card, commit on blur → `patchTitle`); DB-verified a real edit persisted
+    - title input: **always-rendered** (no Text↔input swap → no focus/blur size jump), **auto-grows** to content via `onContentSizeChange`+`height`; **`numberOfLines={1}` on WEB ONLY** to kill the RN-web `<textarea>` 2-row min-height (dead space) — on native it must be omitted or the title truncates to 1 line. Result: short = 1 line, long titles wrap fully, identical size focused/blurred, both platforms.
+    - **Play stays Play** (timer) — the "Play→(i) while editing" idea was **dropped per user**
+    - **swipe-left reveals two action buttons — [Details] + [Delete]** (`ReanimatedSwipeable` `renderRightActions`; Details → detail sheet, Delete → remove; tap to confirm). (Revised per user from the earlier swipe-right-to-open idea.)
+    - long-press = reorder (kept), checkbox = complete (kept)
+    - **show/hide completed**: collapsible footer (`ListFooterComponent`) → `loadCompleted()` fetches done tasks; `CompletedRow` (dimmed + strikethrough, teal check to re-open via `uncomplete`); scoped to the active context + exclude-from-All
+    - store: `completed`/`loadCompleted`/`uncomplete`; `toggleComplete` keeps `completed` in sync
+    - verified on web: inline edit persists (DB), Play works, show/hide completed toggles + lists + re-opens. Swipe gestures + reorder-vs-swipe coexistence are native-touch — verify on device.
   - [ ] **B6c — Quick-add:** title-only top input + keyboard-accessory shortcut row (Deadline · Reminder · Duration · Context); tapping a shortcut → dismiss keyboard, slide up ≈keyboard-height picker panel (date+time w/ quick chips + month grid; context list; duration list; duration needs a deadline); replaces the current "+ Task" button; web = plain input
   - [ ] verify device + web (each sub-batch)
 - [ ] **B7 — Polish (CR §3, §5, §6)**

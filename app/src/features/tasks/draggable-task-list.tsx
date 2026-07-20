@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactElement, type ReactNode } from 'react';
 import ReorderableList, {
   type ReorderableListReorderEvent,
   useReorderableDrag,
@@ -9,6 +9,8 @@ interface Props {
   tasks: Task[];
   renderCard: (task: Task, drag: () => void) => ReactNode;
   onReorder: (movedId: string, afterId: string | null, beforeId: string | null) => void;
+  footer?: ReactNode; // rendered below the list (e.g. the "Show completed" section)
+  empty?: ReactNode; // rendered when there are no open tasks
 }
 
 function DragRow({ item, renderCard }: { item: Task; renderCard: Props['renderCard'] }) {
@@ -23,7 +25,7 @@ function DragRow({ item, renderCard }: { item: Task; renderCard: Props['renderCa
 // The list owns a local `data` copy that it reorders synchronously on drop, so
 // its internal indices never point past the array (the crash we saw on drag-off).
 // The store is updated in parallel to persist; when it re-emits, we re-sync.
-export function DraggableTaskList({ tasks, renderCard, onReorder }: Props) {
+export function DraggableTaskList({ tasks, renderCard, onReorder, footer, empty }: Props) {
   const [data, setData] = useState(tasks);
   useEffect(() => setData(tasks), [tasks]);
 
@@ -48,6 +50,8 @@ export function DraggableTaskList({ tasks, renderCard, onReorder }: Props) {
       keyExtractor={(item, index) => item?.id ?? `__${index}`}
       onReorder={handleReorder}
       renderItem={({ item }) => <DragRow item={item} renderCard={renderCard} />}
+      ListFooterComponent={footer as ReactElement}
+      ListEmptyComponent={empty as ReactElement}
       style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
       contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 4, paddingBottom: 24 }}
       showsVerticalScrollIndicator={false}

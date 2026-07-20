@@ -5,12 +5,15 @@ import { api } from '../lib/api';
 interface TasksState {
   contexts: Context[];
   tasks: Task[]; // all open tasks (status != done), unfiltered
+  completed: Task[]; // done tasks, loaded lazily for the "Show completed" section
   activeContextId: number | null; // null = "All"
   loading: boolean;
   error: string | null;
   pendingOpenTaskId: string | null; // set by a tapped notification; consumed by the screen
 
   load: () => Promise<void>;
+  loadCompleted: () => Promise<void>;
+  uncomplete: (task: Task) => Promise<void>;
   setActiveContext: (id: number | null) => void;
   createContext: (label: string, color: string, excludeFromAll?: boolean) => Promise<void>;
   updateContext: (
@@ -36,6 +39,7 @@ interface TasksState {
 export const useTasksStore = create<TasksState>((set, get) => ({
   contexts: [],
   tasks: [],
+  completed: [],
   activeContextId: null,
   loading: false,
   error: null,
@@ -48,6 +52,27 @@ export const useTasksStore = create<TasksState>((set, get) => ({
       set({ contexts, tasks, loading: false });
     } catch (e) {
       set({ loading: false, error: e instanceof Error ? e.message : 'Failed to load' });
+    }
+  },
+
+  async loadCompleted() {
+    try {
+      const completed = await api.listTasks({ status: 'done' });
+      set({ completed });
+    } catch {
+      /* ignore — the section just stays empty */
+    }
+  },
+
+  async uncomplete(task) {
+    // Optimistic: move it out of the completed list back into the open list.
+    const { completed, tasks } = get();
+    set({ completed: completed.filter((t) => t.id !== task.id) });
+    try {
+      const updated = await api.updateTask(task.id, { status: 'active' });
+      set({ tasks: [updated, ...get().tasks] });
+    } catch {
+      set({ completed, tasks }); // rollback
     }
   },
 
@@ -89,13 +114,18 @@ export const useTasksStore = create<TasksState>((set, get) => ({
   },
 
   async toggleComplete(task) {
-    // Optimistic: completing removes the task from the open list.
+    // Optimistic: completing removes the task from the open list and (if the
+    // completed section has been loaded) surfaces it there.
     const prev = get().tasks;
-    set({ tasks: prev.filter((t) => t.id !== task.id) });
+    const prevCompleted = get().completed;
+    set({
+      tasks: prev.filter((t) => t.id !== task.id),
+      completed: [{ ...task, status: 'done' }, ...prevCompleted],
+    });
     try {
       await api.updateTask(task.id, { completed: true });
     } catch {
-      set({ tasks: prev }); // rollback
+      set({ tasks: prev, completed: prevCompleted }); // rollback
     }
   },
 

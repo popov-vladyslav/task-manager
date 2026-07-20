@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Platform, Pressable, Text, useWindowDimensions, View } from 'react-native';
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Plus } from 'lucide-react-native';
+import { Check, ChevronDown, ChevronRight, Plus } from 'lucide-react-native';
 import { DraggableTaskList } from './draggable-task-list';
 import type { Context, Task } from '@task-manager/shared';
 import { colors, headerDate, monoFont } from '../../theme';
@@ -23,9 +23,12 @@ export function TasksScreen() {
   const {
     contexts,
     tasks,
+    completed,
     activeContextId,
     loading,
     load,
+    loadCompleted,
+    uncomplete,
     setActiveContext,
     addTask,
     toggleComplete,
@@ -39,6 +42,7 @@ export function TasksScreen() {
   const [selected, setSelected] = useState<Task | null>(null);
   const [focusTitle, setFocusTitle] = useState(false); // autofocus the title for a just-created task
   const [toast, setToast] = useState<string | null>(null);
+  const [showCompleted, setShowCompleted] = useState(false);
 
   useEffect(() => {
     load();
@@ -94,6 +98,21 @@ export function TasksScreen() {
     return list.sort((a, b) => a[key] - b[key]);
   }, [tasks, activeContextId, excludedIds]);
 
+  // Completed tasks shown under the collapsible section, scoped to the same view.
+  const visibleCompleted = useMemo(
+    () =>
+      activeContextId == null
+        ? completed.filter(inAll)
+        : completed.filter((t) => t.contextId === activeContextId),
+    [completed, activeContextId, excludedIds],
+  );
+
+  const toggleShowCompleted = () => {
+    const next = !showCompleted;
+    setShowCompleted(next);
+    if (next) loadCompleted();
+  };
+
   const flash = (msg: string) => {
     setToast(msg);
     setTimeout(() => setToast(null), 2200);
@@ -114,26 +133,63 @@ export function TasksScreen() {
     }
   };
 
+  const completedSection = (
+    <View style={{ marginTop: 8 }}>
+      <Pressable
+        onPress={toggleShowCompleted}
+        style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 10 }}
+      >
+        {showCompleted ? (
+          <ChevronDown size={14} color={colors.textMuted} />
+        ) : (
+          <ChevronRight size={14} color={colors.textMuted} />
+        )}
+        <Text style={{ fontFamily: monoFont, fontSize: 11, letterSpacing: 1, color: colors.textMuted }}>
+          {showCompleted ? 'HIDE COMPLETED' : 'SHOW COMPLETED'}
+        </Text>
+      </Pressable>
+      {showCompleted
+        ? visibleCompleted.length === 0
+          ? (
+              <Text style={{ color: colors.textFaint, fontSize: 13, paddingVertical: 6 }}>No completed tasks</Text>
+            )
+          : visibleCompleted.map((t) => (
+              <CompletedRow
+                key={t.id}
+                task={t}
+                onUncomplete={() => uncomplete(t)}
+                onOpen={() => {
+                  setFocusTitle(false);
+                  setSelected(t);
+                }}
+              />
+            ))
+        : null}
+    </View>
+  );
+
   const list =
     loading && visible.length === 0 ? (
       <ActivityIndicator color={colors.accentPrimary} style={{ marginTop: 40 }} />
-    ) : visible.length === 0 ? (
-      <Text style={{ color: colors.textMuted, textAlign: 'center', marginTop: 40 }}>No open tasks</Text>
     ) : (
       <DraggableTaskList
         tasks={visible}
         onReorder={(movedId, afterId, beforeId) =>
           reorder(movedId, afterId, beforeId, activeContextId == null ? 'global' : 'context')
         }
+        footer={completedSection}
+        empty={<Text style={{ color: colors.textMuted, textAlign: 'center', marginTop: 40 }}>No open tasks</Text>}
         renderCard={(item, drag) => (
           <TaskCard
             task={item}
             context={item.contextId != null ? contextById.get(item.contextId) : undefined}
             onToggle={() => onToggle(item)}
-            onOpen={() => {
+            onOpenDetail={() => {
               setFocusTitle(false);
               setSelected(item);
             }}
+            onPatchTitle={(title) => patchTask(item.id, { title })}
+            onDelete={() => removeTask(item.id)}
             onDrag={drag}
           />
         )}
@@ -300,6 +356,43 @@ function SidebarContext({ label, dot, count, active, onPress }: { label: string;
       <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: dot }} />
       <Text style={{ flex: 1, fontSize: 12.5, color: active ? colors.textPrimary : colors.textSecondary }}>{label}</Text>
       <Text style={{ fontFamily: monoFont, fontSize: 10, color: colors.textMuted, fontVariant: ['tabular-nums'] }}>{count}</Text>
+    </Pressable>
+  );
+}
+
+// A completed task row (dimmed, strikethrough). The check un-completes it; the
+// row opens the detail.
+function CompletedRow({ task, onUncomplete, onOpen }: { task: Task; onUncomplete: () => void; onOpen: () => void }) {
+  return (
+    <Pressable
+      onPress={onOpen}
+      style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8, opacity: 0.6 }}
+    >
+      <Pressable
+        onPress={(e) => {
+          e.stopPropagation?.();
+          onUncomplete();
+        }}
+        hitSlop={8}
+        accessibilityRole="checkbox"
+        accessibilityLabel={`Reopen ${task.title}`}
+        style={{
+          width: 20,
+          height: 20,
+          borderRadius: 10,
+          alignItems: 'center',
+          justifyContent: 'center',
+          backgroundColor: colors.accentTimer,
+        }}
+      >
+        <Check size={12} color={colors.bgBase} />
+      </Pressable>
+      <Text
+        style={{ flex: 1, fontSize: 13, color: colors.textSecondary, textDecorationLine: 'line-through' }}
+        numberOfLines={1}
+      >
+        {task.title}
+      </Text>
     </Pressable>
   );
 }
