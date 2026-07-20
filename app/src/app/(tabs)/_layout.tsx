@@ -50,7 +50,6 @@ export default function TabsLayout() {
       {/* Route registration for the custom bar — declared but not displayed. */}
       <TabList style={{ display: 'none' }}>
         <TabTrigger name="index" href="/" />
-        <TabTrigger name="routines" href="/routines" />
         <TabTrigger name="calendar" href="/calendar" />
       </TabList>
 

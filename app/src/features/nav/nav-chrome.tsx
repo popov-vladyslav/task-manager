@@ -1,6 +1,6 @@
 import { type ComponentType, type Ref } from 'react';
 import { Pressable, Text, View } from 'react-native';
-import { CalendarDays, ListTodo, RotateCcw, Settings as SettingsIcon, type LucideProps } from 'lucide-react-native';
+import { CalendarDays, ListTodo, Settings as SettingsIcon, type LucideProps } from 'lucide-react-native';
 import { TabTrigger, type TabTriggerSlotProps } from 'expo-router/ui';
 import { useRouter } from 'expo-router';
 import { colors } from '../../theme';
@@ -28,9 +28,6 @@ export function MobileTabBar({ bottomInset }: { bottomInset: number }) {
       <TabTrigger name="index" asChild>
         <BottomTabButton label="Tasks" icon={ListTodo} />
       </TabTrigger>
-      <TabTrigger name="routines" asChild>
-        <BottomTabButton label="Routine" icon={RotateCcw} />
-      </TabTrigger>
       <TabTrigger name="calendar" asChild>
         <BottomTabButton label="Calendar" icon={CalendarDays} />
       </TabTrigger>
@@ -45,9 +42,6 @@ export function SideNavLinks() {
     <>
       <TabTrigger name="index" asChild>
         <SideNavButton label="Tasks" icon={ListTodo} />
-      </TabTrigger>
-      <TabTrigger name="routines" asChild>
-        <SideNavButton label="Routine" icon={RotateCcw} />
       </TabTrigger>
       <TabTrigger name="calendar" asChild>
         <SideNavButton label="Calendar" icon={CalendarDays} />

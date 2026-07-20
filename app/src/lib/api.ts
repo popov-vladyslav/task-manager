@@ -4,10 +4,8 @@ import type {
   Comment,
   Context,
   CreateContextInput,
-  CreateRoutineInput,
   CreateTaskInput,
   ReorderInput,
-  Routine,
   Task,
   TimeEntry,
   UpdateContextInput,
@@ -104,12 +102,6 @@ export const api = {
   deleteComment: (id: string) => request<void>(`/api/comments/${id}`, { method: 'DELETE' }),
   registerPush: (token: string, device?: string) =>
     request<{ ok: boolean }>('/api/push/register', { method: 'POST', body: { token, device } }),
-  listRoutines: () => request<Routine[]>('/api/routines'),
-  createRoutine: (input: CreateRoutineInput) =>
-    request<Routine>('/api/routines', { method: 'POST', body: input }),
-  toggleRoutine: (id: number, day?: string) =>
-    request<Routine>(`/api/routines/${id}/toggle`, { method: 'POST', body: day ? { day } : {} }),
-  deleteRoutine: (id: number) => request<void>(`/api/routines/${id}`, { method: 'DELETE' }),
   getActiveTimer: () => request<ActiveTimer | null>('/api/timer'),
   startTimer: (taskId: string) =>
     request<ActiveTimer>('/api/timer/start', { method: 'POST', body: { taskId } }),

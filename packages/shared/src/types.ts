@@ -94,22 +94,6 @@ export interface Comment {
   createdAt: string;
 }
 
-// Routines — a fixed daily checklist. `done` reflects completion for the
-// current (Europe/Warsaw) day; GET /api/routines returns only active ones.
-export interface Routine {
-  id: number;
-  title: string;
-  timeHint: string | null; // 'HH:MM' — an approximate time, not a trigger
-  sortOrder: number;
-  active: boolean;
-  done: boolean;
-}
-
-export interface CreateRoutineInput {
-  title: string;
-  timeHint?: string | null; // 'HH:MM'
-}
-
 // Timer — at most one running entry at a time (one_running_timer unique index).
 export interface TimeEntry {
   id: string;
@@ -141,13 +125,6 @@ export interface CalendarBlock {
 
 export interface CalendarData {
   blocks: CalendarBlock[];
-}
-
-export interface UpdateRoutineInput {
-  title?: string;
-  timeHint?: string | null;
-  active?: boolean;
-  sortOrder?: number;
 }
 
 // Auth

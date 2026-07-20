@@ -109,12 +109,13 @@ Source: `change_request_01.md` (**wins on conflict** with tech_spec) + a verbal 
   - [x] deep-link/refresh guard: Settings loads contexts itself if the store is empty
   - [x] verified in real browser (web): screen renders on-brand; create (`qa-b2-temp`) → editor+palette → 2-step delete all work; Sign out → `/sign-in`; prod contexts self-cleaned back to 5. (Reset "Delete everything" not clicked live — proven on the Neon branch in B1; delete-block 409 proven by B1 service test.)
   - ⚠️ **Not yet checked on a mobile device**: the three mobile-header gears + `/settings` push nav (verified on web only).
-- [ ] **B3 — Remove Routines entirely (Revision A)**
-  - [ ] app: delete Routine tab (nav-chrome + `(tabs)/_layout` TabTrigger), `(tabs)/routines.tsx`, `features/routines/`, `store/routines.ts`; drop routines reload in the Settings reset flow
-  - [ ] server: remove `routes/routines.ts` + mount, `services/routines.ts`, MCP `add_routine`, `get_today` routine section; app api client routine methods
-  - [ ] migration `0003_drop_routines.sql` → `DROP TABLE routine_completions, routines`; drizzle schema + mappers cleanup
-  - [ ] reset: drop `routines` from the `resetData()` TRUNCATE (`services/data.ts`)
-  - [ ] verify: typecheck; migration on a Neon branch; MCP tool list no longer shows `add_routine`
+- [~] **B3 — Remove Routines entirely (Revision A)** — code ✅ done & verified 2026-07-20 (uncommitted); **prod migration NOT yet applied (awaiting go-ahead)**
+  - [x] app: deleted Routine tab (nav-chrome bottom+side, `(tabs)/_layout` TabTrigger), `(tabs)/routines.tsx`, `features/routines/`, `store/routines.ts`; removed routines reload from Settings reset; router types regenerated (no `/routines`)
+  - [x] server: removed `routes/routines.ts` + mount, `services/routines.ts`, MCP `add_routine`, `get_today` routine section; app api client routine methods; `Routine`/`CreateRoutineInput`/`UpdateRoutineInput` shared types; `toRoutine` mapper; `routines`/`routineCompletions` drizzle tables (+ unused `primaryKey` import)
+  - [x] reset: dropped `routines` from the `resetData()` TRUNCATE (`services/data.ts`)
+  - [x] migration `server/drizzle/0003_drop_routines.sql` → `DROP TABLE IF EXISTS routine_completions; DROP TABLE IF EXISTS routines;`
+  - [x] verified: both workspaces typecheck clean; migration + updated reset SQL run on Neon branch `br-restless-mouse-aszyk1yy` (auto-expires 2026-07-21) — tables dropped, rest of schema intact, reset works
+  - [ ] **⏸ PROD migration applies on deploy**: Render `preDeployCommand` auto-runs `db:migrate` before starting the new server, so pushing B3 to `main` drops the 2 tables on the shared Neon DB (loses 3 real routines) and then boots the routine-free server — correct ordering, no manual step. **Do NOT run `db:migrate` locally beforehand** (it'd drop the tables while the old deployed app still calls `/api/routines`). Awaiting go-ahead to commit/push.
 - [ ] **B4 — Settings: header gear → rightmost tab (Revision A)**
   - [ ] register `settings` as a tab (`(tabs)/settings.tsx` + TabList/TabTrigger); move `features/settings/settings-screen.tsx` under the tabs; drop the stacked `app/settings.tsx`
   - [ ] nav-chrome: Settings gear icon in the **bottom tab bar** (last) + web sidebar tab; **remove `SettingsGearButton`** from the 3 mobile headers; revert those header layout tweaks

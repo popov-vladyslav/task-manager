@@ -15,7 +15,7 @@ interface TasksState {
   createContext: (label: string, color: string) => Promise<void>;
   updateContext: (id: number, patch: { label?: string; color?: string }) => Promise<void>;
   deleteContext: (id: number) => Promise<void>; // throws (409 message) if still referenced
-  resetData: () => Promise<void>; // wipes tasks/routines/timers; keeps contexts
+  resetData: () => Promise<void>; // wipes tasks/recurrence/timers; keeps contexts
   addTask: (title: string) => Promise<Task | null>;
   toggleComplete: (task: Task) => Promise<void>;
   patchTask: (id: string, patch: Parameters<typeof api.updateTask>[1]) => Promise<void>;
@@ -73,8 +73,7 @@ export const useTasksStore = create<TasksState>((set, get) => ({
 
   async resetData() {
     await api.resetData();
-    // Server kept contexts; refresh the now-empty task list. Routines live in
-    // their own store — reload it too so its screen reflects the wipe.
+    // Server kept contexts; refresh the now-empty task list.
     set({ tasks: [], activeContextId: null });
     await get().load();
   },

@@ -10,7 +10,6 @@ import {
   time,
   date,
   jsonb,
-  primaryKey,
 } from 'drizzle-orm/pg-core';
 
 // Drizzle schema for type-safe queries. The authoritative DDL lives in
@@ -68,24 +67,6 @@ export const photos = pgTable('photos', {
   r2Key: text('r2_key').notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
-
-export const routines = pgTable('routines', {
-  id: serial('id').primaryKey(),
-  title: text('title').notNull(),
-  timeHint: time('time_hint'),
-  sortOrder: integer('sort_order').notNull().default(0),
-  active: boolean('active').notNull().default(true),
-});
-
-export const routineCompletions = pgTable(
-  'routine_completions',
-  {
-    routineId: integer('routine_id').references(() => routines.id, { onDelete: 'cascade' }),
-    day: date('day').notNull(),
-    doneAt: timestamp('done_at', { withTimezone: true }).notNull().defaultNow(),
-  },
-  (t) => [primaryKey({ columns: [t.routineId, t.day] })],
-);
 
 export const timeEntries = pgTable('time_entries', {
   id: uuid('id').primaryKey().defaultRandom(),

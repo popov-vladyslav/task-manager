@@ -4,7 +4,6 @@ import type { Task } from '@task-manager/shared';
 import * as tasksSvc from '../services/tasks';
 import * as contextsSvc from '../services/contexts';
 import * as commentsSvc from '../services/comments';
-import * as routinesSvc from '../services/routines';
 import * as timerSvc from '../services/timer';
 
 function text(s: string) {
@@ -67,7 +66,7 @@ function unresolvedText(candidates: Task[], query?: string): string {
 }
 
 // Builds a fresh MCP server with all tools bound to the service layer.
-// Priority is intentionally out of scope; routine/timer tools land with their phases.
+// Priority is intentionally out of scope.
 export function buildMcpServer(): McpServer {
   const server = new McpServer({ name: 'log-task-manager', version: '1.0.0' });
 
@@ -169,33 +168,23 @@ export function buildMcpServer(): McpServer {
   server.registerTool(
     'get_today',
     {
-      description: "Today's agenda: open tasks due today or overdue, plus the daily routine. (Timer coming soon.)",
+      description: "Today's agenda: open tasks due today or overdue, plus any running timer.",
       inputSchema: {},
     },
     async () => {
-      const [list, labels, routineList, active] = await Promise.all([
+      const [list, labels, active] = await Promise.all([
         tasksSvc.tasksDueToday(),
         contextLabels(),
-        routinesSvc.listRoutines(),
         timerSvc.getActiveTimer(),
       ]);
       const tasksSection = list.length
         ? 'Due today / overdue:\n' +
           list.map((t) => fmtTask(t, t.contextId ? labels.get(t.contextId) : undefined)).join('\n')
         : 'Nothing due today.';
-      let routineSection = '';
-      if (routineList.length) {
-        const done = routineList.filter((r) => r.done).length;
-        routineSection =
-          `\n\nRoutine (${done}/${routineList.length}):\n` +
-          routineList
-            .map((r) => `${r.done ? '☑' : '☐'} ${r.title}${r.timeHint ? ` — ${r.timeHint}` : ''}`)
-            .join('\n');
-      }
       const timerSection = active
         ? `\n\n⏱ Timer running: ${active.taskTitle} (since ${active.startedAt.slice(11, 16)} UTC)`
         : '';
-      return text(tasksSection + routineSection + timerSection);
+      return text(tasksSection + timerSection);
     },
   );
 
@@ -306,18 +295,6 @@ export function buildMcpServer(): McpServer {
     },
   );
 
-  server.registerTool(
-    'add_routine',
-    {
-      description: 'Add a daily routine item. Optionally a time hint (HH:MM, approximate — not a trigger).',
-      inputSchema: { title: z.string().min(1), time_hint: z.string().optional() },
-    },
-    async ({ title, time_hint }) => {
-      const r = await routinesSvc.createRoutine({ title, timeHint: time_hint ?? null });
-      logWrite('add_routine', { id: r.id, title });
-      return text(`Added routine: ${r.title}${r.timeHint ? ` (${r.timeHint})` : ''}`);
-    },
-  );
 
   server.registerTool(
     'start_timer',

@@ -15,7 +15,6 @@ import { ChevronLeft, Plus, Trash2, X } from 'lucide-react-native';
 import type { Context } from '@task-manager/shared';
 import { colors, monoFont, webInputReset } from '../../theme';
 import { useTasksStore } from '../../store/tasks';
-import { useRoutinesStore } from '../../store/routines';
 import { useAuthStore } from '../../store/auth';
 
 // Curated context palette — the five seeded colors plus a few extra accents.
@@ -355,7 +354,6 @@ function DangerSection() {
     setError(null);
     try {
       await useTasksStore.getState().resetData();
-      await useRoutinesStore.getState().load();
       setConfirming(false);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not reset');
@@ -392,7 +390,7 @@ function DangerSection() {
           }}
         >
           <Text style={{ fontSize: 13.5, color: colors.textSecondary, lineHeight: 19 }}>
-            This permanently deletes all tasks, recurring rules, routines and timers. Your contexts and
+            This permanently deletes all tasks, recurring rules and timers. Your contexts and
             sign-in are kept. This cannot be undone.
           </Text>
           {error ? <Text style={{ fontSize: 12.5, color: colors.accentNow }}>{error}</Text> : null}
