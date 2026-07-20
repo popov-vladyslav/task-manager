@@ -130,7 +130,13 @@ Source: `change_request_01.md` (**wins on conflict** with tech_spec) + a verbal 
   - [x] app api client + store `createContext`/`updateContext` pass `excludeFromAll`
   - [x] verified: both workspaces typecheck clean; service test on Neon branch `br-noisy-queen-as0gywtn` (migration applied there) — flag round-trips on create/update, calendar hides-then-shows on toggle (ALL PASS); real browser against a throwaway API on that branch — excluding "Home" dropped **All 39 → 24**, Home chip still shows count 15 and selecting it lists its tasks, Settings shows the "hidden" badge. Prod untouched.
 - [ ] **B6 — Detail bottom sheet + Task-UX overhaul (CR §4 + Revision B)** — mobile-first; web keeps plain input + existing modal
-  - [ ] **B6a — Detail sheet:** mobile task detail → `@gorhom/bottom-sheet` (snap 60/92, swipe-dismiss, `BottomSheetScrollView`, keyboard interactive, safe-area + tab padding); fix the clipping/last-field bug; **regroup fields** into Date & time / Organization sections; web centered modal unchanged
+  - [x] **B6a — Detail sheet** — ✅ done & web-verified 2026-07-20 (uncommitted); ⚠️ native swipe/snap/keyboard needs device check
+    - mobile task detail → `@gorhom/bottom-sheet` `BottomSheetModal` (present-on-mount, `onDismiss`→close, `BottomSheetBackdrop` press-to-close, `keyboardBehavior="interactive"`); `BottomSheetModalProvider` added in root `_layout`
+    - **dynamic sizing** (`enableDynamicSizing`, NOT fixed 60/92 snaps — per user) → sheet grows to fit content, `BottomSheetScrollView` scrolls if it overflows; fixes the clipping/last-field bug
+    - **web-safe input:** `BottomSheetTextInput` crashes on react-native-web (`TextInput.State.currentlyFocusedInput` missing) → `SheetInput` = plain `TextInput` on web, `BottomSheetTextInput` on native
+    - **regrouped** fields: title → **Date & time** (deadline/reminder/duration) → **Organization** (context/repeat) → Comments → Delete; shared `DetailContent` used by both paths
+    - web (wide) keeps the centered RN `Modal` (unchanged); `TaskDetail` now picks modal-vs-sheet by width
+    - verified in browser: web-wide modal shows regrouped layout; web-narrow @gorhom sheet presents, dynamic-sizes to fit (Delete reachable), no crash
   - [ ] **B6b — Task row interactions:** tap = inline title edit (not open detail); Play → **(i)** while editing → opens detail sheet; **swipe-left = delete** (confirm/undo); keep long-press reorder + checkbox complete; **show/hide completed** collapsible section
   - [ ] **B6c — Quick-add:** title-only top input + keyboard-accessory shortcut row (Deadline · Reminder · Duration · Context); tapping a shortcut → dismiss keyboard, slide up ≈keyboard-height picker panel (date+time w/ quick chips + month grid; context list; duration list; duration needs a deadline); replaces the current "+ Task" button; web = plain input
   - [ ] verify device + web (each sub-batch)

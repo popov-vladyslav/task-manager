@@ -4,6 +4,7 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { colors } from '../theme';
@@ -28,15 +29,17 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: colors.bgBase }}>
       <KeyboardProvider>
         <SafeAreaProvider>
-          <StatusBar style="light" />
-          <Stack
-            screenOptions={{
-              headerShown: false,
-              contentStyle: { backgroundColor: colors.bgBase },
-            }}
-          />
-          {Platform.OS !== 'web' ? <NotificationBridge /> : null}
-          <ReminderModal />
+          <BottomSheetModalProvider>
+            <StatusBar style="light" />
+            <Stack
+              screenOptions={{
+                headerShown: false,
+                contentStyle: { backgroundColor: colors.bgBase },
+              }}
+            />
+            {Platform.OS !== 'web' ? <NotificationBridge /> : null}
+            <ReminderModal />
+          </BottomSheetModalProvider>
         </SafeAreaProvider>
       </KeyboardProvider>
     </GestureHandlerRootView>
