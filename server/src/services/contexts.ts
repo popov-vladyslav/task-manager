@@ -1,4 +1,4 @@
-import { asc, eq, sql } from 'drizzle-orm';
+import { and, asc, eq, ne, sql } from 'drizzle-orm';
 import type { Context, CreateContextInput, UpdateContextInput } from '@task-manager/shared';
 import { db } from '../db/client';
 import { contexts, recurrenceRules, tasks } from '../db/schema';
@@ -64,32 +64,29 @@ export async function updateContext(id: number, patch: UpdateContextInput): Prom
   return toContext(row);
 }
 
-// Hard delete, but only when nothing references the context. Tasks and
-// recurrence rules both point at contexts (nullable FK, no cascade), so a
-// naive delete would either orphan them or hit an FK error. Instead we refuse
-// and report the counts, so the caller (Settings UI / MCP) can tell the user
-// to move or delete those tasks first.
+// Delete a context. Block ONLY on OPEN tasks (status != 'done') — those are
+// visible in the list and the user can move them. Done tasks and recurrence
+// rules aren't surfaced anywhere (and empty contexts are hidden from the chip
+// row), so blocking on them would be a dead-end — instead we detach them
+// (context_id → NULL) inside the delete. Tasks/rules have a nullable FK with no
+// cascade, so we must null them before dropping the row.
 export async function deleteContext(id: number): Promise<void> {
   if (Number.isNaN(id)) throw notFound('Context not found');
   const [row] = await db.select({ id: contexts.id }).from(contexts).where(eq(contexts.id, id));
   if (!row) throw notFound('Context not found');
 
-  const [{ taskCount }] = await db
-    .select({ taskCount: sql<number>`count(*)::int` })
+  const [{ openCount }] = await db
+    .select({ openCount: sql<number>`count(*)::int` })
     .from(tasks)
-    .where(eq(tasks.contextId, id));
-  const [{ ruleCount }] = await db
-    .select({ ruleCount: sql<number>`count(*)::int` })
-    .from(recurrenceRules)
-    .where(eq(recurrenceRules.contextId, id));
-
-  const refs = Number(taskCount) + Number(ruleCount);
-  if (refs > 0) {
-    const parts: string[] = [];
-    if (Number(taskCount) > 0) parts.push(`${taskCount} task(s)`);
-    if (Number(ruleCount) > 0) parts.push(`${ruleCount} recurring rule(s)`);
-    throw conflict(`${parts.join(' and ')} still use this context — move or delete them first.`);
+    .where(and(eq(tasks.contextId, id), ne(tasks.status, 'done')));
+  if (Number(openCount) > 0) {
+    throw conflict(`${openCount} open task(s) still use this context — move or delete them first.`);
   }
 
-  await db.delete(contexts).where(eq(contexts.id, id));
+  await db.transaction(async (tx) => {
+    // Only done tasks remain (open ones were blocked above); detach them + rules.
+    await tx.update(tasks).set({ contextId: null }).where(eq(tasks.contextId, id));
+    await tx.update(recurrenceRules).set({ contextId: null }).where(eq(recurrenceRules.contextId, id));
+    await tx.delete(contexts).where(eq(contexts.id, id));
+  });
 }
