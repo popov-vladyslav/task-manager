@@ -81,6 +81,61 @@ export function buildMcpServer(): McpServer {
   );
 
   server.registerTool(
+    'create_context',
+    {
+      description: 'Create a work context. Provide a label and a hex color (e.g. #4FB6A9). Slug is auto-generated.',
+      inputSchema: { label: z.string().min(1), color: z.string().min(1) },
+    },
+    async ({ label, color }) => {
+      const c = await contextsSvc.createContext({ label, color });
+      logWrite('create_context', { id: c.id, slug: c.slug });
+      return text(`Created context: ${c.slug} — ${c.label} (${c.color})`);
+    },
+  );
+
+  server.registerTool(
+    'update_context',
+    {
+      description: 'Rename or recolor a context, identified by its slug. Set label and/or color.',
+      inputSchema: {
+        slug: z.string().min(1),
+        label: z.string().min(1).optional(),
+        color: z.string().min(1).optional(),
+      },
+    },
+    async ({ slug, label, color }) => {
+      const c = await contextsSvc.findContextBySlug(slug);
+      if (!c) return text(`Unknown context '${slug}'.`);
+      const patch: { label?: string; color?: string } = {};
+      if (label !== undefined) patch.label = label;
+      if (color !== undefined) patch.color = color;
+      const updated = await contextsSvc.updateContext(c.id, patch);
+      logWrite('update_context', { id: updated.id, slug: updated.slug });
+      return text(`Updated context: ${updated.slug} — ${updated.label} (${updated.color})`);
+    },
+  );
+
+  server.registerTool(
+    'delete_context',
+    {
+      description:
+        'Delete a context by slug. Refuses (with a count) if any task or recurring rule still uses it — move or delete those first.',
+      inputSchema: { slug: z.string().min(1) },
+    },
+    async ({ slug }) => {
+      const c = await contextsSvc.findContextBySlug(slug);
+      if (!c) return text(`Unknown context '${slug}'.`);
+      try {
+        await contextsSvc.deleteContext(c.id);
+      } catch (err) {
+        return text(err instanceof Error ? err.message : 'Could not delete context.');
+      }
+      logWrite('delete_context', { id: c.id, slug });
+      return text(`Deleted context: ${slug}.`);
+    },
+  );
+
+  server.registerTool(
     'list_tasks',
     {
       description: 'List open tasks. Filter by context slug, status, or overdue.',

@@ -3,12 +3,14 @@ import type {
   CalendarData,
   Comment,
   Context,
+  CreateContextInput,
   CreateRoutineInput,
   CreateTaskInput,
   ReorderInput,
   Routine,
   Task,
   TimeEntry,
+  UpdateContextInput,
   UpdateTaskInput,
 } from '@task-manager/shared';
 import { API_URL } from './config';
@@ -79,6 +81,12 @@ function qs(params?: Record<string, string | number | undefined>): string {
 
 export const api = {
   listContexts: () => request<Context[]>('/api/contexts'),
+  createContext: (input: CreateContextInput) =>
+    request<Context>('/api/contexts', { method: 'POST', body: input }),
+  updateContext: (id: number, patch: UpdateContextInput) =>
+    request<Context>(`/api/contexts/${id}`, { method: 'PATCH', body: patch }),
+  deleteContext: (id: number) => request<void>(`/api/contexts/${id}`, { method: 'DELETE' }),
+  resetData: () => request<void>('/api/data', { method: 'DELETE', body: { confirm: 'RESET' } }),
   listTasks: (params?: { context?: number; status?: string }) =>
     request<Task[]>(`/api/tasks${qs(params)}`),
   createTask: (input: CreateTaskInput) => request<Task>('/api/tasks', { method: 'POST', body: input }),

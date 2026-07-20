@@ -28,4 +28,9 @@ router.patch('/:id', async (req, res) => {
   res.json(await svc.updateContext(Number(req.params.id), updateSchema.parse(req.body)));
 });
 
+router.delete('/:id', async (req, res) => {
+  await svc.deleteContext(Number(req.params.id));
+  res.status(204).end();
+});
+
 export default router;
