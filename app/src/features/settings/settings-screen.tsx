@@ -6,16 +6,20 @@ import {
   ScrollView,
   Text,
   TextInput,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { ChevronLeft, Plus, Trash2, X } from 'lucide-react-native';
+import { Plus, Trash2, X } from 'lucide-react-native';
 import type { Context } from '@task-manager/shared';
-import { colors, monoFont, webInputReset } from '../../theme';
+import { colors, headerDate, monoFont, webInputReset } from '../../theme';
 import { useTasksStore } from '../../store/tasks';
 import { useAuthStore } from '../../store/auth';
+import { SideNavLinks } from '../nav/nav-chrome';
+
+const WIDE_BREAKPOINT = 768;
 
 // Curated context palette — the five seeded colors plus a few extra accents.
 // Free-form color entry isn't worth a picker dependency for a single-user app.
@@ -35,8 +39,9 @@ const PALETTE = [
 const MAX_W = 560;
 
 export function SettingsScreen() {
-  const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
+  const wide = width >= WIDE_BREAKPOINT;
   const contexts = useTasksStore((s) => s.contexts);
 
   // Robust on a direct deep-link / web refresh onto /settings: the tasks store
@@ -47,32 +52,61 @@ export function SettingsScreen() {
     }
   }, []);
 
+  const sections = (
+    <>
+      <ContextsSection contexts={contexts} />
+      <AccountSection />
+      <DangerSection />
+    </>
+  );
+
+  // ---- WEB / WIDE: sidebar + main ----
+  if (wide) {
+    return (
+      <View style={{ flex: 1, flexDirection: 'row', backgroundColor: colors.bgBase }}>
+        <View
+          style={{
+            width: 240,
+            paddingTop: insets.top + 16,
+            paddingHorizontal: 16,
+            paddingBottom: 16,
+            backgroundColor: '#10141B',
+            borderRightWidth: 1,
+            borderRightColor: colors.bgCard,
+          }}
+        >
+          <View style={{ paddingHorizontal: 8, paddingBottom: 20 }}>
+            <Text style={{ fontFamily: monoFont, fontSize: 10, letterSpacing: 2, color: colors.textMuted }}>LOG</Text>
+          </View>
+          <SideNavLinks />
+          <View style={{ flex: 1 }} />
+          <Pressable onPress={() => useAuthStore.getState().signOut()} style={{ paddingHorizontal: 8, paddingVertical: 8 }}>
+            <Text style={{ fontSize: 12, color: colors.textMuted }}>Sign out</Text>
+          </Pressable>
+        </View>
+        <View style={{ flex: 1, paddingTop: insets.top + 24, paddingHorizontal: 24 }}>
+          <Text style={{ fontSize: 22, fontWeight: '600', letterSpacing: -0.4, color: colors.textPrimary, marginBottom: 16 }}>
+            Settings
+          </Text>
+          <ScrollView contentContainerStyle={{ paddingBottom: 40, width: '100%', maxWidth: MAX_W }}>
+            {sections}
+          </ScrollView>
+        </View>
+      </View>
+    );
+  }
+
+  // ---- MOBILE / NARROW: title + sections (bottom tab bar comes from the layout) ----
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       style={{ flex: 1, backgroundColor: colors.bgSurface }}
     >
       <View style={{ paddingTop: insets.top + 8, flex: 1 }}>
-        {/* Header */}
-        <View
-          style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: 8,
-            paddingHorizontal: 12,
-            paddingBottom: 12,
-          }}
-        >
-          <Pressable
-            onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))}
-            hitSlop={10}
-            style={{ padding: 6 }}
-          >
-            <ChevronLeft size={24} color={colors.textPrimary} />
-          </Pressable>
-          <Text style={{ fontSize: 20, fontWeight: '600', color: colors.textPrimary }}>Settings</Text>
+        <View style={{ paddingHorizontal: 20, paddingBottom: 12 }}>
+          <Text style={{ fontFamily: monoFont, fontSize: 10.5, letterSpacing: 1.5, color: colors.textMuted }}>{headerDate()}</Text>
+          <Text style={{ fontSize: 22, fontWeight: '600', letterSpacing: -0.4, color: colors.textPrimary }}>Settings</Text>
         </View>
-
         <ScrollView
           contentContainerStyle={{
             paddingHorizontal: 20,
@@ -82,9 +116,7 @@ export function SettingsScreen() {
             alignSelf: 'center',
           }}
         >
-          <ContextsSection contexts={contexts} />
-          <AccountSection />
-          <DangerSection />
+          {sections}
         </ScrollView>
       </View>
     </KeyboardAvoidingView>

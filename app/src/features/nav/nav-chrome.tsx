@@ -2,14 +2,12 @@ import { type ComponentType, type Ref } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { CalendarDays, ListTodo, Settings as SettingsIcon, type LucideProps } from 'lucide-react-native';
 import { TabTrigger, type TabTriggerSlotProps } from 'expo-router/ui';
-import { useRouter } from 'expo-router';
 import { colors } from '../../theme';
 
 // Shared navigation chrome for the custom tab layout. Screen switching runs
 // through Expo Router's headless <Tabs> — the mobile bar lives in the layout,
 // the web sidebar links live inside each screen (which keep their own sidebar
-// so Tasks can show its contexts). Calendar is a later phase: it has no route
-// yet, so it's a plain button that flashes `onUnavailable`.
+// so Tasks can show its contexts). Tabs: Tasks · Calendar · Settings.
 
 type IconType = ComponentType<LucideProps>;
 
@@ -31,13 +29,15 @@ export function MobileTabBar({ bottomInset }: { bottomInset: number }) {
       <TabTrigger name="calendar" asChild>
         <BottomTabButton label="Calendar" icon={CalendarDays} />
       </TabTrigger>
+      <TabTrigger name="settings" asChild>
+        <BottomTabButton label="Settings" icon={SettingsIcon} />
+      </TabTrigger>
     </View>
   );
 }
 
 // ---- Web sidebar nav links (rendered inside each screen's sidebar) ----
 export function SideNavLinks() {
-  const router = useRouter();
   return (
     <>
       <TabTrigger name="index" asChild>
@@ -46,24 +46,14 @@ export function SideNavLinks() {
       <TabTrigger name="calendar" asChild>
         <SideNavButton label="Calendar" icon={CalendarDays} />
       </TabTrigger>
-      {/* Settings is a stacked route, not a tab — plain nav button. */}
-      <SideNavButton label="Settings" icon={SettingsIcon} onPress={() => router.push('/settings')} />
+      <TabTrigger name="settings" asChild>
+        <SideNavButton label="Settings" icon={SettingsIcon} />
+      </TabTrigger>
     </>
   );
 }
 
-// ---- Mobile header gear (rendered in each screen's top-right) ----
-export function SettingsGearButton() {
-  const router = useRouter();
-  return (
-    <Pressable onPress={() => router.push('/settings')} hitSlop={10} style={{ padding: 6 }}>
-      <SettingsIcon size={20} color={colors.textMuted} />
-    </Pressable>
-  );
-}
-
-// Both buttons accept TabTriggerSlotProps (asChild forwards isFocused/onPress/ref)
-// and also work standalone for the Calendar placeholder.
+// Both buttons accept TabTriggerSlotProps (asChild forwards isFocused/onPress/ref).
 type NavButtonProps = Partial<TabTriggerSlotProps> & {
   label: string;
   icon: IconType;

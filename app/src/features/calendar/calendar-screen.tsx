@@ -9,7 +9,7 @@ import type { CalendarBlock, Task } from '@task-manager/shared';
 import { colors, monoFont } from '../../theme';
 import { useCalendarStore } from '../../store/calendar';
 import { useTasksStore } from '../../store/tasks';
-import { SideNavLinks, SettingsGearButton } from '../nav/nav-chrome';
+import { SideNavLinks } from '../nav/nav-chrome';
 import { useAuthStore } from '../../store/auth';
 import { api } from '../../lib/api';
 import { TaskDetail } from '../tasks/task-detail';
@@ -174,9 +174,6 @@ export function CalendarScreen() {
     <>
       <View style={{ flex: 1, backgroundColor: colors.bgSurface, paddingTop: insets.top + 8 }}>
         <View style={{ paddingHorizontal: 16, flex: 1 }}>
-          <View style={{ alignItems: 'flex-end', marginBottom: 2 }}>
-            <SettingsGearButton />
-          </View>
           {header}
           <View style={{ flex: 1 }}>{body}</View>
         </View>

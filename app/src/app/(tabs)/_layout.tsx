@@ -51,6 +51,7 @@ export default function TabsLayout() {
       <TabList style={{ display: 'none' }}>
         <TabTrigger name="index" href="/" />
         <TabTrigger name="calendar" href="/calendar" />
+        <TabTrigger name="settings" href="/settings" />
       </TabList>
 
       {/* Full-screen focus timer — overlays everything when a session is open. */}

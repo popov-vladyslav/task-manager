@@ -8,7 +8,7 @@ import type { Context, Task } from '@task-manager/shared';
 import { colors, headerDate, monoFont } from '../../theme';
 import { useTasksStore } from '../../store/tasks';
 import { useAuthStore } from '../../store/auth';
-import { SideNavLinks, SettingsGearButton } from '../nav/nav-chrome';
+import { SideNavLinks } from '../nav/nav-chrome';
 import { TaskCard } from './task-card';
 import { ContextChips } from './context-chips';
 import { TaskDetail } from './task-detail';
@@ -250,22 +250,11 @@ export function TasksScreen() {
       keyboardVerticalOffset={insets.bottom + 8}
       style={{ flex: 1, backgroundColor: colors.bgSurface, paddingTop: insets.top + 8 }}
     >
-      <View
-        style={{
-          paddingHorizontal: 20,
-          paddingBottom: 12,
-          flexDirection: 'row',
-          alignItems: 'flex-start',
-          justifyContent: 'space-between',
-        }}
-      >
-        <View>
-          <Text style={{ fontFamily: monoFont, fontSize: 10.5, letterSpacing: 1.5, color: colors.textMuted }}>{headerDate()}</Text>
-          <Text style={{ fontSize: 22, fontWeight: '600', letterSpacing: -0.4, color: colors.textPrimary }}>
-            {tasks.length} open {tasks.length === 1 ? 'task' : 'tasks'}
-          </Text>
-        </View>
-        <SettingsGearButton />
+      <View style={{ paddingHorizontal: 20, paddingBottom: 12 }}>
+        <Text style={{ fontFamily: monoFont, fontSize: 10.5, letterSpacing: 1.5, color: colors.textMuted }}>{headerDate()}</Text>
+        <Text style={{ fontSize: 22, fontWeight: '600', letterSpacing: -0.4, color: colors.textPrimary }}>
+          {tasks.length} open {tasks.length === 1 ? 'task' : 'tasks'}
+        </Text>
       </View>
 
       <ContextChips contexts={contexts} counts={counts} activeContextId={activeContextId} onSelect={setActiveContext} />
