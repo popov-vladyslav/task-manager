@@ -1,7 +1,8 @@
 import { type ComponentType, type Ref } from 'react';
 import { Pressable, Text, View } from 'react-native';
-import { CalendarDays, ListTodo, RotateCcw, type LucideProps } from 'lucide-react-native';
+import { CalendarDays, ListTodo, RotateCcw, Settings as SettingsIcon, type LucideProps } from 'lucide-react-native';
 import { TabTrigger, type TabTriggerSlotProps } from 'expo-router/ui';
+import { useRouter } from 'expo-router';
 import { colors } from '../../theme';
 
 // Shared navigation chrome for the custom tab layout. Screen switching runs
@@ -39,6 +40,7 @@ export function MobileTabBar({ bottomInset }: { bottomInset: number }) {
 
 // ---- Web sidebar nav links (rendered inside each screen's sidebar) ----
 export function SideNavLinks() {
+  const router = useRouter();
   return (
     <>
       <TabTrigger name="index" asChild>
@@ -50,7 +52,19 @@ export function SideNavLinks() {
       <TabTrigger name="calendar" asChild>
         <SideNavButton label="Calendar" icon={CalendarDays} />
       </TabTrigger>
+      {/* Settings is a stacked route, not a tab — plain nav button. */}
+      <SideNavButton label="Settings" icon={SettingsIcon} onPress={() => router.push('/settings')} />
     </>
+  );
+}
+
+// ---- Mobile header gear (rendered in each screen's top-right) ----
+export function SettingsGearButton() {
+  const router = useRouter();
+  return (
+    <Pressable onPress={() => router.push('/settings')} hitSlop={10} style={{ padding: 6 }}>
+      <SettingsIcon size={20} color={colors.textMuted} />
+    </Pressable>
   );
 }
 

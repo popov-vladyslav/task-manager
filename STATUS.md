@@ -1,13 +1,14 @@
 # Project Status — Task Manager "Log"
 
 Handoff / resume doc. Source of truth for architecture & contracts is `tech_spec.md`;
-deploy details in `DEPLOY.md`. Last updated: 2026-07-17.
+deploy details in `DEPLOY.md`. Last updated: 2026-07-20.
 
 ## TL;DR
 - **Phase 1** (Expo app + REST API) — ✅ done & deployed.
 - **Phase 2** — MCP (9 tools) ✅, OAuth ✅, Scheduler ✅, Routines screen ✅ — all committed & deployed.
 - **Phase 3** — **Timer ✅**, **Push ✅** (verified on iPhone), **Calendar ✅**.
-  Calendar/UX refinement pass **✅ done** — Batches **A, B, C, D** all committed & verified (see "Calendar refinement pass" below). **Next: Settings.** **Photos descoped.**
+  Calendar/UX refinement pass **✅ done** — Batches **A, B, C, D** all committed & verified (see "Calendar refinement pass" below). **Photos descoped.**
+- **Change Request 01 + Settings** — 🚧 IN PROGRESS (started 2026-07-20). See "**Change Request 01 + Settings**" section below for the live batch ledger. (Old tech_spec §12 Settings — PIN / export / repeat-toggle — **dropped**; not wanted.)
 - Prod auto-deploys from `main` (Render). Local `.env` `DATABASE_URL` = the **same Neon DB as prod**.
 
 ## Live infra
@@ -64,10 +65,83 @@ User feedback split into batches, all committed & verified.
 - **#7 Keyboard** no longer covers inputs — `KeyboardAvoidingView` moved to wrap each modal (so the bottom-anchored sheet lifts) + the tasks/routines mobile roots + the auth card.
 - **⚠️ Needs a dev-client rebuild** to test on device: `expo-screen-orientation` (#5), notification category + entitlement (#6), and the earlier `expo-haptics`. `#7` works after a JS reload but is best confirmed post-rebuild.
 
-## Left / next (in order)
-1. **Settings** (Phase 3 §12) — PIN (6-digit bcrypt in `settings`), repeat-reminders toggle, JSON export (`GET /api/export`), data reset (`DELETE /api/data {confirm:'RESET'}`).
-2. Optional calendar polish: **edge-resize** blocks to change `duration_min` (deferred from Batch D); drag auto-scroll at viewport edges.
-3. Optional: foreground notification handler; App Store publish via TestFlight (reuse the EAS/`production` profile; create App Store Connect app record + new personal-account ASC key if needed).
+## Change Request 01 + Settings — 🚧 IN PROGRESS (started 2026-07-20)
+Source: `change_request_01.md` (**wins on conflict** with tech_spec) + a verbal Settings ask
+(context CRUD / sign out / reset). **This is the resume ledger — tick the boxes as batches land.**
+
+### Confirmed decisions (do NOT undo without asking) — see `change_request_01.md` Revision A
+- **Delete context = BLOCK when referenced.** If any task points at it → 409 with the task count. Identical in Settings UI and MCP `delete_context`. (CR §1.)
+- **Reset data = keep contexts + settings + auth; user STAYS signed in.** Wipes tasks/comments/time_entries/recurrence_rules/notification_log. (Routines no longer exist — see below.)
+- **🔄 Revision A (2026-07-20) — plan reshaped:**
+  - **Routines REMOVED entirely** — tab/screen/store, `/api/routines`, MCP `add_routine`, `get_today` routine section; **`routines` + `routine_completions` tables DROPPED** (migration).
+  - **Recurring tab (CR §2) CANCELLED** — no separate tab, no auto `recurrence_id` hide rule.
+  - **NEW: `contexts.exclude_from_all` flag** — toggled in Settings. Hides that context's tasks from the Tasks **All** view **and** the **Calendar**; reachable only via the context's own chip. Serves both "daily routine" and "repeated payments" use cases.
+  - **Settings = rightmost TAB**, not a header gear. Tab bar → **Tasks · Calendar · Settings** (remove the 3 gears added in B2).
+  - **Swipe actions (CR §7) DROPPED.**
+  - **Bottom sheet = full `@gorhom/bottom-sheet` migration** (snap 60/92, swipe-dismiss, `BottomSheetScrollView`); web modal unchanged. (CR §4, kept.)
+- **🔄 Revision B (2026-07-20) — task creation & interaction overhaul** (Reminders / Focus To-Do as *examples*, not clones; see `change_request_01.md` Revision B):
+  - **Mobile-first; web falls back** to a plain top input + existing detail modal (no accessory row / swap-in panels).
+  - **Quick-add:** title-only input at the top of the list; keyboard-accessory shortcut row (**Deadline · Reminder · Duration · Context**); tapping a shortcut dismisses the keyboard and slides up an **≈keyboard-height panel** (approximate) to pick the value (date+time w/ Today/Tomorrow/+7d/Later chips + month grid; context list; duration list). Duration enabled only once a deadline is set.
+  - **Tap = inline title edit, NOT open detail.** While a row's title is focused, its **Play button → (i) info icon** which opens the **detail bottom sheet** (regrouped: Date & time / Organization, over our existing fields).
+  - **Swipe-left = delete** (restores a delete-only slice of the dropped §7).
+  - **Show/hide completed** — collapsible "Completed" section at the bottom of the list (+ within a context).
+  - Per-row gestures: tap=edit · long-press=reorder · swipe-left=delete · Play=timer · (i)=detail · checkbox=complete.
+  - **Sequencing:** B3 → B4 → B5 → **[B6 = @gorhom sheet + this overhaul]** → polish.
+
+### Assumptions (proceeding unless corrected)
+- Calendar: default mode = **Day**; last-selected mode persisted locally. (CR §5.)
+- Hide-empty-contexts: a context with **zero non-done tasks** hides from the Tasks chip row; "All" always shown; Settings lists all contexts. (CR §6 — retained; awaiting final ack.)
+
+### Batches (each ends with typecheck + verify + commit)
+> B1 & B2 landed BEFORE Revision A. B2's header-gear nav is **superseded** by B4 (gear→tab); B2's Settings screen gains the exclude toggle in B5. B1's reset still lists `routines` in its TRUNCATE — **B3 removes that** when it drops the tables.
+- [x] **B1 — Context backend + MCP + Reset backend** (all server + shared api; no UI) — ✅ done & verified 2026-07-20 (uncommitted)
+  - [x] `deleteContext(id)` — 409 + task count if referenced, else delete (`services/contexts.ts`)
+  - [x] slug-uniqueness in `createContext` (`uniqueSlug`, suffix `-2`/`-3`… ; slug stable on rename)
+  - [x] `DELETE /api/contexts/:id` route
+  - [x] `resetData()` (`services/data.ts`: `TRUNCATE tasks, recurrence_rules, routines … CASCADE`) + `DELETE /api/data {confirm:'RESET'}` (`routes/data.ts`), mounted in `index.ts`
+  - [x] MCP tools `create_context` / `update_context` / `delete_context` (`build-server.ts`; delete catches the 409 → friendly text)
+  - [x] app api client: `createContext` / `updateContext` / `deleteContext` / `resetData` (`app/src/lib/api.ts`)
+  - [x] verified: both workspaces typecheck clean; reset SQL + context service run against an isolated Neon branch (`br-crimson-rain-ascmov06`, auto-expires 2026-07-21) — reset kept contexts/push/auth & wiped content via cascade; uniqueSlug/rename-keeps-slug/delete-block-with-count/delete-after-unref all PASS; prod DB confirmed untouched.
+- [x] **B2 — Settings screen (UI)** — ✅ done & verified 2026-07-20 (uncommitted)
+  - [x] gear entry points: `SettingsGearButton` in the 3 mobile headers (Tasks/Routine/Calendar) + a Settings link in the web `SideNavLinks` (`nav-chrome.tsx`); stacked route `app/settings.tsx` → `features/settings/settings-screen.tsx`
+  - [x] Settings screen: **Contexts** (list / add / rename / recolor via 10-swatch palette / remove with 2-step confirm; inline editor), **Account** (Sign out → `router.replace('/sign-in')`), **Danger** (Reset data, expanding double-confirm)
+  - [x] context CRUD + `resetData` actions in the tasks store (mutate local `contexts`; clear `activeContextId` if deleted; reload after reset — routines store reloaded from the screen)
+  - [x] deep-link/refresh guard: Settings loads contexts itself if the store is empty
+  - [x] verified in real browser (web): screen renders on-brand; create (`qa-b2-temp`) → editor+palette → 2-step delete all work; Sign out → `/sign-in`; prod contexts self-cleaned back to 5. (Reset "Delete everything" not clicked live — proven on the Neon branch in B1; delete-block 409 proven by B1 service test.)
+  - ⚠️ **Not yet checked on a mobile device**: the three mobile-header gears + `/settings` push nav (verified on web only).
+- [ ] **B3 — Remove Routines entirely (Revision A)**
+  - [ ] app: delete Routine tab (nav-chrome + `(tabs)/_layout` TabTrigger), `(tabs)/routines.tsx`, `features/routines/`, `store/routines.ts`; drop routines reload in the Settings reset flow
+  - [ ] server: remove `routes/routines.ts` + mount, `services/routines.ts`, MCP `add_routine`, `get_today` routine section; app api client routine methods
+  - [ ] migration `0003_drop_routines.sql` → `DROP TABLE routine_completions, routines`; drizzle schema + mappers cleanup
+  - [ ] reset: drop `routines` from the `resetData()` TRUNCATE (`services/data.ts`)
+  - [ ] verify: typecheck; migration on a Neon branch; MCP tool list no longer shows `add_routine`
+- [ ] **B4 — Settings: header gear → rightmost tab (Revision A)**
+  - [ ] register `settings` as a tab (`(tabs)/settings.tsx` + TabList/TabTrigger); move `features/settings/settings-screen.tsx` under the tabs; drop the stacked `app/settings.tsx`
+  - [ ] nav-chrome: Settings gear icon in the **bottom tab bar** (last) + web sidebar tab; **remove `SettingsGearButton`** from the 3 mobile headers; revert those header layout tweaks
+  - [ ] Sign-out no longer needs `router.replace` (tab guard handles it); keep the deep-link contexts load-guard
+  - [ ] verify: web browser (tab nav + all flows still work)
+- [ ] **B5 — Exclude-from-All context flag (Revision A)**
+  - [ ] migration `0004_context_exclude.sql` → `contexts.exclude_from_all boolean NOT NULL DEFAULT false`; drizzle schema + `Context` type + mapper
+  - [ ] service/API: `updateContext` accepts `excludeFromAll`; MCP `create_context`/`update_context` gain it
+  - [ ] Settings editor: an **Exclude from All** toggle per context (+ create form)
+  - [ ] Tasks: **All** view (activeContextId == null) + its counts filter out excluded-context tasks; the context still shows as a chip (if non-empty) and works when selected
+  - [ ] Calendar: `services/calendar.ts` excludes tasks whose context is excluded
+  - [ ] app api client: pass `excludeFromAll`
+  - [ ] verify: Neon branch service test + web browser (task in excluded context absent from All & Calendar, present under its chip)
+- [ ] **B6 — Detail bottom sheet + Task-UX overhaul (CR §4 + Revision B)** — mobile-first; web keeps plain input + existing modal
+  - [ ] **B6a — Detail sheet:** mobile task detail → `@gorhom/bottom-sheet` (snap 60/92, swipe-dismiss, `BottomSheetScrollView`, keyboard interactive, safe-area + tab padding); fix the clipping/last-field bug; **regroup fields** into Date & time / Organization sections; web centered modal unchanged
+  - [ ] **B6b — Task row interactions:** tap = inline title edit (not open detail); Play → **(i)** while editing → opens detail sheet; **swipe-left = delete** (confirm/undo); keep long-press reorder + checkbox complete; **show/hide completed** collapsible section
+  - [ ] **B6c — Quick-add:** title-only top input + keyboard-accessory shortcut row (Deadline · Reminder · Duration · Context); tapping a shortcut → dismiss keyboard, slide up ≈keyboard-height picker panel (date+time w/ quick chips + month grid; context list; duration list; duration needs a deadline); replaces the current "+ Task" button; web = plain input
+  - [ ] verify device + web (each sub-batch)
+- [ ] **B7 — Polish (CR §3, §5, §6)**
+  - [ ] login email autofill (`textContentType`/`autoComplete`/`keyboardType`/`autoCapitalize`; web `type=email`)
+  - [ ] calendar default Day + persist last-selected mode
+  - [ ] hide empty contexts from the Tasks chip row
+  - [ ] verify
+
+## Left / next (after CR01)
+1. Optional calendar polish: **edge-resize** blocks to change `duration_min` (deferred from Batch D); drag auto-scroll at viewport edges.
+2. Optional: foreground notification handler; App Store publish via TestFlight (reuse the EAS/`production` profile; create App Store Connect app record + new personal-account ASC key if needed).
 
 ## Decisions / deviations (do NOT undo without asking)
 - **priority out of scope** — removed from DB, API, UI (overrides tech_spec §2).

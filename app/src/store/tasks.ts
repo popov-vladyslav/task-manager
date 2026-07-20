@@ -12,6 +12,10 @@ interface TasksState {
 
   load: () => Promise<void>;
   setActiveContext: (id: number | null) => void;
+  createContext: (label: string, color: string) => Promise<void>;
+  updateContext: (id: number, patch: { label?: string; color?: string }) => Promise<void>;
+  deleteContext: (id: number) => Promise<void>; // throws (409 message) if still referenced
+  resetData: () => Promise<void>; // wipes tasks/routines/timers; keeps contexts
   addTask: (title: string) => Promise<Task | null>;
   toggleComplete: (task: Task) => Promise<void>;
   patchTask: (id: string, patch: Parameters<typeof api.updateTask>[1]) => Promise<void>;
@@ -46,6 +50,33 @@ export const useTasksStore = create<TasksState>((set, get) => ({
 
   setActiveContext(id) {
     set({ activeContextId: id });
+  },
+
+  async createContext(label, color) {
+    const created = await api.createContext({ label, color });
+    set({ contexts: [...get().contexts, created].sort((a, b) => a.sortOrder - b.sortOrder) });
+  },
+
+  async updateContext(id, patch) {
+    const updated = await api.updateContext(id, patch);
+    set({ contexts: get().contexts.map((c) => (c.id === id ? updated : c)) });
+  },
+
+  async deleteContext(id) {
+    // Let a 409 (context still referenced) propagate — the caller surfaces the message.
+    await api.deleteContext(id);
+    set({
+      contexts: get().contexts.filter((c) => c.id !== id),
+      activeContextId: get().activeContextId === id ? null : get().activeContextId,
+    });
+  },
+
+  async resetData() {
+    await api.resetData();
+    // Server kept contexts; refresh the now-empty task list. Routines live in
+    // their own store — reload it too so its screen reflects the wipe.
+    set({ tasks: [], activeContextId: null });
+    await get().load();
   },
 
   async addTask(title) {

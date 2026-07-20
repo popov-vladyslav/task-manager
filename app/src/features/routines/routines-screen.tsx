@@ -7,7 +7,7 @@ import type { Routine } from '@task-manager/shared';
 import { colors, headerDate, monoFont, webInputReset } from '../../theme';
 import { useRoutinesStore } from '../../store/routines';
 import { useAuthStore } from '../../store/auth';
-import { SideNavLinks } from '../nav/nav-chrome';
+import { SideNavLinks, SettingsGearButton } from '../nav/nav-chrome';
 
 const WIDE_BREAKPOINT = 768;
 
@@ -209,9 +209,20 @@ export function RoutinesScreen() {
       keyboardVerticalOffset={insets.bottom + 8}
       style={{ flex: 1, backgroundColor: colors.bgSurface, paddingTop: insets.top + 8 }}
     >
-      <View style={{ paddingHorizontal: 20, paddingBottom: 12 }}>
-        <Text style={{ fontFamily: monoFont, fontSize: 10.5, letterSpacing: 1.5, color: colors.textMuted }}>{headerDate()}</Text>
-        <Text style={{ fontSize: 22, fontWeight: '600', letterSpacing: -0.4, color: colors.textPrimary }}>Daily routine</Text>
+      <View
+        style={{
+          paddingHorizontal: 20,
+          paddingBottom: 12,
+          flexDirection: 'row',
+          alignItems: 'flex-start',
+          justifyContent: 'space-between',
+        }}
+      >
+        <View>
+          <Text style={{ fontFamily: monoFont, fontSize: 10.5, letterSpacing: 1.5, color: colors.textMuted }}>{headerDate()}</Text>
+          <Text style={{ fontSize: 22, fontWeight: '600', letterSpacing: -0.4, color: colors.textPrimary }}>Daily routine</Text>
+        </View>
+        <SettingsGearButton />
       </View>
 
       <View style={{ paddingHorizontal: 20 }}>{progress}</View>
