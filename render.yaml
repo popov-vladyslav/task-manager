@@ -42,7 +42,7 @@ services:
     envVars:
       - key: NODE_VERSION
         value: "22"
-      - key: EXPO_PUBLIC_API_URL # set to the log-api service URL (inlined at build time)
+      - key: EXPO_PUBLIC_API_URL # dashboard-set (inlined at build time), e.g. https://api.task-tracker.net
         sync: false
     routes:
       # Client-side routing fallback (existing static assets are served first).

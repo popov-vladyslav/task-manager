@@ -10,13 +10,13 @@
         "simulator": false
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://log-api-rdmc.onrender.com"
+        "EXPO_PUBLIC_API_URL": "https://api.task-tracker.net"
       }
     },
     "production": {
       "autoIncrement": true,
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://log-api-rdmc.onrender.com"
+        "EXPO_PUBLIC_API_URL": "https://api.task-tracker.net"
       }
     }
   },
