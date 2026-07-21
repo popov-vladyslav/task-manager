@@ -51,7 +51,7 @@ if (env.MCP_TOKEN) {
   app.use(
     mcpAuthRouter({
       provider: oauthProvider,
-      issuerUrl: new URL(env.PUBLIC_URL),
+      issuerUrl: new URL(env.MCP_BASE_URL),
       resourceName: 'Log Task Manager',
     }),
   );

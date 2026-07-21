@@ -17,9 +17,14 @@ const schema = z.object({
   MCP_TOKEN: z.string().min(16).optional(),
   // Public base URL of the Expo web app, used to build the magic-link target.
   APP_URL: z.string().default('http://localhost:8081'),
-  // Public base URL of THIS API (the OAuth issuer / MCP resource). On Render this
-  // auto-uses RENDER_EXTERNAL_URL; set explicitly for an ngrok tunnel or custom host.
+  // Public base URL of THIS API (legacy). Kept only as a fallback for MCP_BASE_URL.
   PUBLIC_URL: z.string().default(process.env.RENDER_EXTERNAL_URL ?? 'http://localhost:4000'),
+  // Public base URL the MCP server advertises — the OAuth issuer and the
+  // `oauth-protected-resource` metadata / WWW-Authenticate challenge. Falls back to
+  // PUBLIC_URL / RENDER_EXTERNAL_URL / localhost so existing deploys keep working.
+  MCP_BASE_URL: z
+    .string()
+    .default(process.env.PUBLIC_URL ?? process.env.RENDER_EXTERNAL_URL ?? 'http://localhost:4000'),
   // Browser origins allowed by CORS (comma-separated). The web app lives here;
   // the native app / MCP connector send no Origin and bypass CORS regardless.
   ALLOWED_ORIGINS: z
