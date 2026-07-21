@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import * as Haptics from 'expo-haptics';
+import * as Device from 'expo-device';
 import { ChevronLeft, ChevronRight } from 'lucide-react-native';
 import type { CalendarBlock, Task } from '@task-manager/shared';
 import { colors, monoFont } from '../../theme';
@@ -37,9 +38,10 @@ const timeToY = (d: Date) => {
 };
 
 // A light selection tick when a block is grabbed / a slot is long-pressed to
-// create (mobile only; no-op on web where it isn't available anyway).
+// create. Real hardware only: simulators/emulators have no haptic engine, so the
+// call is a no-op there and iOS logs a warning — skip it via Device.isDevice.
 const grabTick = () => {
-  if (Platform.OS !== 'web') Haptics.selectionAsync().catch(() => {});
+  if (Platform.OS !== 'web' && Device.isDevice) Haptics.selectionAsync().catch(() => {});
 };
 
 export function CalendarScreen() {
