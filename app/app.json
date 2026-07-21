@@ -4,6 +4,12 @@
     "slug": "task-manager",
     "owner": "vladyslavpopovpl",
     "version": "1.0.0",
+    "runtimeVersion": {
+      "policy": "fingerprint"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/2e8c9a51-5bfe-4f91-887c-6931f8f1c199"
+    },
     "icon": "./assets/images/icon.png",
     "scheme": "app",
     "userInterfaceStyle": "automatic",

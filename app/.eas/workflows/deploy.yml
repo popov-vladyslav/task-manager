@@ -1,0 +1,43 @@
+name: Deploy on merge to main
+
+# On every push to main: compute the native fingerprint, look for a build that
+# already matches it. If one exists → the change is JS-only → ship it OTA. If
+# not → native changed → make a fresh preview (ad-hoc/internal) iOS build.
+# The typecheck + web-build gate stays in .github/workflows/ci.yml.
+
+on:
+  push:
+    branches: ['main']
+
+jobs:
+  fingerprint:
+    name: Fingerprint (iOS)
+    type: fingerprint
+    environment: preview
+
+  get_ios_build:
+    name: Find matching iOS build
+    needs: [fingerprint]
+    type: get-build
+    params:
+      platform: ios
+      profile: preview
+      fingerprint_hash: ${{ needs.fingerprint.outputs.ios_fingerprint_hash }}
+
+  build_ios:
+    name: Build iOS (native changed)
+    needs: [get_ios_build]
+    if: ${{ !needs.get_ios_build.outputs.build_id }}
+    type: build
+    params:
+      platform: ios
+      profile: preview
+
+  publish_update:
+    name: Publish OTA update (native unchanged)
+    needs: [get_ios_build]
+    if: ${{ needs.get_ios_build.outputs.build_id }}
+    type: update
+    params:
+      channel: preview
+      platform: ios
