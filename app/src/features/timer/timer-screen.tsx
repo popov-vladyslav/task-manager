@@ -9,13 +9,29 @@ import { useTimerStore } from '../../store/timer';
 const DIGIT = '#C7CCD4';
 const MUTED = '#5A6272';
 
-// Re-render every 250ms while `active` so the number ticks smoothly.
+// Re-render exactly when the displayed second changes. A fixed interval drifts and
+// isn't aligned to the second boundary (baseMs from pauses gives an arbitrary phase),
+// so the number would flip at uneven moments. Instead, self-correct: each tick reads
+// the true elapsed ms and schedules the next re-render at the next second boundary.
+function currentTotalMs(): number {
+  const s = useTimerStore.getState();
+  return s.baseMs + (s.running && s.runningSince != null ? Date.now() - s.runningSince : 0);
+}
 function useTick(active: boolean) {
   const [, setN] = useState(0);
   useEffect(() => {
     if (!active) return;
-    const id = setInterval(() => setN((n) => n + 1), 250);
-    return () => clearInterval(id);
+    let id: ReturnType<typeof setTimeout>;
+    const schedule = () => {
+      // +15ms guard so floor(totalMs/1000) has definitely advanced when we re-render.
+      const msToNext = 1000 - (currentTotalMs() % 1000) + 15;
+      id = setTimeout(() => {
+        setN((n) => n + 1);
+        schedule();
+      }, msToNext);
+    };
+    schedule();
+    return () => clearTimeout(id);
   }, [active]);
 }
 
