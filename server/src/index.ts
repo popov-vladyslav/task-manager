@@ -25,7 +25,19 @@ process.on('unhandledRejection', (reason) => {
 const app = express();
 // Behind Render's proxy: trust the first hop so req.ip / rate-limiting see the real client.
 app.set('trust proxy', 1);
-app.use(cors());
+// CORS allowlist (env ALLOWED_ORIGINS). Requests with no Origin header — the
+// native app, curl, the MCP connector (server-to-server) — aren't browser CORS
+// and are always allowed; browser requests must come from an allowlisted origin.
+const allowedOrigins = new Set(env.ALLOWED_ORIGINS);
+app.use(
+  cors({
+    origin(origin, cb) {
+      // Allowlisted (or no Origin) → reflect it; otherwise omit the CORS header so
+      // the browser blocks the response, without 500-ing the request.
+      cb(null, !origin || allowedOrigins.has(origin));
+    },
+  }),
+);
 app.use(express.json());
 app.use(express.urlencoded({ extended: false })); // OAuth /token + /oauth/approve
 

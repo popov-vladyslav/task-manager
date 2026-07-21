@@ -20,6 +20,17 @@ const schema = z.object({
   // Public base URL of THIS API (the OAuth issuer / MCP resource). On Render this
   // auto-uses RENDER_EXTERNAL_URL; set explicitly for an ngrok tunnel or custom host.
   PUBLIC_URL: z.string().default(process.env.RENDER_EXTERNAL_URL ?? 'http://localhost:4000'),
+  // Browser origins allowed by CORS (comma-separated). The web app lives here;
+  // the native app / MCP connector send no Origin and bypass CORS regardless.
+  ALLOWED_ORIGINS: z
+    .string()
+    .default('https://task-tracker.net,https://log-web-6tzk.onrender.com,http://localhost:8081')
+    .transform((s) =>
+      s
+        .split(',')
+        .map((o) => o.trim())
+        .filter(Boolean),
+    ),
 });
 
 export const env = schema.parse(process.env);
