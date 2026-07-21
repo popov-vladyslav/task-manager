@@ -2,8 +2,7 @@ import { useState } from 'react';
 import { Modal, Pressable, Text, TextInput, useWindowDimensions, View } from 'react-native';
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import Animated, { SlideInDown } from 'react-native-reanimated';
-import { X } from 'lucide-react-native';
-import { colors, radius, shortDateTime, webInputReset } from '../../theme';
+import { colors, radius, webInputReset } from '../../theme';
 import { DateFieldsSection } from './date-fields-section';
 
 const WIDE = 768;
@@ -53,12 +52,7 @@ export function NewTaskSheet({
             : { borderTopLeftRadius: radius.sheet, borderTopRightRadius: radius.sheet, borderCurve: 'continuous', backgroundColor: colors.bgCardWeb }}
         >
           <View style={{ padding: 20, gap: 16 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                <Text style={{ flex: 1, fontSize: 16, fontWeight: '600', color: colors.textPrimary }}>New task · {shortDateTime(startISO)}</Text>
-                <Pressable onPress={onClose} hitSlop={8} style={{ padding: 6, borderRadius: 8, backgroundColor: colors.bgElevated }}>
-                  <X size={15} color={colors.textSecondary} />
-                </Pressable>
-              </View>
+              {/* No header/close — tap the overlay to dismiss. */}
               <TextInput
                 autoFocus
                 value={title}
