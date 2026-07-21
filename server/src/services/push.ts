@@ -21,9 +21,10 @@ async function sendPush(title: string, body: string, data: Record<string, unknow
   const tokens = rows.map((r) => r.token).filter((t) => Expo.isExpoPushToken(t));
   if (tokens.length === 0) return;
 
-  // categoryId → the app's snooze action buttons. (interruptionLevel 'active';
-  // 'time-sensitive' is deferred — it needs the Time Sensitive Notifications
-  // capability enabled on the App ID + a regenerated provisioning profile.)
+  // categoryId → the app's snooze action buttons. channelId → the Android HIGH
+  // channel (heads-up + sound). interruptionLevel 'time-sensitive' bypasses
+  // Focus/DND on iOS (needs the Time Sensitive Notifications entitlement — see
+  // app.json ios.entitlements — and a rebuild). (CR02 §3b)
   const messages: ExpoPushMessage[] = tokens.map((to) => ({
     to,
     sound: 'default',
@@ -31,8 +32,9 @@ async function sendPush(title: string, body: string, data: Record<string, unknow
     body,
     data,
     categoryId: 'reminder',
+    channelId: 'tasks-default',
     priority: 'high',
-    interruptionLevel: 'active',
+    interruptionLevel: 'time-sensitive',
   }));
   for (const chunk of expo.chunkPushNotifications(messages)) {
     try {

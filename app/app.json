@@ -12,6 +12,9 @@
       "config": {
         "usesNonExemptEncryption": false
       },
+      "entitlements": {
+        "com.apple.developer.usernotifications.time-sensitive": true
+      },
       "infoPlist": {
         "UISupportedInterfaceOrientations": [
           "UIInterfaceOrientationPortrait",

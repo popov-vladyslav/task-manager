@@ -42,6 +42,26 @@ export async function registerReminderCategory(): Promise<void> {
   } catch {
     /* ignore — categories are a no-op on web / unsupported platforms */
   }
+
+  // Android notification channels (CR02 §3b). No-op on iOS. `tasks-default` (HIGH)
+  // drives regular reminders — heads-up + sound; `tasks-critical` (MAX) is reserved
+  // for reminders marked important. The server routes pushes via channelId.
+  if (process.env.EXPO_OS === 'android') {
+    try {
+      await Notifications.setNotificationChannelAsync('tasks-default', {
+        name: 'Task reminders',
+        importance: Notifications.AndroidImportance.HIGH,
+        sound: 'default',
+      });
+      await Notifications.setNotificationChannelAsync('tasks-critical', {
+        name: 'Important task reminders',
+        importance: Notifications.AndroidImportance.MAX,
+        sound: 'default',
+      });
+    } catch {
+      /* ignore — channels are Android-only */
+    }
+  }
 }
 
 // Registers this device's Expo push token with the API. No-ops on web, the
