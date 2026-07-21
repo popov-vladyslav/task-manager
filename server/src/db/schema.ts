@@ -32,6 +32,9 @@ export const recurrenceRules = pgTable('recurrence_rules', {
   contextId: integer('context_id').references(() => contexts.id),
   rule: text('rule').notNull(),
   remindTime: time('remind_time'),
+  // When set, spawned instances get a due_at at this time on their scheduled
+  // day (and appear on the calendar). Null → instances spawn dateless. (CR02 §1)
+  defaultDueTime: time('default_due_time'),
   dueOffsetD: integer('due_offset_d').default(0),
   active: boolean('active').notNull().default(true),
   lastSpawned: date('last_spawned'),

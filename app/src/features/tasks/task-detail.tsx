@@ -62,14 +62,16 @@ function recKind(rule: string | null): RecKind {
   if (rule.startsWith('monthly')) return 'monthly';
   return 'none';
 }
-function recInput(kind: RecKind, base: Date): RecurrenceInput | null {
+function recInput(kind: RecKind, base: Date, hasDue: boolean): RecurrenceInput | null {
   switch (kind) {
     case 'daily':
       return { rule: 'daily' };
+    // With a deadline, recur on its weekday/day-of-month. Without one, default to
+    // the period start — Monday / the 1st — so dateless instances land there (CR02 §1).
     case 'weekly':
-      return { rule: `weekly:${WEEKDAYS[base.getDay()]}` };
+      return { rule: `weekly:${hasDue ? WEEKDAYS[base.getDay()] : 'mon'}` };
     case 'monthly':
-      return { rule: `monthly:${base.getDate()}` };
+      return { rule: `monthly:${hasDue ? base.getDate() : 1}` };
     default:
       return null;
   }
@@ -271,7 +273,7 @@ function DetailContent({
                   key={o.k}
                   active={activeKind === o.k}
                   label={o.label}
-                  onPress={() => onPatch(task.id, { recurrence: recInput(o.k, base) })}
+                  onPress={() => onPatch(task.id, { recurrence: recInput(o.k, base, !!task.dueAt) })}
                 />
               ))}
             </View>

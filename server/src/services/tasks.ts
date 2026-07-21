@@ -28,6 +28,16 @@ function resolveDuration(due: Date | null, durationMin: number | null | undefine
   return durationMin ?? DEFAULT_DURATION_MIN;
 }
 
+// A recurrence rule's default_due_time is the task's own deadline time (server-
+// local = Europe/Warsaw), or null when the task has no deadline → dateless
+// instances. Copied onto each spawned instance's due_at. (CR02 §1)
+function timeOf(d: Date | string | null | undefined): string | null {
+  if (!d) return null;
+  const date = typeof d === 'string' ? new Date(d) : d;
+  if (Number.isNaN(date.getTime())) return null;
+  return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+}
+
 // Task columns + derived comment/photo counts + the linked recurrence rule.
 const selection = {
   task: tasks,
@@ -125,6 +135,7 @@ export async function createTask(input: CreateTaskInput): Promise<Task> {
         contextId,
         rule: input.recurrence.rule,
         remindTime: input.recurrence.remindTime ?? null,
+        defaultDueTime: timeOf(input.dueAt),
         dueOffsetD: input.recurrence.dueOffsetDays ?? 0,
       })
       .returning();
@@ -204,6 +215,7 @@ export async function updateTask(id: string, patch: UpdateTaskInput): Promise<Ta
         .set({
           rule: patch.recurrence.rule,
           remindTime: patch.recurrence.remindTime ?? null,
+          defaultDueTime: timeOf(patch.dueAt !== undefined ? patch.dueAt : cur.dueAt),
           dueOffsetD: patch.recurrence.dueOffsetDays ?? 0,
         })
         .where(eq(recurrenceRules.id, cur.recurrenceId));
@@ -215,11 +227,21 @@ export async function updateTask(id: string, patch: UpdateTaskInput): Promise<Ta
           contextId: patch.contextId !== undefined ? patch.contextId : cur.contextId,
           rule: patch.recurrence.rule,
           remindTime: patch.recurrence.remindTime ?? null,
+          defaultDueTime: timeOf(patch.dueAt !== undefined ? patch.dueAt : cur.dueAt),
           dueOffsetD: patch.recurrence.dueOffsetDays ?? 0,
         })
         .returning();
       set.recurrenceId = rule.id;
     }
+  }
+
+  // Deadline changed on an already-recurring task without touching the rule:
+  // keep the rule's default_due_time in sync so future instances match. (CR02 §1)
+  if (patch.recurrence === undefined && patch.dueAt !== undefined && cur.recurrenceId) {
+    await db
+      .update(recurrenceRules)
+      .set({ defaultDueTime: timeOf(patch.dueAt) })
+      .where(eq(recurrenceRules.id, cur.recurrenceId));
   }
 
   if (Object.keys(set).length > 0) {

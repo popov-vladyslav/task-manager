@@ -418,7 +418,7 @@ function EditorForm({ context, onClose, Input }: { context?: Context; onClose: (
         <View style={{ flex: 1 }}>
           <Text style={{ fontSize: 13.5, color: colors.textPrimary }}>Hide from All view</Text>
           <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 2 }}>
-            Also hidden from the Calendar; still opens via its chip.
+            Show in calendar if they have a due date.
           </Text>
         </View>
         <Switch

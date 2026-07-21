@@ -1,7 +1,7 @@
 import { and, eq, isNull, lt, or, sql } from 'drizzle-orm';
 import { db } from '../db/client';
 import { recurrenceRules, tasks } from '../db/schema';
-import { expandTitle, ruleMatchesToday } from '../lib/recurrence';
+import { computeInstanceTimes, expandTitle, ruleMatchesToday } from '../lib/recurrence';
 
 function localDateStr(d: Date): string {
   const y = d.getFullYear();
@@ -12,6 +12,8 @@ function localDateStr(d: Date): string {
 
 // For each active rule whose day is today (Europe/Warsaw) and that hasn't spawned
 // today, create the task instance and stamp last_spawned. Idempotent per day.
+// Instances are dated only when the rule carries a default_due_time — otherwise
+// they spawn dateless (no calendar block). (CR02 §1)
 export async function spawnDueRecurring(now: Date = new Date()): Promise<number> {
   const today = localDateStr(now);
   const rules = await db
@@ -28,19 +30,10 @@ export async function spawnDueRecurring(now: Date = new Date()): Promise<number>
   for (const rule of rules) {
     if (!ruleMatchesToday(rule.rule, now)) continue;
 
-    const dueDate = new Date(
-      now.getFullYear(),
-      now.getMonth(),
-      now.getDate() + (rule.dueOffsetD ?? 0),
-      12,
-      0,
-      0,
+    const { dueAt, remindAt } = computeInstanceTimes(
+      { defaultDueTime: rule.defaultDueTime, remindTime: rule.remindTime, dueOffsetD: rule.dueOffsetD },
+      now,
     );
-    let remindAt: Date | null = null;
-    if (rule.remindTime) {
-      const [hh, mm] = String(rule.remindTime).split(':').map((n) => Number(n));
-      remindAt = new Date(dueDate.getFullYear(), dueDate.getMonth(), dueDate.getDate(), hh || 0, mm || 0, 0);
-    }
 
     const [{ minSort }] = await db
       .select({ minSort: sql<number>`coalesce(min(${tasks.sortGlobal}), 1)` })
@@ -50,7 +43,7 @@ export async function spawnDueRecurring(now: Date = new Date()): Promise<number>
     await db.insert(tasks).values({
       title: expandTitle(rule.title, now),
       contextId: rule.contextId,
-      dueAt: dueDate,
+      dueAt,
       remindAt,
       recurrenceId: rule.id,
       sortGlobal: top,

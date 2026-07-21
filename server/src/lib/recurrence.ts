@@ -67,3 +67,28 @@ export function nextInstance(rule: string, from: Date = new Date()): string | nu
 
   return null;
 }
+
+// Times to stamp on a freshly spawned instance (CR02 §1). Pure — unit-tested.
+// - dueAt: only when the rule carries a default_due_time; the instance is then
+//   dated (and shows on the calendar) at (spawn day + dueOffsetD) that time.
+//   Null default_due_time → dateless instance (no calendar block).
+// - remindAt: independent of the due date; from remind_time on the same day.
+// Built in server-local time (deploy runs TZ=Europe/Warsaw), matching the rest
+// of the scheduler.
+export function computeInstanceTimes(
+  rule: { defaultDueTime: string | null; remindTime: string | null; dueOffsetD: number | null },
+  now: Date,
+): { dueAt: Date | null; remindAt: Date | null } {
+  const day = new Date(now.getFullYear(), now.getMonth(), now.getDate() + (rule.dueOffsetD ?? 0));
+  return {
+    dueAt: atTime(day, rule.defaultDueTime),
+    remindAt: atTime(day, rule.remindTime),
+  };
+}
+
+// 'HH:MM' | 'HH:MM:SS' (drizzle `time`) applied to a day → Date, or null.
+function atTime(day: Date, hhmm: string | null): Date | null {
+  if (!hhmm) return null;
+  const [hh, mm] = hhmm.split(':').map((n) => Number(n));
+  return new Date(day.getFullYear(), day.getMonth(), day.getDate(), hh || 0, mm || 0, 0, 0);
+}

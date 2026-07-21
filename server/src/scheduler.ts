@@ -7,9 +7,10 @@ import { repeatReminders, sendReminders } from './services/push';
 export function startScheduler(): void {
   const timezone = env.TZ || 'Europe/Warsaw';
 
-  // spawn recurring instances daily at 00:05 Europe/Warsaw
+  // spawn recurring instances at the start of each day (00:00 Europe/Warsaw), so
+  // dateless instances appear right at the start of their period (CR02 §1).
   cron.schedule(
-    '5 0 * * *',
+    '0 0 * * *',
     () => {
       spawnDueRecurring()
         .then((n) => n && console.log(`[cron] spawned ${n} recurring task(s)`))

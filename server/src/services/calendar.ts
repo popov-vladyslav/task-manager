@@ -1,7 +1,7 @@
-import { and, eq, isNotNull, lte } from 'drizzle-orm';
+import { and, isNotNull, lte } from 'drizzle-orm';
 import type { CalendarData } from '@task-manager/shared';
 import { db } from '../db/client';
-import { contexts, tasks } from '../db/schema';
+import { tasks } from '../db/schema';
 import { badRequest } from '../lib/errors';
 
 const DEFAULT_DURATION_MIN = 30;
@@ -10,6 +10,10 @@ const DEFAULT_DURATION_MIN = 30;
 // (due_at) is a block from due_at for duration_min minutes (default 30).
 // Completed tasks are included (flagged done) — not filtered out. Sourced from
 // tasks, NOT from timer time_entries.
+//
+// A context's `exclude_from_all` flag does NOT suppress calendar visibility
+// (CR02 §2): every task with a due_at shows here regardless of its context.
+// Tasks without a due_at never appear (they have no block).
 export async function getCalendar(fromISO: string, toISO: string): Promise<CalendarData> {
   const from = new Date(fromISO);
   const to = new Date(toISO);
@@ -28,16 +32,11 @@ export async function getCalendar(fromISO: string, toISO: string): Promise<Calen
       dueAt: tasks.dueAt,
       durationMin: tasks.durationMin,
       status: tasks.status,
-      // null when the task has no context; used to hide excluded-context tasks.
-      excludeFromAll: contexts.excludeFromAll,
     })
     .from(tasks)
-    .leftJoin(contexts, eq(tasks.contextId, contexts.id))
     .where(and(isNotNull(tasks.dueAt), lte(tasks.dueAt, to)));
 
   const blocks = rows
-    // Excluded-from-All contexts are also hidden from the Calendar.
-    .filter((r) => !r.excludeFromAll)
     .map((r) => {
       const start = r.dueAt as Date;
       const end = new Date(start.getTime() + (r.durationMin ?? DEFAULT_DURATION_MIN) * 60_000);
