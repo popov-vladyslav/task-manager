@@ -298,7 +298,9 @@ function PanelBody({
     patch(panel === 'deadline' ? { dueAt: iso, durationMin: iso ? (durationMin ?? 30) : durationMin } : { remindAt: iso });
 
   const onPickerChange = (_e: DateTimePickerChangeEvent, d: Date) => {
-    setValue(d.toISOString());
+    const m = new Date(d);
+    m.setSeconds(0, 0); // minute precision — no stray seconds from new Date()
+    setValue(m.toISOString());
   };
 
   return (

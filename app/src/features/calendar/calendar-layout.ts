@@ -12,9 +12,14 @@ export function layoutDayBlocks(
   blocks: { id: string; startAt: string; endAt: string }[],
 ): Map<string, BlockLayout> {
   const out = new Map<string, BlockLayout>();
-  // Earliest start first; on a tie the longer block takes the left lane.
+  // Floor to the minute for overlap detection: the app is minute-precision, but a
+  // deadline can carry stray seconds (from `new Date()` at pick time). Without this,
+  // e.g. 13:30:18–14:00:18 and 14:00:00–15:30:00 look overlapping (by 18s) and get
+  // split into side-by-side lanes instead of stacking one after another.
+  const MIN = 60_000;
+  const floorMin = (iso: string) => Math.floor(new Date(iso).getTime() / MIN) * MIN;
   const items = blocks
-    .map((b) => ({ id: b.id, start: new Date(b.startAt).getTime(), end: new Date(b.endAt).getTime() }))
+    .map((b) => ({ id: b.id, start: floorMin(b.startAt), end: floorMin(b.endAt) }))
     .sort((a, b) => a.start - b.start || b.end - a.end);
 
   let cluster: string[] = [];

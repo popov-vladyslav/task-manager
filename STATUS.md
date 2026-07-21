@@ -11,6 +11,40 @@ deploy details in `DEPLOY.md`. Last updated: 2026-07-20.
 - **Change Request 01 + Settings** — all batches **B1–B7 built & web-verified** (started 2026-07-20). ⚠️ **Pending: device pass** on native-only behaviors (B6 gestures/@gorhom sheet/keyboard-accessory). See the "**Change Request 01 + Settings**" section below for the batch ledger. (Old tech_spec §12 Settings — PIN / export / repeat-toggle — **dropped**; not wanted.)
 - Prod auto-deploys from `main` (Render). Local `.env` `DATABASE_URL` = the **same Neon DB as prod**.
 
+## 🔖 Session handoff — 2026-07-21 (post-B7: device testing + domain migration)
+
+**All CR01 (B1–B7) is committed & deployed.** Since then, a round of device-testing fixes + a domain migration to `task-tracker.net`. **Read this first on resume.**
+
+### ⚠️ UNCOMMITTED right now (this turn — commit these)
+- **Calendar overlap fix** — `calendar-layout.ts`: touching events (e.g. 13:30–14:00 then 14:00–15:30) were shown side-by-side because deadlines carried **stray seconds** (real cause: `13:30:18`+30m = `14:00:18` overlapped `14:00:00` by 18s). Layout now **floors block times to the minute** for overlap detection.
+- **Deadline seconds-zeroing** (root cause) — `quick-add.tsx` + `date-fields-section.tsx` picker `onValueChange` now `setSeconds(0,0)` so new deadlines are minute-clean. (Existing rows still have seconds — cosmetic now that the layout floors; optional one-time cleanup: `UPDATE tasks SET due_at = date_trunc('minute', due_at), remind_at = date_trunc('minute', remind_at)`.)
+- App typecheck clean.
+
+### Fixes already committed this session (device-driven)
+- **Context delete** (`services/contexts.ts`, `f66caa0`): blocks only on **open** tasks; **done tasks + recurrence rules are detached** (context→NULL) on delete — no more dead-end from an invisible recurring rule.
+- **Seed one-time bootstrap** (`db/seed.ts`, `b22ac76`): seed now **skips if any context exists** — deleted starter contexts no longer reappear on deploy. **⚠️ Post-deploy: delete the unwanted starters ONE more time; they'll stay gone.**
+- **Timer tick** (`timer-screen.tsx`, `f9b054d`): boundary-aligned self-correcting re-render (was a drifting 250ms interval) → seconds tick evenly.
+- **Calendar drag preview** (`calendar-overlay.tsx`, `432621f`): removed `scale(1.02)` that offset the full-width Day-view block left.
+- **Quick-add mobile** (`fd6e865`): removed `KeyboardAvoidingView` (double-compensated w/ `KeyboardStickyView`); accessory row uses `offset={{ opened: 52 + insets.bottom }}` to sit above the keyboard + `space-between`; `DateTimePicker` `onChange`→`onValueChange`(+`onDismiss`).
+- **New-task sheet** (calendar create): removed header title + ✕ (dismiss via overlay tap).
+
+### Domain migration → task-tracker.net (committed)
+- **CORS** (`server env.ts`+`index.ts`, `6f2aa69`): `ALLOWED_ORIGINS` env (comma-sep). Default keeps onrender **and** adds `https://task-tracker.net` + localhost. No-Origin (native/MCP) bypasses.
+- **MCP base URL** (`4201e1c`): `MCP_BASE_URL` env drives OAuth issuer + `oauth-protected-resource` + WWW-Authenticate (was `PUBLIC_URL`→onrender). Falls back to PUBLIC_URL/RENDER_EXTERNAL_URL/localhost.
+- **Client API URL**: `eas.json` → `https://api.task-tracker.net` (native builds); `config.ts` reads `EXPO_PUBLIC_API_URL`, **defaults to localhost** (safe for fresh clones). `.env.example` documents all three.
+
+### 🔧 TODO on resume / before/after next deploy
+1. **Commit the uncommitted calendar fix** (above).
+2. **Render env** (log-api): set `MCP_BASE_URL=https://api.task-tracker.net` (optionally `ALLOWED_ORIGINS`). **Render env** (log-web): set `EXPO_PUBLIC_API_URL=https://api.task-tracker.net` (dashboard, `sync:false`), redeploy.
+3. **DNS**: ensure `api.task-tracker.net` resolves to log-api and `task-tracker.net` to log-web before cutover.
+4. **claude.ai MCP connector**: re-add/update to `https://api.task-tracker.net/mcp` after cutover (so it discovers the new OAuth metadata).
+5. **Post-deploy**: delete unwanted starter contexts once more (seed no longer re-adds).
+6. **DEVICE PASS still pending** — the B6 native behaviors (see below): @gorhom sheet gestures, swipe-vs-reorder, quick-add keyboard-accessory → panel → refocus. Latest EAS preview build: `9c89141e-…` (targets onrender; next build will target api.task-tracker.net).
+
+### EAS / builds
+- `preview` iOS ad-hoc build: `cd app && npx eas build --profile preview --platform ios --non-interactive --no-wait` (creds ready; iPhone UDID provisioned). Uses committed git HEAD.
+- No OTA (no `expo-updates`) — a new version = a new build.
+
 ## Live infra
 | Thing | URL / value |
 |-------|-------------|

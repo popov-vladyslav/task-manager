@@ -112,7 +112,9 @@ export function DateFieldsSection({
   // onValueChange fires only when a value is picked (Android cancel → onDismiss).
   const onPickerChange = (_e: DateTimePickerChangeEvent, d: Date) => {
     if (isAndroid) setPicker(null); // the dialog closes after a pick
-    onChange(d.toISOString()); // iOS inline spinner commits live
+    const m = new Date(d);
+    m.setSeconds(0, 0); // minute precision — no stray seconds from new Date()
+    onChange(m.toISOString()); // iOS inline spinner commits live
   };
 
   return (
