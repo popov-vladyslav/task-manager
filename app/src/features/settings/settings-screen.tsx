@@ -48,8 +48,6 @@ const PALETTE = [
   '#8B93A3',
 ];
 
-const MAX_W = 560;
-
 type InputComponent = ComponentType<TextInputProps>;
 
 // BottomSheetTextInput coordinates the keyboard with the sheet on native, but on
@@ -124,7 +122,7 @@ export function SettingsScreen() {
           <Text style={{ fontSize: 22, fontWeight: '600', letterSpacing: -0.4, color: colors.textPrimary, marginBottom: 16 }}>
             Settings
           </Text>
-          <ScrollView contentContainerStyle={{ paddingBottom: 40, width: '100%', maxWidth: MAX_W }}>
+          <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
             {sections}
           </ScrollView>
         </View>
@@ -144,9 +142,6 @@ export function SettingsScreen() {
           contentContainerStyle={{
             paddingHorizontal: 20,
             paddingBottom: insets.bottom + 40,
-            width: '100%',
-            maxWidth: MAX_W,
-            alignSelf: 'center',
           }}
         >
           {sections}
