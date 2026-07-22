@@ -3,11 +3,10 @@ import { Platform, Pressable, ScrollView, Text, useWindowDimensions, View } from
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import * as Haptics from 'expo-haptics';
-import * as Device from 'expo-device';
 import { ChevronLeft, ChevronRight } from 'lucide-react-native';
 import type { CalendarBlock, Task } from '@task-manager/shared';
 import { colors, monoFont } from '../../theme';
+import { haptics } from '../../lib/haptics';
 import { useCalendarStore } from '../../store/calendar';
 import { useTasksStore } from '../../store/tasks';
 import { SideNavLinks } from '../nav/nav-chrome';
@@ -38,11 +37,8 @@ const timeToY = (d: Date) => {
 };
 
 // A light selection tick when a block is grabbed / a slot is long-pressed to
-// create. Real hardware only: simulators/emulators have no haptic engine, so the
-// call is a no-op there and iOS logs a warning — skip it via Device.isDevice.
-const grabTick = () => {
-  if (Platform.OS !== 'web' && Device.isDevice) Haptics.selectionAsync().catch(() => {});
-};
+// create. Real-hardware gating lives in the shared helper.
+const grabTick = () => haptics.select();
 
 export function CalendarScreen() {
   const insets = useSafeAreaInsets();

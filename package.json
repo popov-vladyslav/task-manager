@@ -10,6 +10,10 @@
   "scripts": {
     "server": "npm --workspace server run dev",
     "db:migrate": "npm --workspace server run db:migrate",
-    "db:seed": "npm --workspace server run db:seed"
+    "db:seed": "npm --workspace server run db:seed",
+    "postinstall": "patch-package"
+  },
+  "devDependencies": {
+    "patch-package": "^8.0.1"
   }
 }

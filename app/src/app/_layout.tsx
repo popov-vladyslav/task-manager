@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from 'react';
+import { useEffect } from 'react';
 import { Platform } from 'react-native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -11,6 +11,7 @@ import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { colors } from '../theme';
 import { useAuthStore } from '../store/auth';
+import { useTasksStore } from '../store/tasks';
 import { ReminderModal } from '../features/reminders/reminder-modal';
 import { NotificationBridge } from '../features/reminders/notification-bridge';
 
@@ -18,9 +19,18 @@ SplashScreen.preventAutoHideAsync().catch(() => {});
 SystemUI.setBackgroundColorAsync(colors.bgBase).catch(() => {});
 
 export default function RootLayout() {
-  // Restore the persisted session on cold start.
+  // Cold-start boot: restore the session and prefetch the task list *under the
+  // splash screen*, then reveal — so there's no post-launch spinner. hideAsync
+  // runs even if a request fails (load() resolves on error), so we never hang.
   useEffect(() => {
-    useAuthStore.getState().load();
+    (async () => {
+      try {
+        await useAuthStore.getState().load();
+        if (useAuthStore.getState().jwt) await useTasksStore.getState().load();
+      } finally {
+        SplashScreen.hideAsync().catch(() => {});
+      }
+    })();
   }, []);
 
   // App config allows all orientations (so the timer can rotate); lock everything
@@ -30,14 +40,8 @@ export default function RootLayout() {
     ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP).catch(() => {});
   }, []);
 
-  // Reveal the app only once the root view has laid out — closes the splash→app
-  // gap so there's no white flash between them.
-  const onLayoutRootView = useCallback(() => {
-    SplashScreen.hideAsync().catch(() => {});
-  }, []);
-
   return (
-    <GestureHandlerRootView style={{ flex: 1, backgroundColor: colors.bgBase }} onLayout={onLayoutRootView}>
+    <GestureHandlerRootView style={{ flex: 1, backgroundColor: colors.bgBase }}>
       <KeyboardProvider>
         <SafeAreaProvider>
           <BottomSheetModalProvider>

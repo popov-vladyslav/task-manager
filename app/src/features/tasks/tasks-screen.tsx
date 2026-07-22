@@ -6,6 +6,7 @@ import { DraggableTaskList } from './draggable-task-list';
 import { QuickAddInput, QuickAddBar } from './quick-add';
 import type { Context, Task } from '@task-manager/shared';
 import { colors, headerDate, monoFont } from '../../theme';
+import { haptics } from '../../lib/haptics';
 import { useTasksStore } from '../../store/tasks';
 import { useAuthStore } from '../../store/auth';
 import { SideNavLinks } from '../nav/nav-chrome';
@@ -44,8 +45,10 @@ export function TasksScreen() {
   const [toast, setToast] = useState<string | null>(null);
   const [showCompleted, setShowCompleted] = useState(false);
 
+  // Data is normally prefetched under the splash screen (see _layout). Only load
+  // here if that hasn't happened yet (e.g. a fast in-app remount before boot).
   useEffect(() => {
-    load();
+    if (!useTasksStore.getState().hydrated) load();
   }, [load]);
 
   // Keep the open detail in sync with store updates (e.g. after a patch).
@@ -119,6 +122,7 @@ export function TasksScreen() {
   };
 
   const onToggle = (task: Task) => {
+    haptics.success();
     toggleComplete(task);
     flash(task.recurrenceId ? 'Done. Next instance scheduled.' : 'Done ✓');
   };
@@ -164,7 +168,10 @@ export function TasksScreen() {
               <CompletedRow
                 key={t.id}
                 task={t}
-                onUncomplete={() => uncomplete(t)}
+                onUncomplete={() => {
+                  haptics.select();
+                  uncomplete(t);
+                }}
                 onOpen={() => {
                   setFocusTitle(false);
                   setSelected(t);
@@ -204,20 +211,24 @@ export function TasksScreen() {
     );
 
   const toastNode = toast ? (
+    // Full-width absolute row so the pill centers on web too: `alignSelf` doesn't
+    // center an out-of-flow element on react-native-web (it collapsed bottom-left).
     <View
-      style={{
-        position: 'absolute',
-        alignSelf: 'center',
-        bottom: 96,
-        paddingHorizontal: 16,
-        paddingVertical: 8,
-        borderRadius: 999,
-        backgroundColor: colors.bgElevated,
-        borderWidth: 1,
-        borderColor: colors.borderStrong,
-      }}
+      pointerEvents="none"
+      style={{ position: 'absolute', left: 0, right: 0, bottom: 96, alignItems: 'center' }}
     >
-      <Text style={{ fontSize: 12, color: colors.textPrimary }}>{toast}</Text>
+      <View
+        style={{
+          paddingHorizontal: 16,
+          paddingVertical: 8,
+          borderRadius: 999,
+          backgroundColor: colors.bgElevated,
+          borderWidth: 1,
+          borderColor: colors.borderStrong,
+        }}
+      >
+        <Text style={{ fontSize: 12, color: colors.textPrimary }}>{toast}</Text>
+      </View>
     </View>
   ) : null;
 

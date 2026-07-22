@@ -4,6 +4,7 @@ import ReorderableList, {
   useReorderableDrag,
 } from 'react-native-reorderable-list';
 import type { Task } from '@task-manager/shared';
+import { haptics } from '../../lib/haptics';
 
 interface Props {
   tasks: Task[];
@@ -15,7 +16,13 @@ interface Props {
 
 function DragRow({ item, renderCard }: { item: Task; renderCard: Props['renderCard'] }) {
   const drag = useReorderableDrag();
-  return <>{renderCard(item, drag)}</>;
+  // Pickup feedback the moment the long-press lifts the card into a drag — the
+  // most noticeable haptic of the reorder (the drop adds a lighter settle tick).
+  const startDrag = () => {
+    haptics.impact('medium');
+    drag();
+  };
+  return <>{renderCard(item, startDrag)}</>;
 }
 
 // Variable-height reorderable list. Drag starts on a long-press of the card
@@ -33,6 +40,7 @@ export function DraggableTaskList({ tasks, renderCard, onReorder, footer, empty 
     if (from === to) return;
     const moved = data[from];
     if (!moved) return;
+    haptics.impact('medium'); // the drop settled into a new position
     const order = [...data];
     order.splice(from, 1);
     order.splice(Math.max(0, Math.min(to, order.length)), 0, moved);

@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { Keyboard, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { KeyboardStickyView } from 'react-native-keyboard-controller';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -6,6 +7,7 @@ import { create } from 'zustand';
 import { Bell, CalendarClock, Hourglass, Plus, Tag, X } from 'lucide-react-native';
 import type { Context } from '@task-manager/shared';
 import { colors, radius, shortDateTime, webInputReset } from '../../theme';
+import { haptics } from '../../lib/haptics';
 import { DurationField } from './duration-field';
 
 const isAndroid = process.env.EXPO_OS === 'android';
@@ -66,6 +68,13 @@ export function QuickAddInput({
 }) {
   const { title, dueAt, remindAt, durationMin, patch, reset } = useQuickAdd();
 
+  // Keep the draft's context aligned with the active view. Switching context
+  // chips clears any stale per-task override (a picked context no longer leaks
+  // into the next view); within one view an explicit panel pick is preserved.
+  useEffect(() => {
+    useQuickAdd.getState().patch({ contextId: activeContextId });
+  }, [activeContextId]);
+
   const submit = async () => {
     const t = title.trim();
     if (!t) return;
@@ -77,6 +86,7 @@ export function QuickAddInput({
       remindAt,
       durationMin: dueAt ? (durationMin ?? 30) : undefined,
     });
+    haptics.select();
     reset(activeContextId);
     Keyboard.dismiss();
   };
