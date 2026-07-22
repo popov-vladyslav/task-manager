@@ -164,19 +164,35 @@ export function TasksScreen() {
           ? (
               <Text style={{ color: colors.textFaint, fontSize: 13, paddingVertical: 6 }}>No completed tasks</Text>
             )
-          : visibleCompleted.map((t) => (
-              <CompletedRow
-                key={t.id}
-                task={t}
-                onUncomplete={() => {
-                  haptics.select();
-                  uncomplete(t);
-                }}
-                onOpen={() => {
-                  setFocusTitle(false);
-                  setSelected(t);
-                }}
-              />
+          : groupCompletedByDay(visibleCompleted).map((g) => (
+              <View key={g.key || 'earlier'} style={{ marginTop: 4 }}>
+                <Text
+                  style={{
+                    fontFamily: monoFont,
+                    fontSize: 10,
+                    letterSpacing: 1,
+                    color: colors.textFaint,
+                    marginTop: 10,
+                    marginBottom: 2,
+                  }}
+                >
+                  {g.label.toUpperCase()}
+                </Text>
+                {g.tasks.map((t) => (
+                  <CompletedRow
+                    key={t.id}
+                    task={t}
+                    onUncomplete={() => {
+                      haptics.select();
+                      uncomplete(t);
+                    }}
+                    onOpen={() => {
+                      setFocusTitle(false);
+                      setSelected(t);
+                    }}
+                  />
+                ))}
+              </View>
             ))
         : null}
     </View>
@@ -349,6 +365,63 @@ function SidebarContext({ label, dot, count, active, onPress }: { label: string;
       <Text style={{ fontFamily: monoFont, fontSize: 10, color: colors.textMuted, fontVariant: ['tabular-nums'] }}>{count}</Text>
     </Pressable>
   );
+}
+
+// ---- Completed tasks grouped by completion day (Europe/Warsaw, the app's tz) ----
+const WARSAW_TZ = 'Europe/Warsaw';
+
+// YYYY-MM-DD for an instant, in the app's scheduling timezone. Falls back to the
+// device-local day if the JS engine lacks tz data (older Hermes without full ICU).
+function warsawDayKey(iso: string): string {
+  const d = new Date(iso);
+  try {
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone: WARSAW_TZ,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(d);
+  } catch {
+    return new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
+  }
+}
+
+function completedDayLabel(key: string): string {
+  if (!key) return 'Earlier';
+  const now = Date.now();
+  if (key === warsawDayKey(new Date(now).toISOString())) return 'Today';
+  if (key === warsawDayKey(new Date(now - 86_400_000).toISOString())) return 'Yesterday';
+  // key is YYYY-MM-DD; noon avoids any DST edge when re-parsing for the label.
+  return new Date(`${key}T12:00:00`).toLocaleDateString('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+  });
+}
+
+interface CompletedGroup {
+  key: string;
+  label: string;
+  tasks: Task[];
+}
+
+// Newest day first; within a day, newest completion first. Rows with no
+// completedAt (legacy) fall into an 'Earlier' bucket that sorts last.
+function groupCompletedByDay(tasks: Task[]): CompletedGroup[] {
+  const groups = new Map<string, Task[]>();
+  for (const t of tasks) {
+    const key = t.completedAt ? warsawDayKey(t.completedAt) : '';
+    const bucket = groups.get(key);
+    if (bucket) bucket.push(t);
+    else groups.set(key, [t]);
+  }
+  return [...groups.entries()]
+    .sort(([a], [b]) => (a < b ? 1 : a > b ? -1 : 0))
+    .map(([key, ts]) => ({
+      key,
+      label: completedDayLabel(key),
+      tasks: ts.sort((a, b) => (b.completedAt ?? '').localeCompare(a.completedAt ?? '')),
+    }));
 }
 
 // A completed task row (dimmed, strikethrough). The check un-completes it; the

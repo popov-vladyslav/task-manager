@@ -8,9 +8,10 @@ export function resolveDrop(
   labelW: number,
   colW: number,
   durationMin: number,
+  hourH: number = HOUR_H,
 ): { dayIndex: number; minutes: number; startISO: string } {
   const dayIndex = xToDayIndex(gridX, labelW, colW, days.length);
-  const minutes = snapMinutes(yToMinutes(gridY, HOUR_H), SNAP_MIN, durationMin);
+  const minutes = snapMinutes(yToMinutes(gridY, hourH), SNAP_MIN, durationMin);
   const startISO = combineDayTime(days[dayIndex], minutes).toISOString();
   return { dayIndex, minutes, startISO };
 }

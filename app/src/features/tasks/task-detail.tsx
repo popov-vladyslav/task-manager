@@ -48,6 +48,14 @@ type InputComponent = ComponentType<TextInputProps>;
 const SheetInput: InputComponent = isWeb ? TextInput : BottomSheetTextInput;
 
 const WEEKDAYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+// Weekly multi-select: Monday-first display order + single-letter labels.
+const WEEK_ORDER = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const;
+const DAY_LABEL: Record<string, string> = { mon: 'M', tue: 'T', wed: 'W', thu: 'T', fri: 'F', sat: 'S', sun: 'S' };
+// Selected weekdays parsed from a 'weekly:mon,wed' rule.
+function weeklyDays(rule: string | null): string[] {
+  if (!rule?.startsWith('weekly:')) return [];
+  return rule.slice(7).split(',').map((d) => d.trim()).filter(Boolean);
+}
 type RecKind = 'none' | 'daily' | 'weekly' | 'monthly';
 const REC_OPTIONS: { k: RecKind; label: string }[] = [
   { k: 'none', label: 'No repeat' },
@@ -173,6 +181,14 @@ function DetailContent({
 
   const base = task.dueAt ? new Date(task.dueAt) : new Date();
   const activeKind = recKind(task.recurrenceRule);
+  const selectedWeekdays = weeklyDays(task.recurrenceRule);
+  const toggleWeekday = (d: string) => {
+    const set = new Set(selectedWeekdays);
+    if (set.has(d)) set.delete(d);
+    else set.add(d);
+    if (set.size === 0) return; // keep at least one day
+    onPatch(task.id, { recurrence: { rule: `weekly:${WEEK_ORDER.filter((x) => set.has(x)).join(',')}` } });
+  };
 
   const addComment = async () => {
     const body = draft.trim();
@@ -279,6 +295,33 @@ function DetailContent({
                 />
               ))}
             </View>
+            {activeKind === 'weekly' ? (
+              <View style={{ flexDirection: 'row', gap: 6, marginTop: 10 }}>
+                {WEEK_ORDER.map((d) => {
+                  const on = selectedWeekdays.includes(d);
+                  return (
+                    <Pressable
+                      key={d}
+                      onPress={() => toggleWeekday(d)}
+                      style={{
+                        width: 34,
+                        height: 34,
+                        borderRadius: 17,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        backgroundColor: on ? colors.accentPrimary : colors.bgCard,
+                        borderWidth: 1,
+                        borderColor: on ? colors.accentPrimary : colors.borderSubtle,
+                      }}
+                    >
+                      <Text style={{ fontSize: 12, fontWeight: '600', color: on ? colors.bgBase : colors.textSecondary }}>
+                        {DAY_LABEL[d]}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            ) : null}
             {task.recurrenceId && task.nextInstance ? (
               <Text style={{ marginTop: 8, fontSize: 11, color: colors.textMuted }}>
                 Next instance: {nextInstanceLabel(task.nextInstance)}

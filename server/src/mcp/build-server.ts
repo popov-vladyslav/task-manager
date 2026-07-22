@@ -5,6 +5,7 @@ import * as tasksSvc from '../services/tasks';
 import * as contextsSvc from '../services/contexts';
 import * as commentsSvc from '../services/comments';
 import * as timerSvc from '../services/timer';
+import { ruleFromSpec } from '../lib/recurrence';
 
 function text(s: string) {
   return { content: [{ type: 'text' as const, text: s }] };
@@ -12,6 +13,34 @@ function text(s: string) {
 
 function logWrite(tool: string, data: Record<string, unknown>) {
   console.log(`[mcp] ${tool} ${JSON.stringify(data)}`);
+}
+
+// Structured recurrence for the MCP surface. Serialized (via ruleFromSpec) to the
+// canonical rule string the engine understands, so the model can never store an
+// unparseable free-form rule.
+const recurrenceInput = z.object({
+  freq: z.enum(['daily', 'weekly', 'monthly']),
+  days: z
+    .array(z.enum(['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat']))
+    .optional()
+    .describe("Weekdays for freq='weekly', e.g. ['mon','wed','fri']. Required when weekly."),
+  day_of_month: z
+    .number()
+    .int()
+    .min(1)
+    .max(31)
+    .optional()
+    .describe("Day of month (1-31) for freq='monthly'. Defaults to 1."),
+  remind_time: z.string().optional().describe("Reminder time 'HH:MM' applied to each occurrence."),
+});
+type RecurrenceMcpInput = z.infer<typeof recurrenceInput>;
+
+function toRuleString(r: RecurrenceMcpInput): { rule: string } | { error: string } {
+  try {
+    return { rule: ruleFromSpec({ freq: r.freq, days: r.days, dayOfMonth: r.day_of_month }) };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : 'Invalid recurrence.' };
+  }
 }
 
 function fmtTask(t: Task, contextLabel?: string): string {
@@ -200,16 +229,14 @@ export function buildMcpServer(): McpServer {
     'create_task',
     {
       description:
-        'Create a task. Optionally set context (slug), due_at (ISO — the deadline, also the calendar block start), remind_at (ISO), duration_min (block length in minutes; a task with a due_at is shown on the calendar, default 30 min), recurrence, and an initial comment.',
+        'Create a task. Optionally set context (slug), due_at (ISO — the deadline, also the calendar block start), remind_at (ISO), duration_min (block length in minutes; a task with a due_at is shown on the calendar, default 30 min), recurrence (a repeat rule — see the recurrence field), and an initial comment.',
       inputSchema: {
         title: z.string().min(1),
         context: z.string().optional(),
         due_at: z.string().optional(),
         remind_at: z.string().optional(),
         duration_min: z.number().int().positive().optional(),
-        recurrence: z
-          .object({ rule: z.string().min(1), remind_time: z.string().optional() })
-          .optional(),
+        recurrence: recurrenceInput.optional(),
         comment: z.string().optional(),
       },
     },
@@ -220,15 +247,19 @@ export function buildMcpServer(): McpServer {
         if (!c) return text(`Unknown context '${context}'.`);
         contextId = c.id;
       }
+      let recurrenceRule: { rule: string; remindTime: string | null } | null = null;
+      if (recurrence) {
+        const r = toRuleString(recurrence);
+        if ('error' in r) return text(r.error);
+        recurrenceRule = { rule: r.rule, remindTime: recurrence.remind_time ?? null };
+      }
       const task = await tasksSvc.createTask({
         title,
         contextId,
         dueAt: due_at ?? null,
         remindAt: remind_at ?? null,
         durationMin: duration_min ?? null,
-        recurrence: recurrence
-          ? { rule: recurrence.rule, remindTime: recurrence.remind_time ?? null }
-          : null,
+        recurrence: recurrenceRule,
       });
       if (comment) await commentsSvc.addComment(task.id, comment);
       logWrite('create_task', { id: task.id, title });
@@ -240,7 +271,7 @@ export function buildMcpServer(): McpServer {
     'update_task',
     {
       description:
-        'Update a task by id or title_match. Set any of: title, context (slug), due_at (deadline / calendar block start; pass null to clear), remind_at, duration_min (block length in minutes), status.',
+        'Update a task by id or title_match. Set any of: title, context (slug), due_at (deadline / calendar block start; pass null to clear), remind_at, duration_min (block length in minutes), status, recurrence (a repeat rule — pass null to remove).',
       inputSchema: {
         id: z.string().optional(),
         title_match: z.string().optional(),
@@ -250,6 +281,7 @@ export function buildMcpServer(): McpServer {
         remind_at: z.string().nullable().optional(),
         duration_min: z.number().int().positive().nullable().optional(),
         status: z.enum(['active', 'waiting', 'done']).optional(),
+        recurrence: recurrenceInput.nullable().optional(),
       },
     },
     async (a) => {
@@ -265,6 +297,15 @@ export function buildMcpServer(): McpServer {
         const c = await contextsSvc.findContextBySlug(a.context);
         if (!c) return text(`Unknown context '${a.context}'.`);
         patch.contextId = c.id;
+      }
+      if (a.recurrence !== undefined) {
+        if (a.recurrence === null) {
+          patch.recurrence = null;
+        } else {
+          const rr = toRuleString(a.recurrence);
+          if ('error' in rr) return text(rr.error);
+          patch.recurrence = { rule: rr.rule, remindTime: a.recurrence.remind_time ?? null };
+        }
       }
       const updated = await tasksSvc.updateTask(r.task.id, patch);
       logWrite('update_task', { id: updated.id });

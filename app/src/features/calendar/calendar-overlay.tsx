@@ -23,4 +23,4 @@ export function DragPreview({
   );
 }
 
-export const overlayHeightForMin = (durMin: number) => (durMin / 60) * HOUR_H;
+export const overlayHeightForMin = (durMin: number, hourH: number = HOUR_H) => (durMin / 60) * hourH;

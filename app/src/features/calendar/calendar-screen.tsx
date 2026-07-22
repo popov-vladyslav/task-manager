@@ -13,7 +13,7 @@ import { SideNavLinks } from '../nav/nav-chrome';
 import { useAuthStore } from '../../store/auth';
 import { api } from '../../lib/api';
 import { TaskDetail } from '../tasks/task-detail';
-import { HOUR_END, HOUR_H, HOUR_START, SNAP_MIN, combineDayTime, sameDay, snapMinutes, visibleDays, yToMinutes, type CalMode } from './calendar-dates';
+import { HOUR_END, HOUR_H, HOUR_H_MAX, HOUR_H_MIN, HOUR_START, SNAP_MIN, combineDayTime, sameDay, snapMinutes, visibleDays, yToMinutes, type CalMode } from './calendar-dates';
 import { DragPreview, overlayHeightForMin } from './calendar-overlay';
 import { resolveDrop } from './use-calendar-gestures';
 import { layoutDayBlocks } from './calendar-layout';
@@ -22,7 +22,6 @@ import { NewTaskSheet } from '../tasks/new-task-sheet';
 const WIDE_BREAKPOINT = 768;
 const LABEL_W = 44;
 const HOURS = Array.from({ length: HOUR_END - HOUR_START }, (_, i) => HOUR_START + i);
-const GRID_H = HOURS.length * HOUR_H;
 
 const MODES: { k: CalMode; label: string }[] = [
   { k: 'day', label: 'Day' },
@@ -30,11 +29,6 @@ const MODES: { k: CalMode; label: string }[] = [
   { k: 'week', label: 'Week' },
   { k: 'month', label: 'Month' },
 ];
-
-const timeToY = (d: Date) => {
-  const h = d.getHours() + d.getMinutes() / 60;
-  return (Math.max(HOUR_START, Math.min(HOUR_END, h)) - HOUR_START) * HOUR_H;
-};
 
 // A light selection tick when a block is grabbed / a slot is long-pressed to
 // create. Real-hardware gating lives in the shared helper.
@@ -214,9 +208,43 @@ function Timeline({
   const [draft, setDraft] = useState<null | { startISO: string; left: number; top: number; day: Date }>(null);
   const colW = gridW > 0 ? (gridW - LABEL_W) / days.length : 0;
 
+  // Pinch-to-zoom the timeline: hour height is state, scaled by a two-finger
+  // pinch and clamped. Block/now-line positions and drag math all derive from it,
+  // so short (e.g. 15-min) tasks become legible and easy to grab.
+  const [hourH, setHourH] = useState(HOUR_H);
+  const hourHRef = useRef(hourH);
+  hourHRef.current = hourH;
+  const scrollY = useRef(0);
+  const pinchBaseH = useRef(HOUR_H);
+  const pinchBaseScroll = useRef(0);
+  const gridH = HOURS.length * hourH;
+  const timeToY = (d: Date) => {
+    const h = d.getHours() + d.getMinutes() / 60;
+    return (Math.max(HOUR_START, Math.min(HOUR_END, h)) - HOUR_START) * hourH;
+  };
+  const pinch = useMemo(
+    () =>
+      Gesture.Pinch()
+        .runOnJS(true)
+        .onStart(() => {
+          pinchBaseH.current = hourHRef.current;
+          pinchBaseScroll.current = scrollY.current;
+        })
+        .onUpdate((e) => {
+          const next = Math.max(HOUR_H_MIN, Math.min(HOUR_H_MAX, Math.round(pinchBaseH.current * e.scale)));
+          setHourH(next);
+          // Keep the top-of-viewport time roughly fixed while zooming.
+          scrollRef.current?.scrollTo({
+            y: (pinchBaseScroll.current * next) / pinchBaseH.current,
+            animated: false,
+          });
+        }),
+    [],
+  );
+
   // Start scrolled near the current hour instead of at midnight.
   useEffect(() => {
-    const y = Math.max(0, (now.getHours() - 1) * HOUR_H);
+    const y = Math.max(0, (now.getHours() - 1) * hourH);
     const t = setTimeout(() => scrollRef.current?.scrollTo({ y, animated: false }), 50);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -229,12 +257,12 @@ function Timeline({
     const curCol = Math.max(0, days.findIndex((d) => sameDay(d, startDay)));
     const gridX = colLeft(curCol) + 2 + ex;
     const gridY = timeToY(new Date(b.startAt)) + ey;
-    return resolveDrop(days, gridX, gridY, LABEL_W, colW, durMin);
+    return resolveDrop(days, gridX, gridY, LABEL_W, colW, durMin, hourH);
   };
 
   const updateDrag = (ex: number, ey: number, b: CalendarBlock, durMin: number, color: string) => {
     const drop = computeDrop(ex, ey, b, durMin);
-    setDrag({ id: b.id, durMin, left: colLeft(drop.dayIndex) + 2, top: (drop.minutes / 60) * HOUR_H, color, title: b.title });
+    setDrag({ id: b.id, durMin, left: colLeft(drop.dayIndex) + 2, top: (drop.minutes / 60) * hourH, color, title: b.title });
   };
 
   const commitDrag = (ex: number, ey: number, b: CalendarBlock, durMin: number) => {
@@ -245,10 +273,10 @@ function Timeline({
 
   const DEFAULT_DUR = 30;
   const openDraft = (day: Date, y: number) => {
-    const minutes = snapMinutes(yToMinutes(y, HOUR_H), SNAP_MIN, DEFAULT_DUR);
+    const minutes = snapMinutes(yToMinutes(y, hourH), SNAP_MIN, DEFAULT_DUR);
     const startISO = combineDayTime(day, minutes).toISOString();
     const col = days.findIndex((dd) => sameDay(dd, day));
-    setDraft({ startISO, left: LABEL_W + Math.max(0, col) * colW + 2, top: (minutes / 60) * HOUR_H, day });
+    setDraft({ startISO, left: LABEL_W + Math.max(0, col) * colW + 2, top: (minutes / 60) * hourH, day });
   };
 
   return (
@@ -273,12 +301,13 @@ function Timeline({
 
       {/* scrollable hour grid (absolute-fill so the ScrollView bounds + scrolls on web) */}
       <View style={{ flex: 1, minHeight: 0 }}>
-      <ScrollView ref={scrollRef} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 24 }}>
-        <View style={{ flexDirection: 'row', height: GRID_H }} onLayout={(e) => setGridW(e.nativeEvent.layout.width)}>
+      <ScrollView ref={scrollRef} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 24 }} onScroll={(e) => { scrollY.current = e.nativeEvent.contentOffset.y; }} scrollEventThrottle={16}>
+        <GestureDetector gesture={pinch}>
+        <View style={{ flexDirection: 'row', height: gridH }} onLayout={(e) => setGridW(e.nativeEvent.layout.width)}>
           {/* hour labels */}
           <View style={{ width: LABEL_W }}>
             {HOURS.map((h) => (
-              <View key={h} style={{ height: HOUR_H }}>
+              <View key={h} style={{ height: hourH }}>
                 <Text style={{ position: 'absolute', top: -6, right: 6, fontFamily: monoFont, fontSize: 9, color: colors.textFaint }}>{h}:00</Text>
               </View>
             ))}
@@ -305,7 +334,7 @@ function Timeline({
                 <GestureDetector gesture={bgGesture}>
                   <View>
                     {HOURS.map((h) => (
-                      <View key={h} style={{ height: HOUR_H, borderTopWidth: 1, borderTopColor: '#151A22' }} />
+                      <View key={h} style={{ height: hourH, borderTopWidth: 1, borderTopColor: '#151A22' }} />
                     ))}
                   </View>
                 </GestureDetector>
@@ -377,12 +406,13 @@ function Timeline({
             );
           })}
           {drag ? (
-            <DragPreview left={drag.left} top={drag.top} width={colW - 4} height={overlayHeightForMin(drag.durMin)} color={drag.color} title={drag.title} />
+            <DragPreview left={drag.left} top={drag.top} width={colW - 4} height={overlayHeightForMin(drag.durMin, hourH)} color={drag.color} title={drag.title} />
           ) : null}
           {draft ? (
-            <View pointerEvents="none" style={{ position: 'absolute', left: draft.left, top: draft.top, width: colW - 4, height: overlayHeightForMin(30), borderRadius: 5, borderWidth: 1.5, borderStyle: 'dashed', borderColor: colors.accentPrimary, backgroundColor: `${colors.accentPrimary}18` }} />
+            <View pointerEvents="none" style={{ position: 'absolute', left: draft.left, top: draft.top, width: colW - 4, height: overlayHeightForMin(30, hourH), borderRadius: 5, borderWidth: 1.5, borderStyle: 'dashed', borderColor: colors.accentPrimary, backgroundColor: `${colors.accentPrimary}18` }} />
           ) : null}
         </View>
+        </GestureDetector>
       </ScrollView>
       </View>
       {draft ? (

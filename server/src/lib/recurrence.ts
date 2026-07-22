@@ -1,5 +1,5 @@
 // Compute the next instance date (YYYY-MM-DD) for a recurrence rule, for the
-// "Наступний інстанс" display. Rules: 'daily' | 'weekly:<dow>' | 'monthly:<N>'.
+// "Наступний інстанс" display. Rules: 'daily' | 'weekly:<dow>[,<dow>...]' | 'monthly:<N>'.
 // The scheduler that actually spawns instances is Phase 2.
 const WEEKDAYS: Record<string, number> = {
   sun: 0,
@@ -18,11 +18,41 @@ function fmt(d: Date): string {
   return `${y}-${m}-${day}`;
 }
 
+// Canonical weekday order for serializing a weekly rule.
+const DOW_ORDER = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+
+// Structured recurrence -> canonical rule string ('daily' | 'weekly:mon,wed' |
+// 'monthly:15'). Dedupes/sorts/validates weekdays; throws on an empty weekly set
+// so an unparseable rule can never be stored.
+export function ruleFromSpec(spec: {
+  freq: 'daily' | 'weekly' | 'monthly';
+  days?: string[];
+  dayOfMonth?: number;
+}): string {
+  if (spec.freq === 'daily') return 'daily';
+  if (spec.freq === 'weekly') {
+    const days = [...new Set((spec.days ?? []).map((d) => d.toLowerCase()))]
+      .filter((d) => WEEKDAYS[d] != null)
+      .sort((a, b) => DOW_ORDER.indexOf(a) - DOW_ORDER.indexOf(b));
+    if (days.length === 0) throw new Error('Weekly recurrence needs at least one weekday.');
+    return `weekly:${days.join(',')}`;
+  }
+  return `monthly:${spec.dayOfMonth ?? 1}`;
+}
+
+// 'mon,wed,fri' (or a legacy single 'mon') -> weekday numbers [1, 3, 5].
+function parseWeeklyDays(arg: string | undefined): number[] {
+  return (arg ?? '')
+    .split(',')
+    .map((d) => WEEKDAYS[d.trim().toLowerCase()])
+    .filter((n): n is number => n != null);
+}
+
 // True if a recurring rule should spawn an instance on the given date.
 export function ruleMatchesToday(rule: string, date: Date): boolean {
   if (rule === 'daily') return true;
   const [kind, arg] = rule.split(':');
-  if (kind === 'weekly') return WEEKDAYS[(arg ?? '').toLowerCase()] === date.getDay();
+  if (kind === 'weekly') return parseWeeklyDays(arg).includes(date.getDay());
   if (kind === 'monthly') return Number.parseInt(arg ?? '', 10) === date.getDate();
   return false;
 }
@@ -45,10 +75,15 @@ export function nextInstance(rule: string, from: Date = new Date()): string | nu
   const [kind, arg] = rule.split(':');
 
   if (kind === 'weekly') {
-    const target = WEEKDAYS[(arg ?? '').toLowerCase()];
-    if (target == null) return null;
-    let diff = (target - base.getDay() + 7) % 7;
-    if (diff === 0) diff = 7; // always the *next* occurrence
+    const targets = parseWeeklyDays(arg);
+    if (targets.length === 0) return null;
+    // Nearest future matching weekday across all selected days.
+    const diff = Math.min(
+      ...targets.map((t) => {
+        const d = (t - base.getDay() + 7) % 7;
+        return d === 0 ? 7 : d; // always the *next* occurrence
+      }),
+    );
     base.setDate(base.getDate() + diff);
     return fmt(base);
   }
