@@ -11,6 +11,8 @@ function text(s: string) {
   return { content: [{ type: 'text' as const, text: s }] };
 }
 
+type ToolResult = ReturnType<typeof text>;
+
 function logWrite(tool: string, data: Record<string, unknown>) {
   console.log(`[mcp] ${tool} ${JSON.stringify(data)}`);
 }
@@ -99,16 +101,36 @@ function unresolvedText(candidates: Task[], query?: string): string {
 export function buildMcpServer(): McpServer {
   const server = new McpServer({ name: 'log-task-manager', version: '1.0.0' });
 
-  server.registerTool(
+  // The MCP SDK bundles zod v3, but this project is on zod v4 — their schema types
+  // aren't structurally compatible, so registerTool rejects our inputSchema shapes
+  // and infers handler args as `any` (64 spurious tsc errors). Runtime is unaffected:
+  // tsx strips types and the SDK reads the shape by duck-typing. `reg` casts at this
+  // single boundary while its own signature keeps full zod-v4 inference on `args`.
+  const rawRegister = server.registerTool.bind(server) as (
+    name: string,
+    config: unknown,
+    handler: unknown,
+  ) => void;
+  const reg = <S extends z.ZodRawShape>(
+    name: string,
+    config: { title?: string; description: string; inputSchema: S },
+    handler: (args: z.infer<z.ZodObject<S>>) => ToolResult | Promise<ToolResult>,
+  ): void => {
+    rawRegister(name, config, handler);
+  };
+
+  reg(
     'list_contexts',
     { description: 'List the work contexts (slug, label, color).', inputSchema: {} },
     async () => {
       const cs = await contextsSvc.listContexts();
-      return text(cs.map((c) => `${c.slug} — ${c.label} (${c.color})`).join('\n') || 'No contexts.');
+      return text(
+        cs.map((c) => `${c.slug} — ${c.label} (${c.color})`).join('\n') || 'No contexts.',
+      );
     },
   );
 
-  server.registerTool(
+  reg(
     'create_context',
     {
       description:
@@ -126,7 +148,7 @@ export function buildMcpServer(): McpServer {
     },
   );
 
-  server.registerTool(
+  reg(
     'update_context',
     {
       description:
@@ -151,7 +173,7 @@ export function buildMcpServer(): McpServer {
     },
   );
 
-  server.registerTool(
+  reg(
     'delete_context',
     {
       description:
@@ -171,7 +193,7 @@ export function buildMcpServer(): McpServer {
     },
   );
 
-  server.registerTool(
+  reg(
     'list_tasks',
     {
       description: 'List open tasks. Filter by context slug, status, or overdue.',
@@ -196,13 +218,15 @@ export function buildMcpServer(): McpServer {
       const labels = await contextLabels();
       return text(
         list.length
-          ? list.map((t) => fmtTask(t, t.contextId ? labels.get(t.contextId) : undefined)).join('\n')
+          ? list
+              .map((t) => fmtTask(t, t.contextId ? labels.get(t.contextId) : undefined))
+              .join('\n')
           : 'No matching tasks.',
       );
     },
   );
 
-  server.registerTool(
+  reg(
     'get_today',
     {
       description: "Today's agenda: open tasks due today or overdue, plus any running timer.",
@@ -225,7 +249,7 @@ export function buildMcpServer(): McpServer {
     },
   );
 
-  server.registerTool(
+  reg(
     'create_task',
     {
       description:
@@ -267,7 +291,7 @@ export function buildMcpServer(): McpServer {
     },
   );
 
-  server.registerTool(
+  reg(
     'update_task',
     {
       description:
@@ -313,7 +337,7 @@ export function buildMcpServer(): McpServer {
     },
   );
 
-  server.registerTool(
+  reg(
     'complete_task',
     {
       description: 'Mark a task done, by id or title_match.',
@@ -324,12 +348,13 @@ export function buildMcpServer(): McpServer {
       if (!r.task) return text(unresolvedText(r.candidates, title_match));
       const done = await tasksSvc.updateTask(r.task.id, { completed: true });
       logWrite('complete_task', { id: done.id });
-      const next = done.recurrenceId && done.nextInstance ? ` Next instance: ${done.nextInstance}.` : '';
+      const next =
+        done.recurrenceId && done.nextInstance ? ` Next instance: ${done.nextInstance}.` : '';
       return text(`Completed: ${r.task.title}.${next}`);
     },
   );
 
-  server.registerTool(
+  reg(
     'delete_task',
     {
       description: 'Delete a task, by id or title_match.',
@@ -344,11 +369,11 @@ export function buildMcpServer(): McpServer {
     },
   );
 
-
-  server.registerTool(
+  reg(
     'start_timer',
     {
-      description: 'Start the time tracker on a task (by id or title_match). Stops any timer already running.',
+      description:
+        'Start the time tracker on a task (by id or title_match). Stops any timer already running.',
       inputSchema: { id: z.string().optional(), title_match: z.string().optional() },
     },
     async ({ id, title_match }) => {
@@ -360,20 +385,22 @@ export function buildMcpServer(): McpServer {
     },
   );
 
-  server.registerTool(
+  reg(
     'stop_timer',
     { description: 'Stop the running time tracker.', inputSchema: {} },
     async () => {
       const active = await timerSvc.getActiveTimer();
       const stopped = await timerSvc.stopTimer();
       if (!stopped || !stopped.endedAt) return text('No timer running.');
-      const mins = Math.round((Date.parse(stopped.endedAt) - Date.parse(stopped.startedAt)) / 60000);
+      const mins = Math.round(
+        (Date.parse(stopped.endedAt) - Date.parse(stopped.startedAt)) / 60000,
+      );
       logWrite('stop_timer', { taskId: stopped.taskId });
       return text(`Timer stopped for "${active?.taskTitle ?? 'task'}" — ${mins} min.`);
     },
   );
 
-  server.registerTool(
+  reg(
     'add_comment',
     {
       description: 'Add a comment to a task, by id or title_match.',
