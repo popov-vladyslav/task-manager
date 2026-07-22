@@ -1,0 +1,12 @@
+node_modules
+**/node_modules
+package-lock.json
+dist
+**/dist
+app/.expo
+.expo
+app/android
+app/ios
+app/expo-env.d.ts
+server/drizzle
+*.md

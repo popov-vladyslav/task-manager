@@ -1,5 +1,5 @@
-import { useRef } from 'react';
-import { Keyboard, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { useEffect } from 'react';
+import { Keyboard, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { KeyboardStickyView } from 'react-native-keyboard-controller';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import DateTimePicker, { type DateTimePickerChangeEvent } from '@react-native-community/datetimepicker';
@@ -7,9 +7,9 @@ import { create } from 'zustand';
 import { Bell, CalendarClock, Hourglass, Plus, Tag, X } from 'lucide-react-native';
 import type { Context } from '@task-manager/shared';
 import { colors, radius, shortDateTime, webInputReset } from '../../theme';
+import { haptics } from '../../lib/haptics';
 import { DurationField } from './duration-field';
 
-const isWeb = process.env.EXPO_OS === 'web';
 const isAndroid = process.env.EXPO_OS === 'android';
 const PANEL_HEIGHT = 300;
 // The Tasks screen ends at the top of the bottom tab bar, so the sticky accessory
@@ -67,7 +67,13 @@ export function QuickAddInput({
   onCreate: (input: CreateInput) => Promise<void>;
 }) {
   const { title, dueAt, remindAt, durationMin, patch, reset } = useQuickAdd();
-  const ref = useRef<TextInput>(null);
+
+  // Keep the draft's context aligned with the active view. Switching context
+  // chips clears any stale per-task override (a picked context no longer leaks
+  // into the next view); within one view an explicit panel pick is preserved.
+  useEffect(() => {
+    useQuickAdd.getState().patch({ contextId: activeContextId });
+  }, [activeContextId]);
 
   const submit = async () => {
     const t = title.trim();
@@ -80,31 +86,20 @@ export function QuickAddInput({
       remindAt,
       durationMin: dueAt ? (durationMin ?? 30) : undefined,
     });
+    haptics.select();
     reset(activeContextId);
-    if (!isWeb) ref.current?.focus(); // keep adding on mobile
+    Keyboard.dismiss();
   };
 
   return (
-    <View style={{ paddingHorizontal: 20, paddingBottom: 8 }}>
+    <View style={styles.inputContainer}>
       {/* Sized to match a single-line task card exactly: a card is padding(12*2)
           + its tallest child (the 26px Play button) = 50. Fixing the height also
           caps the native single-line TextInput, which otherwise bloats the box. */}
-      <View
-        style={{
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: 8,
-          borderRadius: radius.card,
-          borderCurve: 'continuous',
-          paddingHorizontal: 12,
-          height: 50,
-          backgroundColor: colors.bgCard,
-        }}
-      >
+      <View style={styles.inputRow}>
         <Plus size={20} color={colors.accentPrimary} />
         <TextInput
           ref={(r) => {
-            ref.current = r;
             inputRef.current = r;
           }}
           value={title}
@@ -116,11 +111,11 @@ export function QuickAddInput({
           placeholder="Add task…"
           placeholderTextColor={colors.textMuted}
           returnKeyType="done"
-          style={{ flex: 1, fontSize: 14, lineHeight: 19, color: colors.textPrimary, padding: 0, ...webInputReset }}
+          style={[styles.input, webInputReset]}
         />
         {title.trim() ? (
-          <Pressable onPress={submit} hitSlop={8} style={{ paddingHorizontal: 4 }}>
-            <Text style={{ fontSize: 13, fontWeight: '600', color: colors.accentPrimary }}>Add</Text>
+          <Pressable onPress={submit} hitSlop={8} style={styles.addBtn}>
+            <Text style={styles.addText}>Add</Text>
           </Pressable>
         ) : null}
       </View>
@@ -153,70 +148,35 @@ export function QuickAddBar({ contexts }: { contexts: Context[] }) {
     <>
       {focused && !panel ? (
         <KeyboardStickyView offset={{ opened: TAB_BAR_CONTENT + insets.bottom }}>
-          <View
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              paddingHorizontal: 24,
-              paddingVertical: 8,
-              backgroundColor: colors.bgSurface,
-              borderTopWidth: 1,
-              borderTopColor: colors.bgCard,
-            }}
-          >
-            {shortcuts.map(({ key, icon: Icon, on }) => (
-              <Pressable
-                key={key}
-                onPress={() => openPanel(key)}
-                hitSlop={6}
-                style={{
-                  width: 44,
-                  height: 34,
-                  borderRadius: 9,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  backgroundColor: on ? colors.bgElevated : 'transparent',
-                }}
-              >
-                <Icon size={18} color={on ? colors.accentPrimary : colors.textSecondary} />
-              </Pressable>
-            ))}
+          <View style={styles.bar}>
+            {shortcuts.map(({ key, icon: Icon, on }) => {
+              const bg = on ? colors.bgElevated : 'transparent';
+              return (
+                <Pressable
+                  key={key}
+                  onPress={() => openPanel(key)}
+                  hitSlop={6}
+                  style={[styles.shortcut, { backgroundColor: bg }]}
+                >
+                  <Icon size={18} color={on ? colors.accentPrimary : colors.textSecondary} />
+                </Pressable>
+              );
+            })}
           </View>
         </KeyboardStickyView>
       ) : null}
 
       {panel ? (
-        <View
-          style={{
-            position: 'absolute',
-            left: 0,
-            right: 0,
-            bottom: 0,
-            height: PANEL_HEIGHT,
-            backgroundColor: colors.bgSurface,
-            borderTopWidth: 1,
-            borderTopColor: colors.bgCard,
-          }}
-        >
-          <View
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              paddingHorizontal: 16,
-              paddingVertical: 12,
-              borderBottomWidth: 1,
-              borderBottomColor: colors.bgCard,
-            }}
-          >
-            <Text style={{ flex: 1, fontSize: 14, fontWeight: '600', color: colors.textPrimary }}>
+        <View style={styles.panel}>
+          <View style={styles.panelHeader}>
+            <Text style={styles.panelTitle}>
               {PANEL_TITLE[panel]}
             </Text>
-            <Pressable onPress={closePanel} hitSlop={8} style={{ padding: 4 }}>
+            <Pressable onPress={closePanel} hitSlop={8} style={styles.panelClose}>
               <X size={18} color={colors.textSecondary} />
             </Pressable>
           </View>
-          <View style={{ flex: 1, padding: 16 }}>
+          <View style={styles.panelBody}>
             <PanelBody panel={panel} dueAt={dueAt} remindAt={remindAt} durationMin={durationMin} contextId={contextId} contexts={contexts} patch={patch} />
           </View>
         </View>
@@ -262,27 +222,17 @@ function PanelBody({
 
   if (panel === 'context') {
     return (
-      <ScrollView contentContainerStyle={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+      <ScrollView contentContainerStyle={styles.wrapRow}>
         {contexts.map((c) => {
           const on = contextId === c.id;
           return (
             <Pressable
               key={c.id}
               onPress={() => patch({ contextId: on ? null : c.id })}
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: 6,
-                paddingHorizontal: 12,
-                paddingVertical: 8,
-                borderRadius: 999,
-                backgroundColor: on ? c.color : colors.bgCard,
-                borderWidth: 1,
-                borderColor: on ? c.color : colors.borderSubtle,
-              }}
+              style={[styles.contextChip, { backgroundColor: on ? c.color : colors.bgCard, borderColor: on ? c.color : colors.borderSubtle }]}
             >
-              <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: on ? colors.bgBase : c.color }} />
-              <Text style={{ fontSize: 13, fontWeight: '500', color: on ? colors.bgBase : colors.textSecondary }}>
+              <View style={[styles.contextDot, { backgroundColor: on ? colors.bgBase : c.color }]} />
+              <Text style={[styles.contextChipText, { color: on ? colors.bgBase : colors.textSecondary }]}>
                 {c.label}
               </Text>
             </Pressable>
@@ -304,8 +254,8 @@ function PanelBody({
   };
 
   return (
-    <View style={{ gap: 12 }}>
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+    <View style={styles.dateBody}>
+      <View style={styles.wrapRow}>
         {[
           { label: 'Today', v: atNoon(0) },
           { label: 'Tomorrow', v: atNoon(1) },
@@ -315,20 +265,13 @@ function PanelBody({
           <Pressable
             key={chip.label}
             onPress={() => setValue(chip.v)}
-            style={{
-              paddingHorizontal: 12,
-              paddingVertical: 8,
-              borderRadius: 999,
-              backgroundColor: colors.bgCard,
-              borderWidth: 1,
-              borderColor: colors.borderSubtle,
-            }}
+            style={styles.dateChip}
           >
-            <Text style={{ fontSize: 12.5, fontWeight: '500', color: colors.textSecondary }}>{chip.label}</Text>
+            <Text style={styles.dateChipText}>{chip.label}</Text>
           </Pressable>
         ))}
       </View>
-      <Text style={{ fontSize: 12, color: colors.textMuted }}>
+      <Text style={styles.dateValue}>
         {value ? shortDateTime(value) : 'No date set'}
       </Text>
       {Platform.OS !== 'web' ? (
@@ -337,10 +280,89 @@ function PanelBody({
           mode={isAndroid ? 'date' : 'datetime'}
           display="spinner"
           themeVariant="dark"
-          style={{ alignSelf: 'stretch' }}
+          style={styles.picker}
           onValueChange={onPickerChange}
         />
       ) : null}
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  inputContainer: { paddingHorizontal: 20, paddingBottom: 8 },
+  inputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderRadius: radius.card,
+    borderCurve: 'continuous',
+    paddingHorizontal: 12,
+    height: 50,
+    backgroundColor: colors.bgCard,
+  },
+  input: { flex: 1, fontSize: 14, lineHeight: 19, color: colors.textPrimary, padding: 0 },
+  addBtn: { paddingHorizontal: 4 },
+  addText: { fontSize: 13, fontWeight: '600', color: colors.accentPrimary },
+  bar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 24,
+    paddingVertical: 8,
+    backgroundColor: colors.bgSurface,
+    borderTopWidth: 1,
+    borderTopColor: colors.bgCard,
+  },
+  shortcut: {
+    width: 44,
+    height: 34,
+    borderRadius: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  panel: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: PANEL_HEIGHT,
+    backgroundColor: colors.bgSurface,
+    borderTopWidth: 1,
+    borderTopColor: colors.bgCard,
+  },
+  panelHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.bgCard,
+  },
+  panelTitle: { flex: 1, fontSize: 14, fontWeight: '600', color: colors.textPrimary },
+  panelClose: { padding: 4 },
+  panelBody: { flex: 1, padding: 16 },
+  wrapRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  contextChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  contextDot: { width: 8, height: 8, borderRadius: 4 },
+  contextChipText: { fontSize: 13, fontWeight: '500' },
+  dateBody: { gap: 12 },
+  dateChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: colors.bgCard,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+  },
+  dateChipText: { fontSize: 12.5, fontWeight: '500', color: colors.textSecondary },
+  dateValue: { fontSize: 12, color: colors.textMuted },
+  picker: { alignSelf: 'stretch' },
+});

@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { ActivityIndicator, useWindowDimensions, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Redirect } from 'expo-router';
 import { Tabs, TabList, TabTrigger, TabSlot } from 'expo-router/ui';
@@ -8,9 +8,7 @@ import { registerForPush } from '../../lib/push';
 import { useTimerStore } from '../../store/timer';
 import { MobileTabBar } from '../../features/nav/nav-chrome';
 import { TimerScreen } from '../../features/timer/timer-screen';
-import { colors } from '../../theme';
-
-const WIDE_BREAKPOINT = 768;
+import { colors, WIDE_BREAKPOINT } from '../../theme';
 
 export default function TabsLayout() {
   const insets = useSafeAreaInsets();
@@ -31,7 +29,7 @@ export default function TabsLayout() {
 
   if (!ready) {
     return (
-      <View style={{ flex: 1, backgroundColor: colors.bgBase, alignItems: 'center', justifyContent: 'center' }}>
+      <View style={styles.loading}>
         <ActivityIndicator color={colors.accentPrimary} />
       </View>
     );
@@ -39,8 +37,8 @@ export default function TabsLayout() {
   if (!jwt) return <Redirect href="/sign-in" />;
 
   return (
-    <Tabs style={{ flex: 1, backgroundColor: colors.bgBase }}>
-      <View style={{ flex: 1 }}>
+    <Tabs style={styles.tabs}>
+      <View style={styles.slot}>
         <TabSlot />
       </View>
 
@@ -48,7 +46,7 @@ export default function TabsLayout() {
       {!wide ? <MobileTabBar bottomInset={insets.bottom} /> : null}
 
       {/* Route registration for the custom bar — declared but not displayed. */}
-      <TabList style={{ display: 'none' }}>
+      <TabList style={styles.hidden}>
         <TabTrigger name="index" href="/" />
         <TabTrigger name="calendar" href="/calendar" />
         <TabTrigger name="settings" href="/settings" />
@@ -59,3 +57,15 @@ export default function TabsLayout() {
     </Tabs>
   );
 }
+
+const styles = StyleSheet.create({
+  loading: {
+    flex: 1,
+    backgroundColor: colors.bgBase,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tabs: { flex: 1, backgroundColor: colors.bgBase },
+  slot: { flex: 1 },
+  hidden: { display: 'none' },
+});

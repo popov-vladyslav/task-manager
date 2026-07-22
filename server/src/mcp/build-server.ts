@@ -5,13 +5,44 @@ import * as tasksSvc from '../services/tasks';
 import * as contextsSvc from '../services/contexts';
 import * as commentsSvc from '../services/comments';
 import * as timerSvc from '../services/timer';
+import { ruleFromSpec } from '../lib/recurrence';
 
 function text(s: string) {
   return { content: [{ type: 'text' as const, text: s }] };
 }
 
+type ToolResult = ReturnType<typeof text>;
+
 function logWrite(tool: string, data: Record<string, unknown>) {
   console.log(`[mcp] ${tool} ${JSON.stringify(data)}`);
+}
+
+// Structured recurrence for the MCP surface. Serialized (via ruleFromSpec) to the
+// canonical rule string the engine understands, so the model can never store an
+// unparseable free-form rule.
+const recurrenceInput = z.object({
+  freq: z.enum(['daily', 'weekly', 'monthly']),
+  days: z
+    .array(z.enum(['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat']))
+    .optional()
+    .describe("Weekdays for freq='weekly', e.g. ['mon','wed','fri']. Required when weekly."),
+  day_of_month: z
+    .number()
+    .int()
+    .min(1)
+    .max(31)
+    .optional()
+    .describe("Day of month (1-31) for freq='monthly'. Defaults to 1."),
+  remind_time: z.string().optional().describe("Reminder time 'HH:MM' applied to each occurrence."),
+});
+type RecurrenceMcpInput = z.infer<typeof recurrenceInput>;
+
+function toRuleString(r: RecurrenceMcpInput): { rule: string } | { error: string } {
+  try {
+    return { rule: ruleFromSpec({ freq: r.freq, days: r.days, dayOfMonth: r.day_of_month }) };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : 'Invalid recurrence.' };
+  }
 }
 
 function fmtTask(t: Task, contextLabel?: string): string {
@@ -70,16 +101,36 @@ function unresolvedText(candidates: Task[], query?: string): string {
 export function buildMcpServer(): McpServer {
   const server = new McpServer({ name: 'log-task-manager', version: '1.0.0' });
 
-  server.registerTool(
+  // The MCP SDK bundles zod v3, but this project is on zod v4 — their schema types
+  // aren't structurally compatible, so registerTool rejects our inputSchema shapes
+  // and infers handler args as `any` (64 spurious tsc errors). Runtime is unaffected:
+  // tsx strips types and the SDK reads the shape by duck-typing. `reg` casts at this
+  // single boundary while its own signature keeps full zod-v4 inference on `args`.
+  const rawRegister = server.registerTool.bind(server) as (
+    name: string,
+    config: unknown,
+    handler: unknown,
+  ) => void;
+  const reg = <S extends z.ZodRawShape>(
+    name: string,
+    config: { title?: string; description: string; inputSchema: S },
+    handler: (args: z.infer<z.ZodObject<S>>) => ToolResult | Promise<ToolResult>,
+  ): void => {
+    rawRegister(name, config, handler);
+  };
+
+  reg(
     'list_contexts',
     { description: 'List the work contexts (slug, label, color).', inputSchema: {} },
     async () => {
       const cs = await contextsSvc.listContexts();
-      return text(cs.map((c) => `${c.slug} — ${c.label} (${c.color})`).join('\n') || 'No contexts.');
+      return text(
+        cs.map((c) => `${c.slug} — ${c.label} (${c.color})`).join('\n') || 'No contexts.',
+      );
     },
   );
 
-  server.registerTool(
+  reg(
     'create_context',
     {
       description:
@@ -97,7 +148,7 @@ export function buildMcpServer(): McpServer {
     },
   );
 
-  server.registerTool(
+  reg(
     'update_context',
     {
       description:
@@ -122,7 +173,7 @@ export function buildMcpServer(): McpServer {
     },
   );
 
-  server.registerTool(
+  reg(
     'delete_context',
     {
       description:
@@ -142,7 +193,7 @@ export function buildMcpServer(): McpServer {
     },
   );
 
-  server.registerTool(
+  reg(
     'list_tasks',
     {
       description: 'List open tasks. Filter by context slug, status, or overdue.',
@@ -167,13 +218,15 @@ export function buildMcpServer(): McpServer {
       const labels = await contextLabels();
       return text(
         list.length
-          ? list.map((t) => fmtTask(t, t.contextId ? labels.get(t.contextId) : undefined)).join('\n')
+          ? list
+              .map((t) => fmtTask(t, t.contextId ? labels.get(t.contextId) : undefined))
+              .join('\n')
           : 'No matching tasks.',
       );
     },
   );
 
-  server.registerTool(
+  reg(
     'get_today',
     {
       description: "Today's agenda: open tasks due today or overdue, plus any running timer.",
@@ -196,20 +249,18 @@ export function buildMcpServer(): McpServer {
     },
   );
 
-  server.registerTool(
+  reg(
     'create_task',
     {
       description:
-        'Create a task. Optionally set context (slug), due_at (ISO — the deadline, also the calendar block start), remind_at (ISO), duration_min (block length in minutes; a task with a due_at is shown on the calendar, default 30 min), recurrence, and an initial comment.',
+        'Create a task. Optionally set context (slug), due_at (ISO — the deadline, also the calendar block start), remind_at (ISO), duration_min (block length in minutes; a task with a due_at is shown on the calendar, default 30 min), recurrence (a repeat rule — see the recurrence field), and an initial comment.',
       inputSchema: {
         title: z.string().min(1),
         context: z.string().optional(),
         due_at: z.string().optional(),
         remind_at: z.string().optional(),
         duration_min: z.number().int().positive().optional(),
-        recurrence: z
-          .object({ rule: z.string().min(1), remind_time: z.string().optional() })
-          .optional(),
+        recurrence: recurrenceInput.optional(),
         comment: z.string().optional(),
       },
     },
@@ -220,15 +271,19 @@ export function buildMcpServer(): McpServer {
         if (!c) return text(`Unknown context '${context}'.`);
         contextId = c.id;
       }
+      let recurrenceRule: { rule: string; remindTime: string | null } | null = null;
+      if (recurrence) {
+        const r = toRuleString(recurrence);
+        if ('error' in r) return text(r.error);
+        recurrenceRule = { rule: r.rule, remindTime: recurrence.remind_time ?? null };
+      }
       const task = await tasksSvc.createTask({
         title,
         contextId,
         dueAt: due_at ?? null,
         remindAt: remind_at ?? null,
         durationMin: duration_min ?? null,
-        recurrence: recurrence
-          ? { rule: recurrence.rule, remindTime: recurrence.remind_time ?? null }
-          : null,
+        recurrence: recurrenceRule,
       });
       if (comment) await commentsSvc.addComment(task.id, comment);
       logWrite('create_task', { id: task.id, title });
@@ -236,11 +291,11 @@ export function buildMcpServer(): McpServer {
     },
   );
 
-  server.registerTool(
+  reg(
     'update_task',
     {
       description:
-        'Update a task by id or title_match. Set any of: title, context (slug), due_at (deadline / calendar block start; pass null to clear), remind_at, duration_min (block length in minutes), status.',
+        'Update a task by id or title_match. Set any of: title, context (slug), due_at (deadline / calendar block start; pass null to clear), remind_at, duration_min (block length in minutes), status, recurrence (a repeat rule — pass null to remove).',
       inputSchema: {
         id: z.string().optional(),
         title_match: z.string().optional(),
@@ -250,6 +305,7 @@ export function buildMcpServer(): McpServer {
         remind_at: z.string().nullable().optional(),
         duration_min: z.number().int().positive().nullable().optional(),
         status: z.enum(['active', 'waiting', 'done']).optional(),
+        recurrence: recurrenceInput.nullable().optional(),
       },
     },
     async (a) => {
@@ -266,13 +322,22 @@ export function buildMcpServer(): McpServer {
         if (!c) return text(`Unknown context '${a.context}'.`);
         patch.contextId = c.id;
       }
+      if (a.recurrence !== undefined) {
+        if (a.recurrence === null) {
+          patch.recurrence = null;
+        } else {
+          const rr = toRuleString(a.recurrence);
+          if ('error' in rr) return text(rr.error);
+          patch.recurrence = { rule: rr.rule, remindTime: a.recurrence.remind_time ?? null };
+        }
+      }
       const updated = await tasksSvc.updateTask(r.task.id, patch);
       logWrite('update_task', { id: updated.id });
       return text(`Updated: ${fmtTask(updated)}`);
     },
   );
 
-  server.registerTool(
+  reg(
     'complete_task',
     {
       description: 'Mark a task done, by id or title_match.',
@@ -283,12 +348,13 @@ export function buildMcpServer(): McpServer {
       if (!r.task) return text(unresolvedText(r.candidates, title_match));
       const done = await tasksSvc.updateTask(r.task.id, { completed: true });
       logWrite('complete_task', { id: done.id });
-      const next = done.recurrenceId && done.nextInstance ? ` Next instance: ${done.nextInstance}.` : '';
+      const next =
+        done.recurrenceId && done.nextInstance ? ` Next instance: ${done.nextInstance}.` : '';
       return text(`Completed: ${r.task.title}.${next}`);
     },
   );
 
-  server.registerTool(
+  reg(
     'delete_task',
     {
       description: 'Delete a task, by id or title_match.',
@@ -303,11 +369,11 @@ export function buildMcpServer(): McpServer {
     },
   );
 
-
-  server.registerTool(
+  reg(
     'start_timer',
     {
-      description: 'Start the time tracker on a task (by id or title_match). Stops any timer already running.',
+      description:
+        'Start the time tracker on a task (by id or title_match). Stops any timer already running.',
       inputSchema: { id: z.string().optional(), title_match: z.string().optional() },
     },
     async ({ id, title_match }) => {
@@ -319,20 +385,22 @@ export function buildMcpServer(): McpServer {
     },
   );
 
-  server.registerTool(
+  reg(
     'stop_timer',
     { description: 'Stop the running time tracker.', inputSchema: {} },
     async () => {
       const active = await timerSvc.getActiveTimer();
       const stopped = await timerSvc.stopTimer();
       if (!stopped || !stopped.endedAt) return text('No timer running.');
-      const mins = Math.round((Date.parse(stopped.endedAt) - Date.parse(stopped.startedAt)) / 60000);
+      const mins = Math.round(
+        (Date.parse(stopped.endedAt) - Date.parse(stopped.startedAt)) / 60000,
+      );
       logWrite('stop_timer', { taskId: stopped.taskId });
       return text(`Timer stopped for "${active?.taskTitle ?? 'task'}" — ${mins} min.`);
     },
   );
 
-  server.registerTool(
+  reg(
     'add_comment',
     {
       description: 'Add a comment to a task, by id or title_match.',

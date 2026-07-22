@@ -6,6 +6,9 @@ export const HOUR_END = 24;
 
 // Timeline geometry (single source; calendar-screen imports HOUR_H from here).
 export const HOUR_H = 48;
+// Pinch-to-zoom bounds for the timeline's hour height.
+export const HOUR_H_MIN = 28;
+export const HOUR_H_MAX = 160;
 export const SNAP_MIN = 15;
 
 // Pixel Y within the hour grid -> minutes past midnight.

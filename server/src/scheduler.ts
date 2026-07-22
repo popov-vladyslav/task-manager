@@ -7,6 +7,20 @@ import { repeatReminders, sendReminders } from './services/push';
 export function startScheduler(): void {
   const timezone = env.TZ || 'Europe/Warsaw';
 
+  // The recurrence/reminder date math builds dates with process-local `Date`
+  // constructors (see recurrence.ts / recurring.ts), so correctness depends on the
+  // process actually running in Europe/Warsaw. cron fires at the right wall-clock
+  // time via { timezone }, but the spawned due/remind times are process-local — a
+  // mismatched TZ silently shifts them. Fail loud instead of drifting quietly.
+  const resolvedTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  if (resolvedTz !== 'Europe/Warsaw') {
+    console.warn(
+      `[cron] WARNING: process timezone is "${resolvedTz}", not Europe/Warsaw. ` +
+        'Recurrence/reminder due-times are computed in process-local time and WILL drift. ' +
+        'Set TZ=Europe/Warsaw.',
+    );
+  }
+
   // spawn recurring instances at the start of each day (00:00 Europe/Warsaw), so
   // dateless instances appear right at the start of their period (CR02 §1).
   cron.schedule(

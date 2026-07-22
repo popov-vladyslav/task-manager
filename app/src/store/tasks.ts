@@ -8,6 +8,7 @@ interface TasksState {
   completed: Task[]; // done tasks, loaded lazily for the "Show completed" section
   activeContextId: number | null; // null = "All"
   loading: boolean;
+  hydrated: boolean;
   error: string | null;
   pendingOpenTaskId: string | null; // set by a tapped notification; consumed by the screen
 
@@ -45,6 +46,7 @@ export const useTasksStore = create<TasksState>((set, get) => ({
   completed: [],
   activeContextId: null,
   loading: false,
+  hydrated: false,
   error: null,
   pendingOpenTaskId: null,
 
@@ -52,7 +54,7 @@ export const useTasksStore = create<TasksState>((set, get) => ({
     set({ loading: true, error: null });
     try {
       const [contexts, tasks] = await Promise.all([api.listContexts(), api.listTasks()]);
-      set({ contexts, tasks, loading: false });
+      set({ contexts, tasks, loading: false, hydrated: true });
     } catch (e) {
       set({ loading: false, error: e instanceof Error ? e.message : 'Failed to load' });
     }

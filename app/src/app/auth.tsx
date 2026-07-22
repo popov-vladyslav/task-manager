@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Text, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useAuthStore } from '../store/auth';
 import { colors } from '../theme';
@@ -25,8 +25,25 @@ export default function AuthCallback() {
   }, [token]);
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.bgBase, alignItems: 'center', justifyContent: 'center', gap: 12 }}>
-      {error ? <Text selectable style={{ color: colors.accentNow }}>{error}</Text> : <ActivityIndicator color={colors.accentPrimary} />}
+    <View style={styles.root}>
+      {error ? (
+        <Text selectable style={styles.error}>
+          {error}
+        </Text>
+      ) : (
+        <ActivityIndicator color={colors.accentPrimary} />
+      )}
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+    backgroundColor: colors.bgBase,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+  },
+  error: { color: colors.accentNow },
+});

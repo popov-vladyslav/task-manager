@@ -1,5 +1,13 @@
 import { useState } from 'react';
-import { Modal, Pressable, Text, TextInput, useWindowDimensions, View } from 'react-native';
+import {
+  Modal,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  useWindowDimensions,
+  View,
+} from 'react-native';
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import Animated, { SlideInDown } from 'react-native-reanimated';
 import { colors, radius, webInputReset } from '../../theme';
@@ -24,6 +32,8 @@ export function NewTaskSheet({
 }) {
   const { width } = useWindowDimensions();
   const wide = width >= WIDE;
+  const overlayJustify = wide ? 'center' : 'flex-end';
+  const overlayAlign = wide ? 'center' : 'stretch';
   const [title, setTitle] = useState('');
   const [due, setDue] = useState<string | null>(startISO);
   const [dur, setDur] = useState<number>(durationMin);
@@ -42,16 +52,17 @@ export function NewTaskSheet({
 
   return (
     <Modal transparent visible animationType="fade" statusBarTranslucent onRequestClose={onClose}>
-      <KeyboardAvoidingView behavior={isIOS ? 'padding' : undefined} style={{ flex: 1 }}>
-      <Pressable onPress={onClose} style={{ flex: 1, backgroundColor: 'rgba(5,6,10,0.6)', justifyContent: wide ? 'center' : 'flex-end', alignItems: wide ? 'center' : 'stretch' }}>
-        <AnimatedPressable
-          entering={wide ? undefined : SlideInDown.duration(260)}
-          onPress={(e) => e.stopPropagation?.()}
-          style={wide
-            ? { width: 460, maxWidth: '92%', borderRadius: 20, borderCurve: 'continuous', backgroundColor: colors.bgCardWeb, borderWidth: 1, borderColor: colors.borderSubtle }
-            : { borderTopLeftRadius: radius.sheet, borderTopRightRadius: radius.sheet, borderCurve: 'continuous', backgroundColor: colors.bgCardWeb }}
+      <KeyboardAvoidingView behavior={isIOS ? 'padding' : undefined} style={styles.flex}>
+        <Pressable
+          onPress={onClose}
+          style={[styles.overlay, { justifyContent: overlayJustify, alignItems: overlayAlign }]}
         >
-          <View style={{ padding: 20, gap: 16 }}>
+          <AnimatedPressable
+            entering={wide ? undefined : SlideInDown.duration(260)}
+            onPress={(e) => e.stopPropagation?.()}
+            style={wide ? styles.sheetWide : styles.sheetMobile}
+          >
+            <View style={styles.content}>
               {/* No header/close — tap the overlay to dismiss. */}
               <TextInput
                 autoFocus
@@ -60,7 +71,7 @@ export function NewTaskSheet({
                 onSubmitEditing={submit}
                 placeholder="Task title…"
                 placeholderTextColor={colors.textMuted}
-                style={{ fontSize: 16, color: colors.textPrimary, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: colors.borderSubtle, ...webInputReset }}
+                style={[styles.input, webInputReset]}
               />
               <DateFieldsSection
                 dueAt={due}
@@ -71,13 +82,57 @@ export function NewTaskSheet({
                 onChangeRemind={() => {}}
                 onChangeDuration={setDur}
               />
-              <Pressable onPress={submit} disabled={!title.trim()} style={{ alignItems: 'center', paddingVertical: 12, borderRadius: radius.card, backgroundColor: title.trim() ? colors.accentPrimary : colors.bgElevated }}>
-                <Text style={{ fontSize: 14, fontWeight: '600', color: title.trim() ? colors.bgSurface : colors.textMuted }}>Create</Text>
+              <Pressable
+                onPress={submit}
+                disabled={!title.trim()}
+                style={[
+                  styles.createBtn,
+                  { backgroundColor: title.trim() ? colors.accentPrimary : colors.bgElevated },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.createText,
+                    { color: title.trim() ? colors.bgSurface : colors.textMuted },
+                  ]}
+                >
+                  Create
+                </Text>
               </Pressable>
             </View>
-        </AnimatedPressable>
-      </Pressable>
+          </AnimatedPressable>
+        </Pressable>
       </KeyboardAvoidingView>
     </Modal>
   );
 }
+
+const styles = StyleSheet.create({
+  flex: { flex: 1 },
+  overlay: { flex: 1, backgroundColor: 'rgba(5,6,10,0.6)' },
+  sheetWide: {
+    width: 460,
+    maxWidth: '92%',
+    borderRadius: 20,
+    borderCurve: 'continuous',
+    backgroundColor: colors.bgCardWeb,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+  },
+  sheetMobile: {
+    borderTopLeftRadius: radius.sheet,
+    borderTopRightRadius: radius.sheet,
+    borderCurve: 'continuous',
+    backgroundColor: colors.bgCardWeb,
+  },
+  content: { padding: 20, gap: 16 },
+  input: {
+    fontSize: 16,
+    color: colors.textPrimary,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderSubtle,
+  },
+  createBtn: { alignItems: 'center', paddingVertical: 12, borderRadius: radius.card },
+  createText: { fontSize: 14, fontWeight: '600' },
+});

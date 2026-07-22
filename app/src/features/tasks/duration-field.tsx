@@ -1,4 +1,4 @@
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { colors, monoFont } from '../../theme';
 
 // Duration presets (minutes) for a scheduled task's calendar block. Chips work
@@ -18,36 +18,30 @@ export function DurationField({
   const active = value ?? DEFAULT_DURATION_MIN;
   return (
     <View>
-      <Text
-        style={{
-          fontFamily: monoFont,
-          fontSize: 10.5,
-          letterSpacing: 1,
-          textTransform: 'uppercase',
-          color: colors.textMuted,
-          marginBottom: 8,
-        }}
-      >
-        Duration
-      </Text>
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+      <Text style={styles.label}>Duration</Text>
+      <View style={styles.row}>
         {PRESETS.map((m) => {
           const on = active === m;
           return (
             <Pressable
               key={m}
               onPress={() => onChange(m)}
-              style={{
-                paddingHorizontal: 12,
-                paddingVertical: 6,
-                borderRadius: 999,
-                backgroundColor: on ? colors.bgElevated : colors.bgCard,
-                borderWidth: 1,
-                borderColor: on ? colors.borderStrong : colors.borderSubtle,
-              }}
+              style={[
+                styles.chip,
+                {
+                  backgroundColor: on ? colors.bgElevated : colors.bgCard,
+                  borderColor: on ? colors.borderStrong : colors.borderSubtle,
+                },
+              ]}
             >
-              <Text style={{ fontSize: 12, fontWeight: '500', color: on ? colors.textPrimary : colors.textSecondary }}>
-                {m < 60 ? `${m}m` : m % 60 === 0 ? `${m / 60}h` : `${Math.floor(m / 60)}h ${m % 60}m`}
+              <Text
+                style={[styles.chipText, { color: on ? colors.textPrimary : colors.textSecondary }]}
+              >
+                {m < 60
+                  ? `${m}m`
+                  : m % 60 === 0
+                    ? `${m / 60}h`
+                    : `${Math.floor(m / 60)}h ${m % 60}m`}
               </Text>
             </Pressable>
           );
@@ -56,3 +50,22 @@ export function DurationField({
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  label: {
+    fontFamily: monoFont,
+    fontSize: 10.5,
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+    color: colors.textMuted,
+    marginBottom: 8,
+  },
+  row: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  chip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  chipText: { fontSize: 12, fontWeight: '500' },
+});

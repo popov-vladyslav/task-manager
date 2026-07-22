@@ -2,6 +2,10 @@ import { colors, radius, contextStripWidth } from '@task-manager/shared';
 
 export { colors, radius, contextStripWidth };
 
+// Width (px) at/above which the app switches from the mobile layout (bottom tab
+// bar) to the wide/web layout (sidebar). Shared by every responsive screen.
+export const WIDE_BREAKPOINT = 768;
+
 // Web-only: strip the default browser focus ring on text inputs — we show our own
 // (accent border) instead. Spread into a TextInput style; a no-op on native.
 export const webInputReset: object | undefined =
