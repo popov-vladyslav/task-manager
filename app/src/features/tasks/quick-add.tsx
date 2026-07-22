@@ -1,4 +1,3 @@
-import { useRef } from 'react';
 import { Keyboard, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { KeyboardStickyView } from 'react-native-keyboard-controller';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -9,7 +8,6 @@ import type { Context } from '@task-manager/shared';
 import { colors, radius, shortDateTime, webInputReset } from '../../theme';
 import { DurationField } from './duration-field';
 
-const isWeb = process.env.EXPO_OS === 'web';
 const isAndroid = process.env.EXPO_OS === 'android';
 const PANEL_HEIGHT = 300;
 // The Tasks screen ends at the top of the bottom tab bar, so the sticky accessory
@@ -67,7 +65,6 @@ export function QuickAddInput({
   onCreate: (input: CreateInput) => Promise<void>;
 }) {
   const { title, dueAt, remindAt, durationMin, patch, reset } = useQuickAdd();
-  const ref = useRef<TextInput>(null);
 
   const submit = async () => {
     const t = title.trim();
@@ -81,7 +78,7 @@ export function QuickAddInput({
       durationMin: dueAt ? (durationMin ?? 30) : undefined,
     });
     reset(activeContextId);
-    if (!isWeb) ref.current?.focus(); // keep adding on mobile
+    Keyboard.dismiss();
   };
 
   return (
@@ -104,7 +101,6 @@ export function QuickAddInput({
         <Plus size={20} color={colors.accentPrimary} />
         <TextInput
           ref={(r) => {
-            ref.current = r;
             inputRef.current = r;
           }}
           value={title}

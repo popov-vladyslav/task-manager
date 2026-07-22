@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ComponentType } from 'react';
 import {
+  Keyboard,
   Modal,
   Pressable,
   ScrollView,
@@ -177,6 +178,7 @@ function DetailContent({
     const body = draft.trim();
     if (!body) return;
     setDraft('');
+    Keyboard.dismiss(); // dismiss on submit
     try {
       const c = await api.addComment(task.id, body);
       setComments((prev) => [...prev, c]);

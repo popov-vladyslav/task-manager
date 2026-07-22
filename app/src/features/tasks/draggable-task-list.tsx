@@ -55,6 +55,9 @@ export function DraggableTaskList({ tasks, renderCard, onReorder, footer, empty 
       style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
       contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 4, paddingBottom: 24 }}
       showsVerticalScrollIndicator={false}
+      automaticallyAdjustKeyboardInsets
+      keyboardShouldPersistTaps="handled"
+      keyboardDismissMode="interactive"
     />
   );
 }
