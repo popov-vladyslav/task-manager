@@ -31,25 +31,36 @@ export async function spawnDueRecurring(now: Date = new Date()): Promise<number>
     if (!ruleMatchesToday(rule.rule, now)) continue;
 
     const { dueAt, remindAt } = computeInstanceTimes(
-      { defaultDueTime: rule.defaultDueTime, remindTime: rule.remindTime, dueOffsetD: rule.dueOffsetD },
+      {
+        defaultDueTime: rule.defaultDueTime,
+        remindTime: rule.remindTime,
+        dueOffsetD: rule.dueOffsetD,
+      },
       now,
     );
 
-    const [{ minSort }] = await db
-      .select({ minSort: sql<number>`coalesce(min(${tasks.sortGlobal}), 1)` })
-      .from(tasks);
-    const top = Number(minSort) - 1;
+    // Insert + last_spawned stamp are one unit per rule: the daily-idempotency
+    // guard relies on both landing (a partial would let the rule re-spawn).
+    await db.transaction(async (tx) => {
+      const [{ minSort }] = await tx
+        .select({ minSort: sql<number>`coalesce(min(${tasks.sortGlobal}), 1)` })
+        .from(tasks);
+      const top = Number(minSort) - 1;
 
-    await db.insert(tasks).values({
-      title: expandTitle(rule.title, now),
-      contextId: rule.contextId,
-      dueAt,
-      remindAt,
-      recurrenceId: rule.id,
-      sortGlobal: top,
-      sortContext: top,
+      await tx.insert(tasks).values({
+        title: expandTitle(rule.title, now),
+        contextId: rule.contextId,
+        dueAt,
+        remindAt,
+        recurrenceId: rule.id,
+        sortGlobal: top,
+        sortContext: top,
+      });
+      await tx
+        .update(recurrenceRules)
+        .set({ lastSpawned: today })
+        .where(eq(recurrenceRules.id, rule.id));
     });
-    await db.update(recurrenceRules).set({ lastSpawned: today }).where(eq(recurrenceRules.id, rule.id));
     spawned += 1;
   }
   return spawned;

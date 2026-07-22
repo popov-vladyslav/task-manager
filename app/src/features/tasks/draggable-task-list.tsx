@@ -1,4 +1,5 @@
-import { useEffect, useState, type ReactElement, type ReactNode } from 'react';
+import { memo, useCallback, useEffect, useState, type ReactElement, type ReactNode } from 'react';
+import { StyleSheet } from 'react-native';
 import ReorderableList, {
   type ReorderableListReorderEvent,
   useReorderableDrag,
@@ -14,16 +15,24 @@ interface Props {
   empty?: ReactNode; // rendered when there are no open tasks
 }
 
-function DragRow({ item, renderCard }: { item: Task; renderCard: Props['renderCard'] }) {
+// memo'd so an unchanged row skips re-render when the list re-renders — relies on
+// `renderCard` being a stable ref from the parent (see TasksScreen useCallback).
+const DragRow = memo(function DragRow({
+  item,
+  renderCard,
+}: {
+  item: Task;
+  renderCard: Props['renderCard'];
+}) {
   const drag = useReorderableDrag();
   // Pickup feedback the moment the long-press lifts the card into a drag — the
   // most noticeable haptic of the reorder (the drop adds a lighter settle tick).
-  const startDrag = () => {
+  const startDrag = useCallback(() => {
     haptics.impact('medium');
     drag();
-  };
+  }, [drag]);
   return <>{renderCard(item, startDrag)}</>;
-}
+});
 
 // Variable-height reorderable list. Drag starts on a long-press of the card
 // (tap still opens it — no tap/drag conflict). `flex: 1` gives it a bounded
@@ -60,8 +69,8 @@ export function DraggableTaskList({ tasks, renderCard, onReorder, footer, empty 
       renderItem={({ item }) => <DragRow item={item} renderCard={renderCard} />}
       ListFooterComponent={footer as ReactElement}
       ListEmptyComponent={empty as ReactElement}
-      style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
-      contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 4, paddingBottom: 24 }}
+      style={styles.list}
+      contentContainerStyle={styles.content}
       showsVerticalScrollIndicator={false}
       automaticallyAdjustKeyboardInsets
       keyboardShouldPersistTaps="handled"
@@ -69,3 +78,10 @@ export function DraggableTaskList({ tasks, renderCard, onReorder, footer, empty 
     />
   );
 }
+
+const styles = StyleSheet.create({
+  // absolute-fill inside a flex:1 parent so the list bounds + scrolls on web
+  // (react-native-web needs this; flex min-height:0 alone doesn't work here).
+  list: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
+  content: { paddingHorizontal: 20, paddingTop: 4, paddingBottom: 24 },
+});

@@ -1,4 +1,5 @@
 import { and, asc, eq, ilike, isNotNull, lte, ne, sql } from 'drizzle-orm';
+import { DEFAULT_DURATION_MIN } from '@task-manager/shared';
 import type {
   CreateTaskInput,
   ReorderInput,
@@ -18,8 +19,6 @@ interface ListFilter {
   status?: TaskStatus;
   dueBefore?: Date; // only tasks with a due date at/before this
 }
-
-const DEFAULT_DURATION_MIN = 30; // a task with a deadline gets a 30-min block unless set
 
 // A scheduled task (has a deadline) always has a duration; a task with no
 // deadline has none. Returns the duration_min to store for a given (due, dur).
@@ -117,140 +116,150 @@ export async function createTask(input: CreateTaskInput): Promise<Task> {
   const title = input.title?.trim();
   if (!title) throw badRequest('Title is required');
   const contextId = input.contextId ?? null;
+  const dueAt = input.dueAt ? new Date(input.dueAt) : null;
 
-  // New task goes to the top of both the global and the context scope.
-  const [mins] = await db
-    .select({
-      ming: sql<number>`coalesce(min(${tasks.sortGlobal}), 1)`,
-      minc: sql<number>`coalesce(min(${tasks.sortContext}) filter (where ${tasks.contextId} is not distinct from ${contextId}), 1)`,
-    })
-    .from(tasks);
+  // One unit of work: a failure between the rule insert and the task insert would
+  // otherwise leave an orphaned recurrence_rules row.
+  const id = await db.transaction(async (tx) => {
+    // New task goes to the top of both the global and the context scope.
+    const [mins] = await tx
+      .select({
+        ming: sql<number>`coalesce(min(${tasks.sortGlobal}), 1)`,
+        minc: sql<number>`coalesce(min(${tasks.sortContext}) filter (where ${tasks.contextId} is not distinct from ${contextId}), 1)`,
+      })
+      .from(tasks);
 
-  let recurrenceId: string | null = null;
-  if (input.recurrence) {
-    const [rule] = await db
-      .insert(recurrenceRules)
+    let recurrenceId: string | null = null;
+    if (input.recurrence) {
+      const [rule] = await tx
+        .insert(recurrenceRules)
+        .values({
+          title,
+          contextId,
+          rule: input.recurrence.rule,
+          remindTime: input.recurrence.remindTime ?? null,
+          defaultDueTime: timeOf(input.dueAt),
+          dueOffsetD: input.recurrence.dueOffsetDays ?? 0,
+        })
+        .returning();
+      recurrenceId = rule.id;
+    }
+
+    const [row] = await tx
+      .insert(tasks)
       .values({
         title,
         contextId,
-        rule: input.recurrence.rule,
-        remindTime: input.recurrence.remindTime ?? null,
-        defaultDueTime: timeOf(input.dueAt),
-        dueOffsetD: input.recurrence.dueOffsetDays ?? 0,
+        dueAt,
+        remindAt: input.remindAt ? new Date(input.remindAt) : null,
+        durationMin: resolveDuration(dueAt, input.durationMin),
+        sortGlobal: Number(mins.ming) - 1,
+        sortContext: Number(mins.minc) - 1,
+        recurrenceId,
+        createdVia: 'app',
       })
       .returning();
-    recurrenceId = rule.id;
-  }
+    return row.id;
+  });
 
-  const dueAt = input.dueAt ? new Date(input.dueAt) : null;
-
-  const [row] = await db
-    .insert(tasks)
-    .values({
-      title,
-      contextId,
-      dueAt,
-      remindAt: input.remindAt ? new Date(input.remindAt) : null,
-      durationMin: resolveDuration(dueAt, input.durationMin),
-      sortGlobal: Number(mins.ming) - 1,
-      sortContext: Number(mins.minc) - 1,
-      recurrenceId,
-      createdVia: 'app',
-    })
-    .returning();
-
-  return getTask(row.id);
+  return getTask(id);
 }
 
 export async function updateTask(id: string, patch: UpdateTaskInput): Promise<Task> {
-  const [cur] = await db
-    .select({
-      recurrenceId: tasks.recurrenceId,
-      title: tasks.title,
-      contextId: tasks.contextId,
-      dueAt: tasks.dueAt,
-      durationMin: tasks.durationMin,
-    })
-    .from(tasks)
-    .where(eq(tasks.id, id));
-  if (!cur) throw notFound('Task not found');
+  // The task update and its dependent recurrence-rule writes (upsert / sync /
+  // orphan-delete) are one unit so a mid-way failure can't leave a partial state.
+  await db.transaction(async (tx) => {
+    const [cur] = await tx
+      .select({
+        recurrenceId: tasks.recurrenceId,
+        title: tasks.title,
+        contextId: tasks.contextId,
+        dueAt: tasks.dueAt,
+        durationMin: tasks.durationMin,
+      })
+      .from(tasks)
+      .where(eq(tasks.id, id));
+    if (!cur) throw notFound('Task not found');
 
-  const set: Partial<typeof tasks.$inferInsert> = {};
-  if (patch.title !== undefined) set.title = patch.title;
-  if (patch.contextId !== undefined) set.contextId = patch.contextId;
-  if (patch.status !== undefined) set.status = patch.status;
-  if (patch.dueAt !== undefined) set.dueAt = patch.dueAt ? new Date(patch.dueAt) : null;
-  if (patch.remindAt !== undefined) set.remindAt = patch.remindAt ? new Date(patch.remindAt) : null;
+    const set: Partial<typeof tasks.$inferInsert> = {};
+    if (patch.title !== undefined) set.title = patch.title;
+    if (patch.contextId !== undefined) set.contextId = patch.contextId;
+    if (patch.status !== undefined) set.status = patch.status;
+    if (patch.dueAt !== undefined) set.dueAt = patch.dueAt ? new Date(patch.dueAt) : null;
+    if (patch.remindAt !== undefined)
+      set.remindAt = patch.remindAt ? new Date(patch.remindAt) : null;
 
-  // Deadline ⇒ duration invariant: recompute whenever either changes so a task
-  // with a deadline always has a duration (default 30), and one without has none.
-  if (patch.dueAt !== undefined || patch.durationMin !== undefined) {
-    const nextDue = patch.dueAt !== undefined ? (patch.dueAt ? new Date(patch.dueAt) : null) : cur.dueAt;
-    const nextDur = patch.durationMin !== undefined ? patch.durationMin : cur.durationMin;
-    set.durationMin = resolveDuration(nextDue, nextDur);
-  }
-
-  // { completed: true } runs the complete-logic (spec §3).
-  if (patch.completed !== undefined) {
-    if (patch.completed) {
-      set.status = 'done';
-      set.completedAt = new Date();
-    } else {
-      set.status = 'active';
-      set.completedAt = null;
+    // Deadline ⇒ duration invariant: recompute whenever either changes so a task
+    // with a deadline always has a duration (default 30), and one without has none.
+    if (patch.dueAt !== undefined || patch.durationMin !== undefined) {
+      const nextDue =
+        patch.dueAt !== undefined ? (patch.dueAt ? new Date(patch.dueAt) : null) : cur.dueAt;
+      const nextDur = patch.durationMin !== undefined ? patch.durationMin : cur.durationMin;
+      set.durationMin = resolveDuration(nextDue, nextDur);
     }
-  }
 
-  // Recurrence: create/update the linked rule, or unlink (and drop the orphan).
-  let orphanRuleId: string | null = null;
-  if (patch.recurrence !== undefined) {
-    if (patch.recurrence === null) {
-      if (cur.recurrenceId) {
-        set.recurrenceId = null;
-        orphanRuleId = cur.recurrenceId;
+    // { completed: true } runs the complete-logic (spec §3).
+    if (patch.completed !== undefined) {
+      if (patch.completed) {
+        set.status = 'done';
+        set.completedAt = new Date();
+      } else {
+        set.status = 'active';
+        set.completedAt = null;
       }
-    } else if (cur.recurrenceId) {
-      await db
-        .update(recurrenceRules)
-        .set({
-          rule: patch.recurrence.rule,
-          remindTime: patch.recurrence.remindTime ?? null,
-          defaultDueTime: timeOf(patch.dueAt !== undefined ? patch.dueAt : cur.dueAt),
-          dueOffsetD: patch.recurrence.dueOffsetDays ?? 0,
-        })
-        .where(eq(recurrenceRules.id, cur.recurrenceId));
-    } else {
-      const [rule] = await db
-        .insert(recurrenceRules)
-        .values({
-          title: patch.title ?? cur.title,
-          contextId: patch.contextId !== undefined ? patch.contextId : cur.contextId,
-          rule: patch.recurrence.rule,
-          remindTime: patch.recurrence.remindTime ?? null,
-          defaultDueTime: timeOf(patch.dueAt !== undefined ? patch.dueAt : cur.dueAt),
-          dueOffsetD: patch.recurrence.dueOffsetDays ?? 0,
-        })
-        .returning();
-      set.recurrenceId = rule.id;
     }
-  }
 
-  // Deadline changed on an already-recurring task without touching the rule:
-  // keep the rule's default_due_time in sync so future instances match. (CR02 §1)
-  if (patch.recurrence === undefined && patch.dueAt !== undefined && cur.recurrenceId) {
-    await db
-      .update(recurrenceRules)
-      .set({ defaultDueTime: timeOf(patch.dueAt) })
-      .where(eq(recurrenceRules.id, cur.recurrenceId));
-  }
+    // Recurrence: create/update the linked rule, or unlink (and drop the orphan).
+    let orphanRuleId: string | null = null;
+    if (patch.recurrence !== undefined) {
+      if (patch.recurrence === null) {
+        if (cur.recurrenceId) {
+          set.recurrenceId = null;
+          orphanRuleId = cur.recurrenceId;
+        }
+      } else if (cur.recurrenceId) {
+        await tx
+          .update(recurrenceRules)
+          .set({
+            rule: patch.recurrence.rule,
+            remindTime: patch.recurrence.remindTime ?? null,
+            defaultDueTime: timeOf(patch.dueAt !== undefined ? patch.dueAt : cur.dueAt),
+            dueOffsetD: patch.recurrence.dueOffsetDays ?? 0,
+          })
+          .where(eq(recurrenceRules.id, cur.recurrenceId));
+      } else {
+        const [rule] = await tx
+          .insert(recurrenceRules)
+          .values({
+            title: patch.title ?? cur.title,
+            contextId: patch.contextId !== undefined ? patch.contextId : cur.contextId,
+            rule: patch.recurrence.rule,
+            remindTime: patch.recurrence.remindTime ?? null,
+            defaultDueTime: timeOf(patch.dueAt !== undefined ? patch.dueAt : cur.dueAt),
+            dueOffsetD: patch.recurrence.dueOffsetDays ?? 0,
+          })
+          .returning();
+        set.recurrenceId = rule.id;
+      }
+    }
 
-  if (Object.keys(set).length > 0) {
-    await db.update(tasks).set(set).where(eq(tasks.id, id));
-  }
-  // Delete the rule only after the task no longer references it (FK).
-  if (orphanRuleId) {
-    await db.delete(recurrenceRules).where(eq(recurrenceRules.id, orphanRuleId));
-  }
+    // Deadline changed on an already-recurring task without touching the rule:
+    // keep the rule's default_due_time in sync so future instances match. (CR02 §1)
+    if (patch.recurrence === undefined && patch.dueAt !== undefined && cur.recurrenceId) {
+      await tx
+        .update(recurrenceRules)
+        .set({ defaultDueTime: timeOf(patch.dueAt) })
+        .where(eq(recurrenceRules.id, cur.recurrenceId));
+    }
+
+    if (Object.keys(set).length > 0) {
+      await tx.update(tasks).set(set).where(eq(tasks.id, id));
+    }
+    // Delete the rule only after the task no longer references it (FK).
+    if (orphanRuleId) {
+      await tx.delete(recurrenceRules).where(eq(recurrenceRules.id, orphanRuleId));
+    }
+  });
 
   return getTask(id);
 }
@@ -264,13 +273,15 @@ export async function deleteTask(id: string): Promise<void> {
 // so the scheduler re-sends when the new remind_at arrives.
 export async function snoozeTask(id: string, minutes: number): Promise<Task> {
   const remindAt = new Date(Date.now() + minutes * 60_000);
-  const [row] = await db
-    .update(tasks)
-    .set({ remindAt })
-    .where(eq(tasks.id, id))
-    .returning({ id: tasks.id });
-  if (!row) throw notFound('Task not found');
-  await db.delete(notificationLog).where(eq(notificationLog.taskId, id));
+  await db.transaction(async (tx) => {
+    const [row] = await tx
+      .update(tasks)
+      .set({ remindAt })
+      .where(eq(tasks.id, id))
+      .returning({ id: tasks.id });
+    if (!row) throw notFound('Task not found');
+    await tx.delete(notificationLog).where(eq(notificationLog.taskId, id));
+  });
   return getTask(id);
 }
 

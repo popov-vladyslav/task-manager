@@ -40,6 +40,24 @@ export function ruleFromSpec(spec: {
   return `monthly:${spec.dayOfMonth ?? 1}`;
 }
 
+// True if a serialized rule string is canonical and parseable — 'daily' |
+// 'weekly:<dow>[,<dow>...]' | 'monthly:<1-31>'. The MCP surface always sends a
+// canonical rule (via ruleFromSpec); this guards the REST boundary so a
+// hand-crafted, unparseable rule can never be stored.
+export function isValidRule(rule: string): boolean {
+  if (rule === 'daily') return true;
+  const [kind, arg] = rule.split(':');
+  if (kind === 'weekly') {
+    const days = (arg ?? '').split(',').map((d) => d.trim().toLowerCase());
+    return days.length > 0 && days.every((d) => WEEKDAYS[d] != null);
+  }
+  if (kind === 'monthly') {
+    const n = Number.parseInt(arg ?? '', 10);
+    return Number.isInteger(n) && n >= 1 && n <= 31;
+  }
+  return false;
+}
+
 // 'mon,wed,fri' (or a legacy single 'mon') -> weekday numbers [1, 3, 5].
 function parseWeeklyDays(arg: string | undefined): number[] {
   return (arg ?? '')

@@ -1,6 +1,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { computeInstanceTimes, nextInstance, ruleFromSpec, ruleMatchesToday } from './recurrence';
+import {
+  computeInstanceTimes,
+  isValidRule,
+  nextInstance,
+  ruleFromSpec,
+  ruleMatchesToday,
+} from './recurrence';
 
 // Jul 20 2026 is a Monday; Jul 21 2026 a Tuesday.
 const MONDAY = new Date(2026, 6, 20, 0, 0, 1);
@@ -73,9 +79,31 @@ test('ruleFromSpec: serializes structured recurrence to canonical rules', () => 
   assert.equal(ruleFromSpec({ freq: 'monthly', dayOfMonth: 15 }), 'monthly:15');
   assert.equal(ruleFromSpec({ freq: 'monthly' }), 'monthly:1'); // default day
   // dedupes, lowercases, and sorts into week order (sun..sat)
-  assert.equal(ruleFromSpec({ freq: 'weekly', days: ['fri', 'MON', 'wed', 'mon'] }), 'weekly:mon,wed,fri');
+  assert.equal(
+    ruleFromSpec({ freq: 'weekly', days: ['fri', 'MON', 'wed', 'mon'] }),
+    'weekly:mon,wed,fri',
+  );
   // drops junk weekdays, keeps valid ones
   assert.equal(ruleFromSpec({ freq: 'weekly', days: ['tue', 'nope'] }), 'weekly:tue');
   assert.throws(() => ruleFromSpec({ freq: 'weekly', days: [] }));
   assert.throws(() => ruleFromSpec({ freq: 'weekly' }));
+});
+
+test('isValidRule: accepts canonical rules, rejects malformed ones', () => {
+  // canonical
+  assert.equal(isValidRule('daily'), true);
+  assert.equal(isValidRule('weekly:mon'), true);
+  assert.equal(isValidRule('weekly:mon,wed,fri'), true);
+  assert.equal(isValidRule('monthly:1'), true);
+  assert.equal(isValidRule('monthly:31'), true);
+  // malformed
+  assert.equal(isValidRule('weekly'), false); // no days
+  assert.equal(isValidRule('weekly:'), false); // empty day list
+  assert.equal(isValidRule('weekly:funday'), false); // junk weekday
+  assert.equal(isValidRule('weekly:mon,nope'), false); // one bad weekday
+  assert.equal(isValidRule('monthly:0'), false); // out of 1..31
+  assert.equal(isValidRule('monthly:32'), false);
+  assert.equal(isValidRule('monthly:abc'), false);
+  assert.equal(isValidRule('yearly:1'), false); // unknown kind
+  assert.equal(isValidRule(''), false);
 });

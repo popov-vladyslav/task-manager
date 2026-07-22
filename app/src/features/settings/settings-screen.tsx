@@ -4,6 +4,7 @@ import {
   Modal,
   Pressable,
   ScrollView,
+  StyleSheet,
   Switch,
   Text,
   TextInput,
@@ -24,12 +25,11 @@ import {
 import { useRouter } from 'expo-router';
 import { ChevronRight, EyeOff, Plus, Trash2, X } from 'lucide-react-native';
 import type { Context } from '@task-manager/shared';
-import { colors, headerDate, monoFont, webInputReset } from '../../theme';
+import { colors, headerDate, monoFont, webInputReset, WIDE_BREAKPOINT } from '../../theme';
 import { useTasksStore } from '../../store/tasks';
 import { useAuthStore } from '../../store/auth';
 import { SideNavLinks } from '../nav/nav-chrome';
 
-const WIDE_BREAKPOINT = 768;
 const isWeb = process.env.EXPO_OS === 'web';
 const isIOS = process.env.EXPO_OS === 'ios';
 
@@ -97,34 +97,23 @@ export function SettingsScreen() {
   // ---- WEB / WIDE: sidebar + main ----
   if (wide) {
     return (
-      <View style={{ flex: 1, flexDirection: 'row', backgroundColor: colors.bgBase }}>
-        <View
-          style={{
-            width: 240,
-            paddingTop: insets.top + 16,
-            paddingHorizontal: 16,
-            paddingBottom: 16,
-            backgroundColor: '#10141B',
-            borderRightWidth: 1,
-            borderRightColor: colors.bgCard,
-          }}
-        >
-          <View style={{ paddingHorizontal: 8, paddingBottom: 20 }}>
-            <Text style={{ fontFamily: monoFont, fontSize: 10, letterSpacing: 2, color: colors.textMuted }}>LOG</Text>
+      <View style={styles.wideRoot}>
+        <View style={[styles.sidebar, { paddingTop: insets.top + 16 }]}>
+          <View style={styles.sidebarHeader}>
+            <Text style={styles.sidebarLogo}>LOG</Text>
           </View>
           <SideNavLinks />
-          <View style={{ flex: 1 }} />
-          <Pressable onPress={() => useAuthStore.getState().signOut()} style={{ paddingHorizontal: 8, paddingVertical: 8 }}>
-            <Text style={{ fontSize: 12, color: colors.textMuted }}>Sign out</Text>
+          <View style={styles.flex1} />
+          <Pressable
+            onPress={() => useAuthStore.getState().signOut()}
+            style={styles.sidebarSignOut}
+          >
+            <Text style={styles.sidebarSignOutText}>Sign out</Text>
           </Pressable>
         </View>
-        <View style={{ flex: 1, paddingTop: insets.top + 24, paddingHorizontal: 24 }}>
-          <Text style={{ fontSize: 22, fontWeight: '600', letterSpacing: -0.4, color: colors.textPrimary, marginBottom: 16 }}>
-            Settings
-          </Text>
-          <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
-            {sections}
-          </ScrollView>
+        <View style={[styles.wideMain, { paddingTop: insets.top + 24 }]}>
+          <Text style={styles.wideTitle}>Settings</Text>
+          <ScrollView contentContainerStyle={styles.wideScrollContent}>{sections}</ScrollView>
         </View>
       </View>
     );
@@ -132,17 +121,20 @@ export function SettingsScreen() {
 
   // ---- MOBILE / NARROW: title + sections (bottom tab bar comes from the layout) ----
   return (
-    <KeyboardAvoidingView behavior={isIOS ? 'padding' : undefined} style={{ flex: 1, backgroundColor: colors.bgSurface }}>
-      <View style={{ paddingTop: insets.top + 8, flex: 1 }}>
-        <View style={{ paddingHorizontal: 20, paddingBottom: 12 }}>
-          <Text style={{ fontFamily: monoFont, fontSize: 10.5, letterSpacing: 1.5, color: colors.textMuted }}>{headerDate()}</Text>
-          <Text style={{ fontSize: 22, fontWeight: '600', letterSpacing: -0.4, color: colors.textPrimary }}>Settings</Text>
+    <KeyboardAvoidingView
+      behavior={isIOS ? 'padding' : undefined}
+      style={styles.mobileRoot}
+    >
+      <View style={[styles.flex1, { paddingTop: insets.top + 8 }]}>
+        <View style={styles.mobileHeader}>
+          <Text style={styles.mobileDate}>{headerDate()}</Text>
+          <Text style={styles.mobileTitle}>Settings</Text>
         </View>
         <ScrollView
-          contentContainerStyle={{
-            paddingHorizontal: 20,
-            paddingBottom: insets.bottom + 40,
-          }}
+          contentContainerStyle={[
+            styles.mobileScrollContent,
+            { paddingBottom: insets.bottom + 40 },
+          ]}
         >
           {sections}
         </ScrollView>
@@ -150,8 +142,6 @@ export function SettingsScreen() {
     </KeyboardAvoidingView>
   );
 }
-
-// ---------------------------------------------------------------- Contexts
 
 function ContextsSection({ contexts }: { contexts: Context[] }) {
   // A context being edited, 'new' for the add form, or null.
@@ -169,74 +159,77 @@ function ContextsSection({ contexts }: { contexts: Context[] }) {
   };
 
   return (
-    <View style={{ marginTop: 8 }}>
+    <View style={styles.sectionTop}>
       <SectionLabel>CONTEXTS</SectionLabel>
-      <View style={{ gap: 8 }}>
+      <View style={styles.contextList}>
         {contexts.map((c) => (
-          <ContextRow key={c.id} context={c} onPress={() => setEditing(c)} onDelete={() => remove(c.id)} />
+          <ContextRow
+            key={c.id}
+            context={c}
+            onPress={() => setEditing(c)}
+            onDelete={() => remove(c.id)}
+          />
         ))}
 
         <Pressable
           onPress={() => setEditing('new')}
-          style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 9,
-            paddingVertical: 12,
-            paddingHorizontal: 14,
-            borderRadius: 12,
-            borderWidth: 1,
-            borderColor: colors.borderStrong,
-            borderStyle: 'dashed',
-          }}
+          style={styles.addContextBtn}
         >
           <Plus size={15} color={colors.accentPrimary} />
-          <Text style={{ fontSize: 13.5, fontWeight: '500', color: colors.accentPrimary }}>Add context</Text>
+          <Text style={styles.addContextText}>
+            Add context
+          </Text>
         </Pressable>
       </View>
 
       {deleteError ? (
-        <Text style={{ fontSize: 12, color: colors.accentNow, marginTop: 8, marginHorizontal: 4 }}>{deleteError}</Text>
+        <Text style={styles.deleteErrorText}>
+          {deleteError}
+        </Text>
       ) : null}
-      <Text style={{ fontSize: 11, color: colors.textFaint, marginTop: 8, marginHorizontal: 4 }}>
+      <Text style={styles.hintText}>
         {isWeb ? 'Tap a context to edit.' : 'Swipe a row left to delete. Tap to edit.'}
       </Text>
 
       {editing ? (
-        <ContextEditor context={editing === 'new' ? undefined : editing} onClose={() => setEditing(null)} />
+        <ContextEditor
+          context={editing === 'new' ? undefined : editing}
+          onClose={() => setEditing(null)}
+        />
       ) : null}
     </View>
   );
 }
 
-function ContextRow({ context, onPress, onDelete }: { context: Context; onPress: () => void; onDelete: () => void }) {
+function ContextRow({
+  context,
+  onPress,
+  onDelete,
+}: {
+  context: Context;
+  onPress: () => void;
+  onDelete: () => void;
+}) {
   const swipeRef = useRef<SwipeableMethods>(null);
 
   const inner = (
     <Pressable
       onPress={onPress}
-      style={{
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 11,
-        paddingVertical: 12,
-        paddingHorizontal: 14,
-        borderRadius: 12,
-        backgroundColor: colors.bgCard,
-      }}
+      style={styles.contextRow}
     >
-      <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: context.color }} />
-      <Text style={{ flex: 1, fontSize: 14.5, color: colors.textPrimary }} numberOfLines={1}>
+      <View style={[styles.contextDot, { backgroundColor: context.color }]} />
+      <Text style={styles.contextLabel} numberOfLines={1}>
         {context.label}
       </Text>
       {context.excludeFromAll ? (
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+        <View style={styles.hiddenBadge}>
           <EyeOff size={11} color={colors.textMuted} />
-          <Text style={{ fontSize: 10.5, color: colors.textMuted }}>hidden</Text>
+          <Text style={styles.hiddenText}>hidden</Text>
         </View>
       ) : null}
-      <Text style={{ fontFamily: monoFont, fontSize: 10, color: colors.textFaint }}>{context.slug}</Text>
+      <Text style={styles.contextSlug}>
+        {context.slug}
+      </Text>
     </Pressable>
   );
 
@@ -252,19 +245,10 @@ function ContextRow({ context, onPress, onDelete }: { context: Context; onPress:
             swipeRef.current?.close();
             onDelete();
           }}
-          style={{
-            width: 72,
-            marginLeft: 6,
-            borderRadius: 12,
-            borderCurve: 'continuous',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 4,
-            backgroundColor: colors.accentNow,
-          }}
+          style={styles.swipeDelete}
         >
           <Trash2 size={16} color={colors.bgSurface} />
-          <Text style={{ fontSize: 11, fontWeight: '600', color: colors.bgSurface }}>Delete</Text>
+          <Text style={styles.swipeDeleteText}>Delete</Text>
         </Pressable>
       )}
       rightThreshold={40}
@@ -279,7 +263,11 @@ function ContextRow({ context, onPress, onDelete }: { context: Context; onPress:
 function ContextEditor({ context, onClose }: { context?: Context; onClose: () => void }) {
   const { width } = useWindowDimensions();
   const wide = width >= WIDE_BREAKPOINT;
-  return wide ? <WebEditorModal context={context} onClose={onClose} /> : <SheetEditor context={context} onClose={onClose} />;
+  return wide ? (
+    <WebEditorModal context={context} onClose={onClose} />
+  ) : (
+    <SheetEditor context={context} onClose={onClose} />
+  );
 }
 
 function WebEditorModal({ context, onClose }: { context?: Context; onClose: () => void }) {
@@ -287,20 +275,11 @@ function WebEditorModal({ context, onClose }: { context?: Context; onClose: () =
     <Modal transparent visible animationType="fade" statusBarTranslucent onRequestClose={onClose}>
       <Pressable
         onPress={onClose}
-        style={{ flex: 1, backgroundColor: 'rgba(5,6,10,0.6)', justifyContent: 'center', alignItems: 'center', padding: 20 }}
+        style={styles.modalOverlay}
       >
         <Pressable
           onPress={(e) => e.stopPropagation?.()}
-          style={{
-            width: 460,
-            maxWidth: '100%',
-            borderRadius: 20,
-            borderCurve: 'continuous',
-            backgroundColor: colors.bgCardWeb,
-            borderWidth: 1,
-            borderColor: colors.borderSubtle,
-            padding: 20,
-          }}
+          style={styles.webModalCard}
         >
           <EditorForm context={context} onClose={onClose} Input={TextInput} />
         </Pressable>
@@ -334,10 +313,13 @@ function SheetEditor({ context, onClose }: { context?: Context; onClose: () => v
       keyboardBehavior="interactive"
       keyboardBlurBehavior="restore"
       android_keyboardInputMode="adjustResize"
-      handleIndicatorStyle={{ backgroundColor: colors.borderStrong }}
-      backgroundStyle={{ backgroundColor: colors.bgCardWeb }}
+      handleIndicatorStyle={styles.sheetHandle}
+      backgroundStyle={styles.sheetBackground}
     >
-      <BottomSheetScrollView contentContainerStyle={{ padding: 20, paddingBottom: 32 }} keyboardShouldPersistTaps="handled">
+      <BottomSheetScrollView
+        contentContainerStyle={styles.sheetContent}
+        keyboardShouldPersistTaps="handled"
+      >
         <EditorForm context={context} onClose={close} Input={SheetInput} />
       </BottomSheetScrollView>
     </BottomSheetModal>
@@ -346,7 +328,15 @@ function SheetEditor({ context, onClose }: { context?: Context; onClose: () => v
 
 // The editor form — shared by the mobile sheet and the web modal. `context`
 // present = edit; absent = create.
-function EditorForm({ context, onClose, Input }: { context?: Context; onClose: () => void; Input: InputComponent }) {
+function EditorForm({
+  context,
+  onClose,
+  Input,
+}: {
+  context?: Context;
+  onClose: () => void;
+  Input: InputComponent;
+}) {
   const { createContext, updateContext, deleteContext } = useTasksStore();
   const [label, setLabel] = useState(context?.label ?? '');
   const [color, setColor] = useState(context?.color ?? PALETTE[0]);
@@ -384,10 +374,9 @@ function EditorForm({ context, onClose, Input }: { context?: Context; onClose: (
   };
 
   return (
-    <View style={{ gap: 16 }}>
-      {/* Name */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-        <View style={{ width: 14, height: 14, borderRadius: 7, backgroundColor: color }} />
+    <View style={styles.editorForm}>
+      <View style={styles.editorRow}>
+        <View style={[styles.editorColorDot, { backgroundColor: color }]} />
         <Input
           value={label}
           onChangeText={setLabel}
@@ -396,28 +385,21 @@ function EditorForm({ context, onClose, Input }: { context?: Context; onClose: (
           autoFocus
           returnKeyType="done"
           onSubmitEditing={save}
-          style={{ flex: 1, fontSize: 17, fontWeight: '600', color: colors.textPrimary, paddingVertical: 2, ...webInputReset }}
+          style={[styles.editorInput, webInputReset]}
         />
-        <Pressable onPress={onClose} hitSlop={8} style={{ padding: 7, borderRadius: 9, backgroundColor: colors.bgCard }}>
+        <Pressable
+          onPress={onClose}
+          hitSlop={8}
+          style={styles.editorClose}
+        >
           <X size={16} color={colors.textSecondary} />
         </Pressable>
       </View>
 
-      {/* Hide from All */}
-      <View
-        style={{
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: 12,
-          paddingVertical: 12,
-          paddingHorizontal: 14,
-          borderRadius: 12,
-          backgroundColor: colors.bgCard,
-        }}
-      >
-        <View style={{ flex: 1 }}>
-          <Text style={{ fontSize: 13.5, color: colors.textPrimary }}>Hide from All view</Text>
-          <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 2 }}>
+      <View style={styles.hideRow}>
+        <View style={styles.flex1}>
+          <Text style={styles.hideRowTitle}>Hide from All view</Text>
+          <Text style={styles.hideRowSubtitle}>
             Show in calendar if they have a due date.
           </Text>
         </View>
@@ -429,68 +411,55 @@ function EditorForm({ context, onClose, Input }: { context?: Context; onClose: (
         />
       </View>
 
-      {/* Color */}
       <View>
-        <Text
-          style={{
-            fontFamily: monoFont,
-            fontSize: 10.5,
-            letterSpacing: 1.3,
-            textTransform: 'uppercase',
-            color: colors.textMuted,
-            marginBottom: 10,
-            marginLeft: 2,
-          }}
-        >
+        <Text style={styles.colorLabel}>
           Color
         </Text>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
-          {PALETTE.map((c) => (
-            <Pressable
-              key={c}
-              onPress={() => setColor(c)}
-              style={{
-                width: 28,
-                height: 28,
-                borderRadius: 14,
-                backgroundColor: c,
-                borderWidth: color === c ? 2 : 0,
-                borderColor: colors.textPrimary,
-              }}
-            />
-          ))}
+        <View style={styles.colorGrid}>
+          {PALETTE.map((c) => {
+            const borderWidth = color === c ? 2 : 0;
+            return (
+              <Pressable
+                key={c}
+                onPress={() => setColor(c)}
+                style={[styles.colorSwatch, { backgroundColor: c, borderWidth }]}
+              />
+            );
+          })}
         </View>
       </View>
 
-      {error ? <Text style={{ fontSize: 12.5, color: colors.accentNow }}>{error}</Text> : null}
+      {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
-      {/* Actions */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+      <View style={styles.editorRow}>
         {context ? (
           <Pressable
             onPress={remove}
             disabled={busy}
-            style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 6, paddingVertical: 8 }}
+            style={styles.editorRemove}
           >
             <Trash2 size={15} color={colors.accentNow} />
-            <Text style={{ fontSize: 13, fontWeight: '500', color: colors.accentNow }}>Delete</Text>
+            <Text style={styles.editorRemoveText}>Delete</Text>
           </Pressable>
         ) : null}
-        <View style={{ flex: 1 }} />
+        <View style={styles.flex1} />
         <Pressable
           onPress={save}
           disabled={busy || !label.trim()}
-          style={{
-            paddingHorizontal: 20,
-            paddingVertical: 10,
-            borderRadius: 11,
-            backgroundColor: label.trim() ? colors.accentPrimary : colors.bgElevated,
-          }}
+          style={[
+            styles.editorSave,
+            { backgroundColor: label.trim() ? colors.accentPrimary : colors.bgElevated },
+          ]}
         >
           {busy ? (
             <ActivityIndicator size="small" color={colors.bgSurface} />
           ) : (
-            <Text style={{ fontSize: 13.5, fontWeight: '600', color: label.trim() ? colors.bgSurface : colors.textMuted }}>
+            <Text
+              style={[
+                styles.editorSaveText,
+                { color: label.trim() ? colors.bgSurface : colors.textMuted },
+              ]}
+            >
               Save
             </Text>
           )}
@@ -499,8 +468,6 @@ function EditorForm({ context, onClose, Input }: { context?: Context; onClose: (
     </View>
   );
 }
-
-// ---------------------------------------------------------------- Account
 
 function AccountSection() {
   const router = useRouter();
@@ -513,25 +480,30 @@ function AccountSection() {
   };
 
   return (
-    <View style={{ marginTop: 28 }}>
+    <View style={styles.mt28}>
       <SectionLabel>ACCOUNT</SectionLabel>
-      <View style={{ borderRadius: 12, backgroundColor: colors.bgCard, overflow: 'hidden' }}>
+      <View style={styles.accountCard}>
         {email ? (
           <>
-            <View style={{ paddingHorizontal: 14, paddingVertical: 12 }}>
-              <Text style={{ fontSize: 11, color: colors.textMuted }}>Signed in as</Text>
-              <Text numberOfLines={1} style={{ fontFamily: monoFont, fontSize: 12.5, color: '#B8BFCC', marginTop: 2 }}>
+            <View style={styles.accountEmailRow}>
+              <Text style={styles.accountEmailLabel}>Signed in as</Text>
+              <Text
+                numberOfLines={1}
+                style={styles.accountEmail}
+              >
                 {email}
               </Text>
             </View>
-            <View style={{ height: 1, backgroundColor: colors.borderSubtle, marginHorizontal: 14 }} />
+            <View style={styles.accountDivider} />
           </>
         ) : null}
         <Pressable
           onPress={signOut}
-          style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 14, paddingVertical: 13 }}
+          style={styles.accountSignOutRow}
         >
-          <Text style={{ fontSize: 15, fontWeight: '500', color: colors.accentPrimary }}>Sign out</Text>
+          <Text style={styles.accountSignOutText}>
+            Sign out
+          </Text>
           <ChevronRight size={16} color={colors.textFaint} />
         </Pressable>
       </View>
@@ -539,42 +511,25 @@ function AccountSection() {
   );
 }
 
-// ---------------------------------------------------------------- Danger
-
 function DangerSection() {
   const [modal, setModal] = useState(false);
   return (
-    <View style={{ marginTop: 28 }}>
+    <View style={styles.mt28}>
       <SectionLabel>DANGER ZONE</SectionLabel>
-      <View
-        style={{
-          borderRadius: 12,
-          padding: 14,
-          backgroundColor: 'rgba(217,102,139,0.06)',
-          borderWidth: 1,
-          borderColor: 'rgba(217,102,139,0.18)',
-        }}
-      >
-        <Text style={{ fontSize: 14, fontWeight: '500', color: colors.accentNow }}>Reset all data</Text>
-        <Text style={{ fontSize: 11.5, lineHeight: 17, color: colors.textSecondary, marginTop: 3, marginBottom: 12 }}>
-          Permanently deletes all tasks, recurring rules and timers. Your contexts and sign-in are kept. This cannot be undone.
+      <View style={styles.dangerCard}>
+        <Text style={styles.dangerTitle}>
+          Reset all data
+        </Text>
+        <Text style={styles.dangerText}>
+          Permanently deletes all tasks, recurring rules and timers. Your contexts and sign-in are
+          kept. This cannot be undone.
         </Text>
         <Pressable
           onPress={() => setModal(true)}
-          style={{
-            flexDirection: 'row',
-            alignSelf: 'flex-start',
-            alignItems: 'center',
-            gap: 7,
-            borderRadius: 10,
-            paddingHorizontal: 14,
-            paddingVertical: 8,
-            borderWidth: 1,
-            borderColor: 'rgba(217,102,139,0.4)',
-          }}
+          style={styles.dangerBtn}
         >
           <Trash2 size={13} color={colors.accentNow} />
-          <Text style={{ fontSize: 12.5, fontWeight: '600', color: colors.accentNow }}>Reset…</Text>
+          <Text style={styles.dangerBtnText}>Reset…</Text>
         </Pressable>
       </View>
       {modal ? <ResetModal onClose={() => setModal(false)} /> : null}
@@ -604,28 +559,23 @@ function ResetModal({ onClose }: { onClose: () => void }) {
 
   return (
     <Modal transparent visible animationType="fade" statusBarTranslucent onRequestClose={onClose}>
-      <KeyboardAvoidingView behavior={isIOS ? 'padding' : undefined} style={{ flex: 1 }}>
+      <KeyboardAvoidingView behavior={isIOS ? 'padding' : undefined} style={styles.flex1}>
         <Pressable
           onPress={onClose}
-          style={{ flex: 1, backgroundColor: 'rgba(5,6,10,0.7)', justifyContent: 'center', alignItems: 'center', padding: 24 }}
+          style={styles.resetOverlay}
         >
           <Pressable
             onPress={(e) => e.stopPropagation?.()}
-            style={{
-              width: 400,
-              maxWidth: '100%',
-              borderRadius: 18,
-              borderCurve: 'continuous',
-              backgroundColor: colors.bgCardWeb,
-              borderWidth: 1,
-              borderColor: colors.borderSubtle,
-              padding: 20,
-            }}
+            style={styles.resetCard}
           >
-            <Text style={{ fontSize: 17, fontWeight: '600', color: colors.textPrimary, marginBottom: 8 }}>Reset all data</Text>
-            <Text style={{ fontSize: 13, lineHeight: 19, color: colors.textSecondary, marginBottom: 16 }}>
-              This permanently deletes all tasks, recurring rules and timers. Your contexts and sign-in are kept. Type{' '}
-              <Text style={{ fontFamily: monoFont, color: colors.textPrimary }}>RESET</Text> to confirm.
+            <Text style={styles.resetTitle}>
+              Reset all data
+            </Text>
+            <Text style={styles.resetBody}>
+              This permanently deletes all tasks, recurring rules and timers. Your contexts and
+              sign-in are kept. Type{' '}
+              <Text style={styles.resetBodyEmphasis}>RESET</Text> to
+              confirm.
             </Text>
             <TextInput
               value={text}
@@ -635,43 +585,42 @@ function ResetModal({ onClose }: { onClose: () => void }) {
               autoCapitalize="characters"
               autoCorrect={false}
               autoFocus
-              style={{
-                backgroundColor: colors.bgCard,
-                borderWidth: 1,
-                borderColor: colors.borderSubtle,
-                borderRadius: 11,
-                paddingHorizontal: 12,
-                paddingVertical: 11,
-                fontSize: 14,
-                letterSpacing: 2,
-                color: colors.textPrimary,
-                ...webInputReset,
-              }}
+              style={[styles.resetInput, webInputReset]}
             />
-            {error ? <Text style={{ fontSize: 12.5, color: colors.accentNow, marginTop: 10 }}>{error}</Text> : null}
-            <View style={{ flexDirection: 'row', gap: 10, marginTop: 16 }}>
+            {error ? (
+              <Text style={styles.resetErrorText}>
+                {error}
+              </Text>
+            ) : null}
+            <View style={styles.resetActions}>
               <Pressable
                 onPress={onClose}
                 disabled={busy}
-                style={{ flex: 1, borderRadius: 11, paddingVertical: 11, alignItems: 'center', backgroundColor: colors.bgElevated }}
+                style={styles.resetCancel}
               >
-                <Text style={{ fontSize: 13, fontWeight: '500', color: colors.textPrimary }}>Cancel</Text>
+                <Text style={styles.resetCancelText}>
+                  Cancel
+                </Text>
               </Pressable>
               <Pressable
                 onPress={doReset}
                 disabled={!ok || busy}
-                style={{
-                  flex: 1,
-                  borderRadius: 11,
-                  paddingVertical: 11,
-                  alignItems: 'center',
-                  backgroundColor: ok ? colors.accentNow : colors.bgElevated,
-                }}
+                style={[
+                  styles.resetConfirm,
+                  { backgroundColor: ok ? colors.accentNow : colors.bgElevated },
+                ]}
               >
                 {busy ? (
                   <ActivityIndicator size="small" color={colors.bgSurface} />
                 ) : (
-                  <Text style={{ fontSize: 13, fontWeight: '700', color: ok ? colors.bgSurface : colors.textMuted }}>Reset</Text>
+                  <Text
+                    style={[
+                      styles.resetConfirmText,
+                      { color: ok ? colors.bgSurface : colors.textMuted },
+                    ]}
+                  >
+                    Reset
+                  </Text>
                 )}
               </Pressable>
             </View>
@@ -682,20 +631,283 @@ function ResetModal({ onClose }: { onClose: () => void }) {
   );
 }
 
-// ---------------------------------------------------------------- shared
-
 function SectionLabel({ children }: { children: string }) {
   return (
-    <Text
-      style={{
-        fontFamily: monoFont,
-        fontSize: 10.5,
-        letterSpacing: 1.5,
-        color: colors.textFaint,
-        marginBottom: 10,
-      }}
-    >
+    <Text style={styles.sectionLabel}>
       {children}
     </Text>
   );
 }
+
+const styles = StyleSheet.create({
+  wideRoot: { flex: 1, flexDirection: 'row', backgroundColor: colors.bgBase },
+  sidebar: {
+    width: 240,
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+    backgroundColor: '#10141B',
+    borderRightWidth: 1,
+    borderRightColor: colors.bgCard,
+  },
+  sidebarHeader: { paddingHorizontal: 8, paddingBottom: 20 },
+  sidebarLogo: {
+    fontFamily: monoFont,
+    fontSize: 10,
+    letterSpacing: 2,
+    color: colors.textMuted,
+  },
+  flex1: { flex: 1 },
+  sidebarSignOut: { paddingHorizontal: 8, paddingVertical: 8 },
+  sidebarSignOutText: { fontSize: 12, color: colors.textMuted },
+  wideMain: { flex: 1, paddingHorizontal: 24 },
+  wideTitle: {
+    fontSize: 22,
+    fontWeight: '600',
+    letterSpacing: -0.4,
+    color: colors.textPrimary,
+    marginBottom: 16,
+  },
+  wideScrollContent: { paddingBottom: 40 },
+  mobileRoot: { flex: 1, backgroundColor: colors.bgSurface },
+  mobileHeader: { paddingHorizontal: 20, paddingBottom: 12 },
+  mobileDate: {
+    fontFamily: monoFont,
+    fontSize: 10.5,
+    letterSpacing: 1.5,
+    color: colors.textMuted,
+  },
+  mobileTitle: {
+    fontSize: 22,
+    fontWeight: '600',
+    letterSpacing: -0.4,
+    color: colors.textPrimary,
+  },
+  mobileScrollContent: { paddingHorizontal: 20 },
+  sectionTop: { marginTop: 8 },
+  contextList: { gap: 8 },
+  addContextBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 9,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.borderStrong,
+    borderStyle: 'dashed',
+  },
+  addContextText: { fontSize: 13.5, fontWeight: '500', color: colors.accentPrimary },
+  deleteErrorText: { fontSize: 12, color: colors.accentNow, marginTop: 8, marginHorizontal: 4 },
+  hintText: { fontSize: 11, color: colors.textFaint, marginTop: 8, marginHorizontal: 4 },
+  contextRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 11,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    backgroundColor: colors.bgCard,
+  },
+  contextDot: { width: 12, height: 12, borderRadius: 6 },
+  contextLabel: { flex: 1, fontSize: 14.5, color: colors.textPrimary },
+  hiddenBadge: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  hiddenText: { fontSize: 10.5, color: colors.textMuted },
+  contextSlug: { fontFamily: monoFont, fontSize: 10, color: colors.textFaint },
+  swipeDelete: {
+    width: 72,
+    marginLeft: 6,
+    borderRadius: 12,
+    borderCurve: 'continuous',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    backgroundColor: colors.accentNow,
+  },
+  swipeDeleteText: { fontSize: 11, fontWeight: '600', color: colors.bgSurface },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(5,6,10,0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  webModalCard: {
+    width: 460,
+    maxWidth: '100%',
+    borderRadius: 20,
+    borderCurve: 'continuous',
+    backgroundColor: colors.bgCardWeb,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    padding: 20,
+  },
+  sheetHandle: { backgroundColor: colors.borderStrong },
+  sheetBackground: { backgroundColor: colors.bgCardWeb },
+  sheetContent: { padding: 20, paddingBottom: 32 },
+  editorForm: { gap: 16 },
+  editorRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  editorColorDot: { width: 14, height: 14, borderRadius: 7 },
+  editorInput: {
+    flex: 1,
+    fontSize: 17,
+    fontWeight: '600',
+    color: colors.textPrimary,
+    paddingVertical: 2,
+  },
+  editorClose: { padding: 7, borderRadius: 9, backgroundColor: colors.bgCard },
+  hideRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    backgroundColor: colors.bgCard,
+  },
+  hideRowTitle: { fontSize: 13.5, color: colors.textPrimary },
+  hideRowSubtitle: { fontSize: 11, color: colors.textMuted, marginTop: 2 },
+  colorLabel: {
+    fontFamily: monoFont,
+    fontSize: 10.5,
+    letterSpacing: 1.3,
+    textTransform: 'uppercase',
+    color: colors.textMuted,
+    marginBottom: 10,
+    marginLeft: 2,
+  },
+  colorGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  colorSwatch: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderColor: colors.textPrimary,
+  },
+  errorText: { fontSize: 12.5, color: colors.accentNow },
+  editorRemove: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 8,
+  },
+  editorRemoveText: { fontSize: 13, fontWeight: '500', color: colors.accentNow },
+  editorSave: {
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 11,
+  },
+  editorSaveText: {
+    fontSize: 13.5,
+    fontWeight: '600',
+  },
+  mt28: { marginTop: 28 },
+  accountCard: { borderRadius: 12, backgroundColor: colors.bgCard, overflow: 'hidden' },
+  accountEmailRow: { paddingHorizontal: 14, paddingVertical: 12 },
+  accountEmailLabel: { fontSize: 11, color: colors.textMuted },
+  accountEmail: { fontFamily: monoFont, fontSize: 12.5, color: '#B8BFCC', marginTop: 2 },
+  accountDivider: { height: 1, backgroundColor: colors.borderSubtle, marginHorizontal: 14 },
+  accountSignOutRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 14,
+    paddingVertical: 13,
+  },
+  accountSignOutText: { fontSize: 15, fontWeight: '500', color: colors.accentPrimary },
+  dangerCard: {
+    borderRadius: 12,
+    padding: 14,
+    backgroundColor: 'rgba(217,102,139,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(217,102,139,0.18)',
+  },
+  dangerTitle: { fontSize: 14, fontWeight: '500', color: colors.accentNow },
+  dangerText: {
+    fontSize: 11.5,
+    lineHeight: 17,
+    color: colors.textSecondary,
+    marginTop: 3,
+    marginBottom: 12,
+  },
+  dangerBtn: {
+    flexDirection: 'row',
+    alignSelf: 'flex-start',
+    alignItems: 'center',
+    gap: 7,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(217,102,139,0.4)',
+  },
+  dangerBtnText: { fontSize: 12.5, fontWeight: '600', color: colors.accentNow },
+  resetOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(5,6,10,0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  resetCard: {
+    width: 400,
+    maxWidth: '100%',
+    borderRadius: 18,
+    borderCurve: 'continuous',
+    backgroundColor: colors.bgCardWeb,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    padding: 20,
+  },
+  resetTitle: {
+    fontSize: 17,
+    fontWeight: '600',
+    color: colors.textPrimary,
+    marginBottom: 8,
+  },
+  resetBody: {
+    fontSize: 13,
+    lineHeight: 19,
+    color: colors.textSecondary,
+    marginBottom: 16,
+  },
+  resetBodyEmphasis: { fontFamily: monoFont, color: colors.textPrimary },
+  resetInput: {
+    backgroundColor: colors.bgCard,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    borderRadius: 11,
+    paddingHorizontal: 12,
+    paddingVertical: 11,
+    fontSize: 14,
+    letterSpacing: 2,
+    color: colors.textPrimary,
+  },
+  resetErrorText: { fontSize: 12.5, color: colors.accentNow, marginTop: 10 },
+  resetActions: { flexDirection: 'row', gap: 10, marginTop: 16 },
+  resetCancel: {
+    flex: 1,
+    borderRadius: 11,
+    paddingVertical: 11,
+    alignItems: 'center',
+    backgroundColor: colors.bgElevated,
+  },
+  resetCancelText: { fontSize: 13, fontWeight: '500', color: colors.textPrimary },
+  resetConfirm: {
+    flex: 1,
+    borderRadius: 11,
+    paddingVertical: 11,
+    alignItems: 'center',
+  },
+  resetConfirmText: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  sectionLabel: {
+    fontFamily: monoFont,
+    fontSize: 10.5,
+    letterSpacing: 1.5,
+    color: colors.textFaint,
+    marginBottom: 10,
+  },
+});

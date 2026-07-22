@@ -1,21 +1,12 @@
 import { type ReactNode } from 'react';
-import { Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { Bell, Clock } from 'lucide-react-native';
 import { colors, monoFont, radius } from '../../theme';
 import { DurationField } from './duration-field';
 
 export function FieldLabel({ children }: { children: string }) {
   return (
-    <Text
-      style={{
-        fontFamily: monoFont,
-        fontSize: 10.5,
-        letterSpacing: 1,
-        textTransform: 'uppercase',
-        color: colors.textMuted,
-        marginBottom: 8,
-      }}
-    >
+    <Text style={styles.fieldLabel}>
       {children}
     </Text>
   );
@@ -54,35 +45,15 @@ function WebField({
   };
 
   return (
-    <View style={{ flex: 1 }}>
+    <View style={styles.fieldWrap}>
       <FieldLabel>{label}</FieldLabel>
-      <View
-        style={{
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: 8,
-          borderRadius: radius.card,
-          paddingHorizontal: 12,
-          paddingVertical: 10,
-          backgroundColor: colors.bgCard,
-          borderWidth: 1,
-          borderColor: colors.borderSubtle,
-        }}
-      >
+      <View style={styles.fieldRow}>
         {icon}
         <input
           type={mode === 'date' ? 'date' : 'datetime-local'}
           value={toInputValue(value, mode)}
           onChange={onInput}
-          style={{
-            flex: 1,
-            background: 'transparent',
-            border: 'none',
-            outline: 'none',
-            color: colors.textPrimary,
-            fontSize: 13,
-            colorScheme: 'dark',
-          }}
+          style={inputStyle}
         />
       </View>
     </View>
@@ -109,8 +80,8 @@ export function DateFieldsSection({
   showReminder = true,
 }: Props) {
   return (
-    <View style={{ gap: 16 }}>
-      <View style={{ flexDirection: 'row', gap: 12 }}>
+    <View style={styles.container}>
+      <View style={styles.row}>
         <WebField
           label="Deadline"
           icon={<Clock size={13} color={colors.textSecondary} />}
@@ -132,3 +103,40 @@ export function DateFieldsSection({
     </View>
   );
 }
+
+// The date input is a DOM <input> (web), not an RN component — its style takes
+// web CSS props that StyleSheet.create can't type, so it lives as a plain const.
+const inputStyle = {
+  flex: 1,
+  background: 'transparent',
+  border: 'none',
+  outline: 'none',
+  color: colors.textPrimary,
+  fontSize: 13,
+  colorScheme: 'dark',
+} as const;
+
+const styles = StyleSheet.create({
+  fieldLabel: {
+    fontFamily: monoFont,
+    fontSize: 10.5,
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+    color: colors.textMuted,
+    marginBottom: 8,
+  },
+  fieldWrap: { flex: 1 },
+  fieldRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderRadius: radius.card,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    backgroundColor: colors.bgCard,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+  },
+  container: { gap: 16 },
+  row: { flexDirection: 'row', gap: 12 },
+});

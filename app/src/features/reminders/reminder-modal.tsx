@@ -1,4 +1,4 @@
-import { Modal, Pressable, Text, View } from 'react-native';
+import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Bell } from 'lucide-react-native';
 import { colors, monoFont, radius } from '../../theme';
 import { api } from '../../lib/api';
@@ -23,44 +23,72 @@ export function ReminderModal() {
 
   return (
     <Modal transparent visible animationType="fade" statusBarTranslucent onRequestClose={dismiss}>
-      <View style={{ flex: 1, backgroundColor: 'rgba(5,6,10,0.75)', justifyContent: 'center', alignItems: 'center', padding: 24 }}>
-        <View
-          style={{
-            width: '100%',
-            maxWidth: 380,
-            borderRadius: 20,
-            borderCurve: 'continuous',
-            backgroundColor: colors.bgCardWeb,
-            borderWidth: 1,
-            borderColor: colors.borderSubtle,
-            padding: 24,
-            gap: 16,
-          }}
-        >
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+      <View style={styles.overlay}>
+        <View style={styles.card}>
+          <View style={styles.headerRow}>
             <Bell size={16} color={colors.accentReminder} />
-            <Text style={{ fontFamily: monoFont, fontSize: 10.5, letterSpacing: 1.5, color: colors.textMuted }}>REMINDER</Text>
+            <Text style={styles.label}>REMINDER</Text>
           </View>
-          <Text style={{ fontSize: 17, fontWeight: '600', color: colors.textPrimary }}>{active.title}</Text>
-          <View style={{ gap: 8 }}>
+          <Text style={styles.title}>{active.title}</Text>
+          <View style={styles.actions}>
             {SNOOZE_ACTIONS.map((a) => (
               <Pressable
                 key={a.identifier}
                 onPress={() => snooze(a.minutes)}
-                style={{ paddingVertical: 12, borderRadius: radius.card, borderCurve: 'continuous', backgroundColor: colors.bgCard, borderWidth: 1, borderColor: colors.borderSubtle, alignItems: 'center' }}
+                style={styles.snoozeBtn}
               >
-                <Text style={{ fontSize: 14, fontWeight: '500', color: colors.textPrimary }}>{a.buttonTitle}</Text>
+                <Text style={styles.snoozeText}>{a.buttonTitle}</Text>
               </Pressable>
             ))}
           </View>
-          <Pressable
-            onPress={dismiss}
-            style={{ paddingVertical: 12, borderRadius: radius.card, borderCurve: 'continuous', backgroundColor: colors.accentPrimary, alignItems: 'center' }}
-          >
-            <Text style={{ fontSize: 14, fontWeight: '600', color: colors.bgSurface }}>Dismiss</Text>
+          <Pressable onPress={dismiss} style={styles.dismissBtn}>
+            <Text style={styles.dismissText}>Dismiss</Text>
           </Pressable>
         </View>
       </View>
     </Modal>
   );
 }
+
+const styles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(5,6,10,0.75)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  card: {
+    width: '100%',
+    maxWidth: 380,
+    borderRadius: 20,
+    borderCurve: 'continuous',
+    backgroundColor: colors.bgCardWeb,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    padding: 24,
+    gap: 16,
+  },
+  headerRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  label: { fontFamily: monoFont, fontSize: 10.5, letterSpacing: 1.5, color: colors.textMuted },
+  title: { fontSize: 17, fontWeight: '600', color: colors.textPrimary },
+  actions: { gap: 8 },
+  snoozeBtn: {
+    paddingVertical: 12,
+    borderRadius: radius.card,
+    borderCurve: 'continuous',
+    backgroundColor: colors.bgCard,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    alignItems: 'center',
+  },
+  snoozeText: { fontSize: 14, fontWeight: '500', color: colors.textPrimary },
+  dismissBtn: {
+    paddingVertical: 12,
+    borderRadius: radius.card,
+    borderCurve: 'continuous',
+    backgroundColor: colors.accentPrimary,
+    alignItems: 'center',
+  },
+  dismissText: { fontSize: 14, fontWeight: '600', color: colors.bgSurface },
+});

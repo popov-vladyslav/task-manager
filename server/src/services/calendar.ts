@@ -1,10 +1,8 @@
 import { and, isNotNull, lte } from 'drizzle-orm';
-import type { CalendarData } from '@task-manager/shared';
+import { DEFAULT_DURATION_MIN, type CalendarData } from '@task-manager/shared';
 import { db } from '../db/client';
 import { tasks } from '../db/schema';
 import { badRequest } from '../lib/errors';
-
-const DEFAULT_DURATION_MIN = 30;
 
 // Scheduled task time-blocks overlapping [from, to]. A task with a deadline
 // (due_at) is a block from due_at for duration_min minutes (default 30).

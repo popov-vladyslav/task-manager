@@ -3,11 +3,14 @@ import { z } from 'zod';
 import type { TaskStatus } from '@task-manager/shared';
 import * as svc from '../services/tasks';
 import * as commentsSvc from '../services/comments';
+import { isValidRule } from '../lib/recurrence';
 
 const router = Router();
 
 const recurrenceSchema = z.object({
-  rule: z.string().min(1),
+  // Reject malformed rules at the boundary — the service stores this verbatim and
+  // the scheduler parses it later, so an unparseable rule would silently never spawn.
+  rule: z.string().min(1).refine(isValidRule, 'Invalid recurrence rule'),
   remindTime: z.string().nullish(),
   dueOffsetDays: z.number().int().optional(),
 });
@@ -77,7 +80,6 @@ router.post('/:id/snooze', async (req, res) => {
   res.json(await svc.snoozeTask(req.params.id, minutes));
 });
 
-// ---- comments ----
 router.get('/:id/comments', async (req, res) => {
   res.json(await commentsSvc.listComments(req.params.id));
 });

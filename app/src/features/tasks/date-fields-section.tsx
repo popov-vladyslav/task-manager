@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import DateTimePicker, { type DateTimePickerChangeEvent } from '@react-native-community/datetimepicker';
 import { Bell, Clock, X } from 'lucide-react-native';
 import { colors, monoFont, radius, shortDateTime } from '../../theme';
@@ -9,16 +9,7 @@ const isAndroid = process.env.EXPO_OS === 'android';
 
 export function FieldLabel({ children }: { children: string }) {
   return (
-    <Text
-      style={{
-        fontFamily: monoFont,
-        fontSize: 10.5,
-        letterSpacing: 1,
-        textTransform: 'uppercase',
-        color: colors.textMuted,
-        marginBottom: 8,
-      }}
-    >
+    <Text style={styles.fieldLabel}>
       {children}
     </Text>
   );
@@ -40,26 +31,18 @@ function FieldButton({
   onClear: () => void;
 }) {
   return (
-    <View style={{ flex: 1 }}>
+    <View style={styles.fieldButtonWrap}>
       <FieldLabel>{label}</FieldLabel>
       <Pressable
         onPress={onPress}
-        style={{
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: 8,
-          borderRadius: radius.card,
-          borderCurve: 'continuous',
-          paddingHorizontal: 12,
-          paddingVertical: 10,
-          backgroundColor: colors.bgCard,
-          borderWidth: 1,
-          borderColor: active ? colors.accentPrimary : colors.borderSubtle,
-        }}
+        style={[
+          styles.fieldButton,
+          { borderColor: active ? colors.accentPrimary : colors.borderSubtle },
+        ]}
       >
         {icon}
         <Text
-          style={{ flex: 1, fontSize: 13, color: display ? colors.textPrimary : colors.textMuted }}
+          style={[styles.fieldButtonText, { color: display ? colors.textPrimary : colors.textMuted }]}
           numberOfLines={1}
         >
           {display ?? 'Add'}
@@ -119,7 +102,7 @@ export function DateFieldsSection({
 
   return (
     <View>
-      <View style={{ flexDirection: 'row', gap: 12 }}>
+      <View style={styles.row}>
         <FieldButton
           label="Deadline"
           icon={<Clock size={13} color={colors.textSecondary} />}
@@ -147,37 +130,20 @@ export function DateFieldsSection({
       </View>
 
       {picker && !isAndroid ? (
-        <View
-          style={{
-            marginTop: 12,
-            gap: 8,
-            paddingHorizontal: 8,
-            paddingVertical: 8,
-            borderRadius: radius.card,
-            borderCurve: 'continuous',
-            backgroundColor: colors.bgCard,
-            borderWidth: 1,
-            borderColor: colors.borderSubtle,
-          }}
-        >
+        <View style={styles.pickerBox}>
           <DateTimePicker
             value={value ? new Date(value) : new Date()}
             mode={mode}
             display="spinner"
             themeVariant="dark"
-            style={{ alignSelf: 'stretch' }}
+            style={styles.picker}
             onValueChange={onPickerChange}
           />
           <Pressable
             onPress={() => setPicker(null)}
-            style={{
-              alignItems: 'center',
-              paddingVertical: 10,
-              borderRadius: radius.card,
-              backgroundColor: colors.accentPrimary,
-            }}
+            style={styles.doneBtn}
           >
-            <Text style={{ fontSize: 13, fontWeight: '600', color: colors.bgSurface }}>Done</Text>
+            <Text style={styles.doneText}>Done</Text>
           </Pressable>
         </View>
       ) : null}
@@ -192,10 +158,55 @@ export function DateFieldsSection({
       ) : null}
 
       {dueAt ? (
-        <View style={{ marginTop: 16 }}>
+        <View style={styles.durationWrap}>
           <DurationField value={durationMin} onChange={onChangeDuration} />
         </View>
       ) : null}
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  fieldLabel: {
+    fontFamily: monoFont,
+    fontSize: 10.5,
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+    color: colors.textMuted,
+    marginBottom: 8,
+  },
+  fieldButtonWrap: { flex: 1 },
+  fieldButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderRadius: radius.card,
+    borderCurve: 'continuous',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    backgroundColor: colors.bgCard,
+    borderWidth: 1,
+  },
+  fieldButtonText: { flex: 1, fontSize: 13 },
+  row: { flexDirection: 'row', gap: 12 },
+  pickerBox: {
+    marginTop: 12,
+    gap: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 8,
+    borderRadius: radius.card,
+    borderCurve: 'continuous',
+    backgroundColor: colors.bgCard,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+  },
+  picker: { alignSelf: 'stretch' },
+  doneBtn: {
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderRadius: radius.card,
+    backgroundColor: colors.accentPrimary,
+  },
+  doneText: { fontSize: 13, fontWeight: '600', color: colors.bgSurface },
+  durationWrap: { marginTop: 16 },
+});

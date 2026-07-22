@@ -4,6 +4,7 @@ import {
   Modal,
   Pressable,
   ScrollView,
+  StyleSheet,
   Text,
   TextInput,
   useWindowDimensions,
@@ -20,8 +21,22 @@ import {
   type BottomSheetBackdropProps,
 } from '@gorhom/bottom-sheet';
 import { ChevronRight, MessageSquare, Trash2, X } from 'lucide-react-native';
-import type { Comment, Context, RecurrenceInput, Task, UpdateTaskInput } from '@task-manager/shared';
-import { colors, monoFont, nextInstanceLabel, radius, shortDateTime, webInputReset } from '../../theme';
+import type {
+  Comment,
+  Context,
+  RecurrenceInput,
+  Task,
+  UpdateTaskInput,
+} from '@task-manager/shared';
+import {
+  colors,
+  monoFont,
+  nextInstanceLabel,
+  radius,
+  shortDateTime,
+  webInputReset,
+  WIDE_BREAKPOINT,
+} from '../../theme';
 import { api } from '../../lib/api';
 import { useTasksStore } from '../../store/tasks';
 import { DateFieldsSection, FieldLabel } from './date-fields-section';
@@ -35,7 +50,6 @@ interface Props {
   autoFocusTitle?: boolean; // focus the title on open (e.g. just-created task)
 }
 
-const WIDE_BREAKPOINT = 768;
 const isIOS = process.env.EXPO_OS === 'ios';
 const isWeb = process.env.EXPO_OS === 'web';
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
@@ -50,11 +64,23 @@ const SheetInput: InputComponent = isWeb ? TextInput : BottomSheetTextInput;
 const WEEKDAYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
 // Weekly multi-select: Monday-first display order + single-letter labels.
 const WEEK_ORDER = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const;
-const DAY_LABEL: Record<string, string> = { mon: 'M', tue: 'T', wed: 'W', thu: 'T', fri: 'F', sat: 'S', sun: 'S' };
+const DAY_LABEL: Record<string, string> = {
+  mon: 'M',
+  tue: 'T',
+  wed: 'W',
+  thu: 'T',
+  fri: 'F',
+  sat: 'S',
+  sun: 'S',
+};
 // Selected weekdays parsed from a 'weekly:mon,wed' rule.
 function weeklyDays(rule: string | null): string[] {
   if (!rule?.startsWith('weekly:')) return [];
-  return rule.slice(7).split(',').map((d) => d.trim()).filter(Boolean);
+  return rule
+    .slice(7)
+    .split(',')
+    .map((d) => d.trim())
+    .filter(Boolean);
 }
 type RecKind = 'none' | 'daily' | 'weekly' | 'monthly';
 const REC_OPTIONS: { k: RecKind; label: string }[] = [
@@ -88,20 +114,7 @@ function recInput(kind: RecKind, base: Date, hasDue: boolean): RecurrenceInput |
 
 // A group heading (Date & time / Organization) — larger than the per-field label.
 function GroupLabel({ children }: { children: string }) {
-  return (
-    <Text
-      style={{
-        fontFamily: monoFont,
-        fontSize: 11,
-        letterSpacing: 1.5,
-        textTransform: 'uppercase',
-        color: colors.textFaint,
-        marginBottom: 12,
-      }}
-    >
-      {children}
-    </Text>
-  );
+  return <Text style={styles.groupLabel}>{children}</Text>;
 }
 
 function Pill({
@@ -118,21 +131,21 @@ function Pill({
   return (
     <Pressable
       onPress={onPress}
-      style={{
-        paddingHorizontal: 12,
-        paddingVertical: 6,
-        borderRadius: 999,
-        backgroundColor: active ? (color ?? colors.bgElevated) : colors.bgCard,
-        borderWidth: 1,
-        borderColor: active ? (color ?? colors.borderStrong) : colors.borderSubtle,
-      }}
+      style={[
+        styles.pill,
+        {
+          backgroundColor: active ? (color ?? colors.bgElevated) : colors.bgCard,
+          borderColor: active ? (color ?? colors.borderStrong) : colors.borderSubtle,
+        },
+      ]}
     >
       <Text
-        style={{
-          fontSize: 12,
-          fontWeight: '500',
-          color: active ? (color ? colors.bgBase : colors.textPrimary) : colors.textSecondary,
-        }}
+        style={[
+          styles.pillText,
+          {
+            color: active ? (color ? colors.bgBase : colors.textPrimary) : colors.textSecondary,
+          },
+        ]}
       >
         {label}
       </Text>
@@ -187,7 +200,9 @@ function DetailContent({
     if (set.has(d)) set.delete(d);
     else set.add(d);
     if (set.size === 0) return; // keep at least one day
-    onPatch(task.id, { recurrence: { rule: `weekly:${WEEK_ORDER.filter((x) => set.has(x)).join(',')}` } });
+    onPatch(task.id, {
+      recurrence: { rule: `weekly:${WEEK_ORDER.filter((x) => set.has(x)).join(',')}` },
+    });
   };
 
   const addComment = async () => {
@@ -219,7 +234,7 @@ function DetailContent({
   return (
     <>
       {wide ? (
-        <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
+        <View style={styles.titleRow}>
           <Input
             value={title}
             onChangeText={setTitle}
@@ -229,9 +244,9 @@ function DetailContent({
             selectTextOnFocus={autoFocusTitle}
             multiline
             scrollEnabled={false}
-            style={{ flex: 1, fontSize: 18, fontWeight: '600', color: colors.textPrimary, ...webInputReset }}
+            style={[styles.wideTitleInput, webInputReset]}
           />
-          <Pressable onPress={onClose} hitSlop={8} style={{ padding: 6, borderRadius: 8, backgroundColor: colors.bgElevated, marginLeft: 8 }}>
+          <Pressable onPress={onClose} hitSlop={8} style={styles.closeBtn}>
             <X size={15} color={colors.textSecondary} />
           </Pressable>
         </View>
@@ -244,11 +259,10 @@ function DetailContent({
           autoFocus={autoFocusTitle}
           multiline
           scrollEnabled={false}
-          style={{ fontSize: 17, fontWeight: '600', color: colors.textPrimary, ...webInputReset }}
+          style={[styles.narrowTitleInput, webInputReset]}
         />
       )}
 
-      {/* ---- Date & time ---- */}
       <View>
         <GroupLabel>Date & time</GroupLabel>
         <DateFieldsSection
@@ -261,13 +275,12 @@ function DetailContent({
         />
       </View>
 
-      {/* ---- Organization ---- */}
       <View>
         <GroupLabel>Organization</GroupLabel>
-        <View style={{ gap: 18 }}>
+        <View style={styles.orgGroup}>
           <View>
             <FieldLabel>Context</FieldLabel>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+            <View style={styles.rowWrap}>
               {contexts.map((c) => {
                 const active = task.contextId === c.id;
                 return (
@@ -285,36 +298,42 @@ function DetailContent({
 
           <View>
             <FieldLabel>Repeat</FieldLabel>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+            <View style={styles.rowWrap}>
               {REC_OPTIONS.map((o) => (
                 <Pill
                   key={o.k}
                   active={activeKind === o.k}
                   label={o.label}
-                  onPress={() => onPatch(task.id, { recurrence: recInput(o.k, base, !!task.dueAt) })}
+                  onPress={() =>
+                    onPatch(task.id, { recurrence: recInput(o.k, base, !!task.dueAt) })
+                  }
                 />
               ))}
             </View>
             {activeKind === 'weekly' ? (
-              <View style={{ flexDirection: 'row', gap: 6, marginTop: 10 }}>
+              <View style={styles.weekRow}>
                 {WEEK_ORDER.map((d) => {
                   const on = selectedWeekdays.includes(d);
                   return (
                     <Pressable
                       key={d}
                       onPress={() => toggleWeekday(d)}
-                      style={{
-                        width: 34,
-                        height: 34,
-                        borderRadius: 17,
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        backgroundColor: on ? colors.accentPrimary : colors.bgCard,
-                        borderWidth: 1,
-                        borderColor: on ? colors.accentPrimary : colors.borderSubtle,
-                      }}
+                      style={[
+                        styles.weekday,
+                        {
+                          backgroundColor: on ? colors.accentPrimary : colors.bgCard,
+                          borderColor: on ? colors.accentPrimary : colors.borderSubtle,
+                        },
+                      ]}
                     >
-                      <Text style={{ fontSize: 12, fontWeight: '600', color: on ? colors.bgBase : colors.textSecondary }}>
+                      <Text
+                        style={[
+                          styles.weekdayText,
+                          {
+                            color: on ? colors.bgBase : colors.textSecondary,
+                          },
+                        ]}
+                      >
                         {DAY_LABEL[d]}
                       </Text>
                     </Pressable>
@@ -323,7 +342,7 @@ function DetailContent({
               </View>
             ) : null}
             {task.recurrenceId && task.nextInstance ? (
-              <Text style={{ marginTop: 8, fontSize: 11, color: colors.textMuted }}>
+              <Text style={styles.nextInstance}>
                 Next instance: {nextInstanceLabel(task.nextInstance)}
               </Text>
             ) : null}
@@ -331,43 +350,27 @@ function DetailContent({
         </View>
       </View>
 
-      {/* ---- Comments ---- */}
       <View>
         <FieldLabel>Comments</FieldLabel>
         {comments.map((c) => (
-          <View
-            key={c.id}
-            style={{ borderRadius: radius.card, borderCurve: 'continuous', paddingHorizontal: 12, paddingVertical: 10, marginBottom: 8, backgroundColor: colors.bgCard }}
-          >
-            <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
-              <Text selectable style={{ flex: 1, fontSize: 13, lineHeight: 18, color: '#B8BFCC' }}>
+          <View key={c.id} style={styles.comment}>
+            <View style={styles.titleRow}>
+              <Text selectable style={styles.commentBody}>
                 {c.body}
               </Text>
-              <Pressable onPress={() => removeComment(c.id)} hitSlop={8} style={{ marginLeft: 8 }}>
+              <Pressable
+                onPress={() => removeComment(c.id)}
+                hitSlop={8}
+                style={styles.commentRemove}
+              >
                 <X size={12} color={colors.textMuted} />
               </Pressable>
             </View>
-            <Text style={{ fontFamily: monoFont, fontSize: 10, marginTop: 4, color: colors.textMuted }}>
-              {shortDateTime(c.createdAt)}
-            </Text>
+            <Text style={styles.commentTime}>{shortDateTime(c.createdAt)}</Text>
           </View>
         ))}
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-          <View
-            style={{
-              flex: 1,
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: 8,
-              borderRadius: radius.card,
-              borderCurve: 'continuous',
-              paddingHorizontal: 12,
-              paddingVertical: 8,
-              backgroundColor: colors.bgCard,
-              borderWidth: 1,
-              borderColor: colors.borderSubtle,
-            }}
-          >
+        <View style={styles.commentRow}>
+          <View style={styles.commentInputWrap}>
             <MessageSquare size={13} color={colors.textMuted} />
             <Input
               value={draft}
@@ -375,10 +378,10 @@ function DetailContent({
               onSubmitEditing={addComment}
               placeholder="Add a comment…"
               placeholderTextColor={colors.textMuted}
-              style={{ flex: 1, fontSize: 13, color: colors.textPrimary, ...webInputReset }}
+              style={[styles.commentInput, webInputReset]}
             />
           </View>
-          <Pressable onPress={addComment} style={{ padding: 10, borderRadius: radius.card, backgroundColor: colors.accentPrimary }}>
+          <Pressable onPress={addComment} style={styles.sendBtn}>
             <ChevronRight size={15} color={colors.bgSurface} />
           </Pressable>
         </View>
@@ -389,21 +392,10 @@ function DetailContent({
           onDelete(task.id);
           onClose();
         }}
-        style={{
-          flexDirection: 'row',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: 8,
-          borderRadius: radius.card,
-          borderCurve: 'continuous',
-          paddingVertical: 11,
-          backgroundColor: 'rgba(217,102,139,0.12)',
-          borderWidth: 1,
-          borderColor: 'rgba(217,102,139,0.25)',
-        }}
+        style={styles.deleteBtn}
       >
         <Trash2 size={14} color={colors.accentNow} />
-        <Text style={{ fontSize: 13, fontWeight: '500', color: colors.accentNow }}>Delete task</Text>
+        <Text style={styles.deleteText}>Delete task</Text>
       </Pressable>
     </>
   );
@@ -412,27 +404,18 @@ function DetailContent({
 // ---- Web / wide: centered popup (RN Modal), unchanged behavior ----
 function WebModalDetail(props: Props) {
   return (
-    <Modal transparent visible animationType="fade" statusBarTranslucent onRequestClose={props.onClose}>
-      <KeyboardAvoidingView behavior={isIOS ? 'padding' : undefined} style={{ flex: 1 }}>
-        <Pressable
-          onPress={props.onClose}
-          style={{ flex: 1, backgroundColor: 'rgba(5,6,10,0.6)', justifyContent: 'center', alignItems: 'center' }}
-        >
-          <AnimatedPressable
-            onPress={(e) => e.stopPropagation?.()}
-            style={{
-              width: 560,
-              maxWidth: '92%',
-              maxHeight: '85%',
-              borderRadius: 20,
-              borderCurve: 'continuous',
-              backgroundColor: colors.bgCardWeb,
-              borderWidth: 1,
-              borderColor: colors.borderSubtle,
-            }}
-          >
+    <Modal
+      transparent
+      visible
+      animationType="fade"
+      statusBarTranslucent
+      onRequestClose={props.onClose}
+    >
+      <KeyboardAvoidingView behavior={isIOS ? 'padding' : undefined} style={styles.flex1}>
+        <Pressable onPress={props.onClose} style={styles.backdrop}>
+          <AnimatedPressable onPress={(e) => e.stopPropagation?.()} style={styles.modalCard}>
             <ScrollView
-              contentContainerStyle={{ padding: 20, paddingBottom: 28, gap: 16 }}
+              contentContainerStyle={styles.webScrollContent}
               keyboardShouldPersistTaps="handled"
             >
               <DetailContent {...props} wide Input={TextInput} />
@@ -471,13 +454,13 @@ function MobileSheetDetail(props: Props) {
       keyboardBehavior="interactive"
       keyboardBlurBehavior="restore"
       android_keyboardInputMode="adjustResize"
-      handleIndicatorStyle={{ backgroundColor: colors.borderStrong }}
-      backgroundStyle={{ backgroundColor: colors.bgCardWeb }}
+      handleIndicatorStyle={styles.handleIndicator}
+      backgroundStyle={styles.sheetBackground}
     >
       {/* Dynamic sizing: the sheet grows to fit the content (capped at the
           screen). BottomSheetScrollView still scrolls if it overflows. */}
       <BottomSheetScrollView
-        contentContainerStyle={{ padding: 20, paddingBottom: 40, gap: 16 }}
+        contentContainerStyle={styles.sheetScrollContent}
         keyboardShouldPersistTaps="handled"
       >
         <DetailContent {...props} onClose={close} wide={false} Input={SheetInput} />
@@ -492,3 +475,119 @@ export function TaskDetail(props: Props) {
   const wide = width >= WIDE_BREAKPOINT;
   return wide ? <WebModalDetail {...props} /> : <MobileSheetDetail {...props} />;
 }
+
+const styles = StyleSheet.create({
+  groupLabel: {
+    fontFamily: monoFont,
+    fontSize: 11,
+    letterSpacing: 1.5,
+    textTransform: 'uppercase',
+    color: colors.textFaint,
+    marginBottom: 12,
+  },
+  pill: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  pillText: {
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  titleRow: { flexDirection: 'row', alignItems: 'flex-start' },
+  wideTitleInput: {
+    flex: 1,
+    fontSize: 18,
+    fontWeight: '600',
+    color: colors.textPrimary,
+  },
+  closeBtn: {
+    padding: 6,
+    borderRadius: 8,
+    backgroundColor: colors.bgElevated,
+    marginLeft: 8,
+  },
+  narrowTitleInput: { fontSize: 17, fontWeight: '600', color: colors.textPrimary },
+  orgGroup: { gap: 18 },
+  rowWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  weekRow: { flexDirection: 'row', gap: 6, marginTop: 10 },
+  weekday: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+  },
+  weekdayText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  nextInstance: { marginTop: 8, fontSize: 11, color: colors.textMuted },
+  comment: {
+    borderRadius: radius.card,
+    borderCurve: 'continuous',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 8,
+    backgroundColor: colors.bgCard,
+  },
+  commentBody: { flex: 1, fontSize: 13, lineHeight: 18, color: '#B8BFCC' },
+  commentRemove: { marginLeft: 8 },
+  commentTime: { fontFamily: monoFont, fontSize: 10, marginTop: 4, color: colors.textMuted },
+  commentRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  commentInputWrap: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderRadius: radius.card,
+    borderCurve: 'continuous',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: colors.bgCard,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+  },
+  commentInput: { flex: 1, fontSize: 13, color: colors.textPrimary },
+  sendBtn: {
+    padding: 10,
+    borderRadius: radius.card,
+    backgroundColor: colors.accentPrimary,
+  },
+  deleteBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    borderRadius: radius.card,
+    borderCurve: 'continuous',
+    paddingVertical: 11,
+    backgroundColor: 'rgba(217,102,139,0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(217,102,139,0.25)',
+  },
+  deleteText: { fontSize: 13, fontWeight: '500', color: colors.accentNow },
+  flex1: { flex: 1 },
+  backdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(5,6,10,0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalCard: {
+    width: 560,
+    maxWidth: '92%',
+    maxHeight: '85%',
+    borderRadius: 20,
+    borderCurve: 'continuous',
+    backgroundColor: colors.bgCardWeb,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+  },
+  webScrollContent: { padding: 20, paddingBottom: 28, gap: 16 },
+  handleIndicator: { backgroundColor: colors.borderStrong },
+  sheetBackground: { backgroundColor: colors.bgCardWeb },
+  sheetScrollContent: { padding: 20, paddingBottom: 40, gap: 16 },
+});

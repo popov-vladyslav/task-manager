@@ -1,5 +1,5 @@
 import { Expo, type ExpoPushMessage } from 'expo-server-sdk';
-import { and, eq, isNotNull, lte, notExists, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNotNull, lte, notExists, sql } from 'drizzle-orm';
 import { db } from '../db/client';
 import { contexts, notificationLog, pushTokens, settings, tasks } from '../db/schema';
 import { composeNotificationTitle } from '../lib/notification-title';
@@ -36,11 +36,29 @@ async function sendPush(title: string, body: string, data: Record<string, unknow
     priority: 'high',
     interruptionLevel: 'time-sensitive',
   }));
+  // Tokens Expo reports as no longer registered (app uninstalled / token rotated).
+  // Tickets come back in the same order as the chunk, so map by index.
+  const dead: string[] = [];
   for (const chunk of expo.chunkPushNotifications(messages)) {
     try {
-      await expo.sendPushNotificationsAsync(chunk);
+      const tickets = await expo.sendPushNotificationsAsync(chunk);
+      tickets.forEach((ticket, i) => {
+        if (ticket.status === 'error' && ticket.details?.error === 'DeviceNotRegistered') {
+          dead.push(chunk[i].to as string);
+        }
+      });
     } catch (e) {
       console.error('[push] send failed', e);
+    }
+  }
+
+  // Prune dead tokens so every future send stops targeting them.
+  if (dead.length > 0) {
+    try {
+      await db.delete(pushTokens).where(inArray(pushTokens.token, dead));
+      console.log(`[push] pruned ${dead.length} unregistered token(s)`);
+    } catch (e) {
+      console.error('[push] prune failed', e);
     }
   }
 }
