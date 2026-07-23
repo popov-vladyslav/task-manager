@@ -1,6 +1,15 @@
 import { create } from 'zustand';
 import type { Context, ReorderScope, Task } from '@task-manager/shared';
 import { api } from '../lib/api';
+import { TOAST_DURATION_MS, useToastStore } from './toast';
+
+// Must exceed the toast duration so the Undo action can never outlive the commit.
+const DELETE_UNDO_MS = TOAST_DURATION_MS + 1000;
+const pendingDeletes = new Map<string, { task: Task; timer: ReturnType<typeof setTimeout> }>();
+
+export function isPendingDelete(id: string): boolean {
+  return pendingDeletes.has(id);
+}
 
 interface TasksState {
   contexts: Context[];
@@ -30,6 +39,7 @@ interface TasksState {
   toggleComplete: (task: Task) => Promise<void>;
   patchTask: (id: string, patch: Parameters<typeof api.updateTask>[1]) => Promise<void>;
   removeTask: (id: string) => Promise<void>;
+  undoRemove: (id: string) => void; // restore a task within its delete-undo window
   adjustCommentCount: (id: string, delta: number) => void;
   reorder: (
     id: string,
@@ -54,7 +64,8 @@ export const useTasksStore = create<TasksState>((set, get) => ({
     set({ loading: true, error: null });
     try {
       const [contexts, tasks] = await Promise.all([api.listContexts(), api.listTasks()]);
-      set({ contexts, tasks, loading: false, hydrated: true });
+      const open = pendingDeletes.size ? tasks.filter((t) => !pendingDeletes.has(t.id)) : tasks;
+      set({ contexts, tasks: open, loading: false, hydrated: true });
     } catch (e) {
       set({ loading: false, error: e instanceof Error ? e.message : 'Failed to load' });
     }
@@ -152,13 +163,25 @@ export const useTasksStore = create<TasksState>((set, get) => ({
   },
 
   async removeTask(id) {
-    const prev = get().tasks;
-    set({ tasks: prev.filter((t) => t.id !== id) });
-    try {
-      await api.deleteTask(id);
-    } catch {
-      set({ tasks: prev }); // rollback
-    }
+    const task = get().tasks.find((t) => t.id === id);
+    if (!task || pendingDeletes.has(id)) return;
+    set({ tasks: get().tasks.filter((t) => t.id !== id) });
+    const timer = setTimeout(() => {
+      pendingDeletes.delete(id);
+      api.deleteTask(id).catch(() => {
+        if (!get().tasks.some((t) => t.id === id)) set({ tasks: [task, ...get().tasks] });
+        useToastStore.getState().show({ title: 'Couldn’t delete task — restored', message: task.title });
+      });
+    }, DELETE_UNDO_MS);
+    pendingDeletes.set(id, { task, timer });
+  },
+
+  undoRemove(id) {
+    const pending = pendingDeletes.get(id);
+    if (!pending) return;
+    clearTimeout(pending.timer);
+    pendingDeletes.delete(id);
+    if (!get().tasks.some((t) => t.id === id)) set({ tasks: [pending.task, ...get().tasks] });
   },
 
   adjustCommentCount(id, delta) {

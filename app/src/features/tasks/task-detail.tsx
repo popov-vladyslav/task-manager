@@ -112,11 +112,6 @@ function recInput(kind: RecKind, base: Date, hasDue: boolean): RecurrenceInput |
   }
 }
 
-// A group heading (Date & time / Organization) — larger than the per-field label.
-function GroupLabel({ children }: { children: string }) {
-  return <Text style={styles.groupLabel}>{children}</Text>;
-}
-
 function Pill({
   active,
   color,
@@ -264,7 +259,6 @@ function DetailContent({
       )}
 
       <View>
-        <GroupLabel>Date & time</GroupLabel>
         <DateFieldsSection
           dueAt={task.dueAt}
           remindAt={task.remindAt}
@@ -276,7 +270,6 @@ function DetailContent({
       </View>
 
       <View>
-        <GroupLabel>Organization</GroupLabel>
         <View style={styles.orgGroup}>
           <View>
             <FieldLabel>Context</FieldLabel>
@@ -477,14 +470,6 @@ export function TaskDetail(props: Props) {
 }
 
 const styles = StyleSheet.create({
-  groupLabel: {
-    fontFamily: monoFont,
-    fontSize: 11,
-    letterSpacing: 1.5,
-    textTransform: 'uppercase',
-    color: colors.textFaint,
-    marginBottom: 12,
-  },
   pill: {
     paddingHorizontal: 12,
     paddingVertical: 6,
