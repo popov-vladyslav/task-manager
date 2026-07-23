@@ -10,18 +10,12 @@
       "environment": "preview",
       "ios": {
         "simulator": false
-      },
-      "env": {
-        "EXPO_PUBLIC_API_URL": "https://api.task-tracker.net"
       }
     },
     "production": {
       "autoIncrement": true,
       "channel": "production",
-      "environment": "production",
-      "env": {
-        "EXPO_PUBLIC_API_URL": "https://api.task-tracker.net"
-      }
+      "environment": "production"
     }
   },
   "submit": {
