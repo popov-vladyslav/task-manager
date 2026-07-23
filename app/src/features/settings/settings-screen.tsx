@@ -23,7 +23,9 @@ import {
   type BottomSheetBackdropProps,
 } from '@gorhom/bottom-sheet';
 import { useRouter } from 'expo-router';
-import { ChevronRight, EyeOff, Plus, Trash2, X } from 'lucide-react-native';
+import * as Updates from 'expo-updates';
+import { useUpdates } from 'expo-updates';
+import { ChevronRight, EyeOff, Plus, RefreshCw, Trash2, X } from 'lucide-react-native';
 import type { Context } from '@task-manager/shared';
 import { colors, headerDate, monoFont, webInputReset, WIDE_BREAKPOINT } from '../../theme';
 import { useTasksStore } from '../../store/tasks';
@@ -90,6 +92,7 @@ export function SettingsScreen() {
     <>
       <ContextsSection contexts={contexts} />
       <AccountSection />
+      <UpdatesSection />
       <DangerSection />
     </>
   );
@@ -121,10 +124,7 @@ export function SettingsScreen() {
 
   // ---- MOBILE / NARROW: title + sections (bottom tab bar comes from the layout) ----
   return (
-    <KeyboardAvoidingView
-      behavior={isIOS ? 'padding' : undefined}
-      style={styles.mobileRoot}
-    >
+    <KeyboardAvoidingView behavior={isIOS ? 'padding' : undefined} style={styles.mobileRoot}>
       <View style={[styles.flex1, { paddingTop: insets.top + 8 }]}>
         <View style={styles.mobileHeader}>
           <Text style={styles.mobileDate}>{headerDate()}</Text>
@@ -171,22 +171,13 @@ function ContextsSection({ contexts }: { contexts: Context[] }) {
           />
         ))}
 
-        <Pressable
-          onPress={() => setEditing('new')}
-          style={styles.addContextBtn}
-        >
+        <Pressable onPress={() => setEditing('new')} style={styles.addContextBtn}>
           <Plus size={15} color={colors.accentPrimary} />
-          <Text style={styles.addContextText}>
-            Add context
-          </Text>
+          <Text style={styles.addContextText}>Add context</Text>
         </Pressable>
       </View>
 
-      {deleteError ? (
-        <Text style={styles.deleteErrorText}>
-          {deleteError}
-        </Text>
-      ) : null}
+      {deleteError ? <Text style={styles.deleteErrorText}>{deleteError}</Text> : null}
       <Text style={styles.hintText}>
         {isWeb ? 'Tap a context to edit.' : 'Swipe a row left to delete. Tap to edit.'}
       </Text>
@@ -213,10 +204,7 @@ function ContextRow({
   const swipeRef = useRef<SwipeableMethods>(null);
 
   const inner = (
-    <Pressable
-      onPress={onPress}
-      style={styles.contextRow}
-    >
+    <Pressable onPress={onPress} style={styles.contextRow}>
       <View style={[styles.contextDot, { backgroundColor: context.color }]} />
       <Text style={styles.contextLabel} numberOfLines={1}>
         {context.label}
@@ -227,9 +215,7 @@ function ContextRow({
           <Text style={styles.hiddenText}>hidden</Text>
         </View>
       ) : null}
-      <Text style={styles.contextSlug}>
-        {context.slug}
-      </Text>
+      <Text style={styles.contextSlug}>{context.slug}</Text>
     </Pressable>
   );
 
@@ -273,14 +259,8 @@ function ContextEditor({ context, onClose }: { context?: Context; onClose: () =>
 function WebEditorModal({ context, onClose }: { context?: Context; onClose: () => void }) {
   return (
     <Modal transparent visible animationType="fade" statusBarTranslucent onRequestClose={onClose}>
-      <Pressable
-        onPress={onClose}
-        style={styles.modalOverlay}
-      >
-        <Pressable
-          onPress={(e) => e.stopPropagation?.()}
-          style={styles.webModalCard}
-        >
+      <Pressable onPress={onClose} style={styles.modalOverlay}>
+        <Pressable onPress={(e) => e.stopPropagation?.()} style={styles.webModalCard}>
           <EditorForm context={context} onClose={onClose} Input={TextInput} />
         </Pressable>
       </Pressable>
@@ -387,11 +367,7 @@ function EditorForm({
           onSubmitEditing={save}
           style={[styles.editorInput, webInputReset]}
         />
-        <Pressable
-          onPress={onClose}
-          hitSlop={8}
-          style={styles.editorClose}
-        >
+        <Pressable onPress={onClose} hitSlop={8} style={styles.editorClose}>
           <X size={16} color={colors.textSecondary} />
         </Pressable>
       </View>
@@ -399,9 +375,7 @@ function EditorForm({
       <View style={styles.hideRow}>
         <View style={styles.flex1}>
           <Text style={styles.hideRowTitle}>Hide from All view</Text>
-          <Text style={styles.hideRowSubtitle}>
-            Show in calendar if they have a due date.
-          </Text>
+          <Text style={styles.hideRowSubtitle}>Show in calendar if they have a due date.</Text>
         </View>
         <Switch
           value={excludeFromAll}
@@ -412,9 +386,7 @@ function EditorForm({
       </View>
 
       <View>
-        <Text style={styles.colorLabel}>
-          Color
-        </Text>
+        <Text style={styles.colorLabel}>Color</Text>
         <View style={styles.colorGrid}>
           {PALETTE.map((c) => {
             const borderWidth = color === c ? 2 : 0;
@@ -433,11 +405,7 @@ function EditorForm({
 
       <View style={styles.editorRow}>
         {context ? (
-          <Pressable
-            onPress={remove}
-            disabled={busy}
-            style={styles.editorRemove}
-          >
+          <Pressable onPress={remove} disabled={busy} style={styles.editorRemove}>
             <Trash2 size={15} color={colors.accentNow} />
             <Text style={styles.editorRemoveText}>Delete</Text>
           </Pressable>
@@ -487,23 +455,15 @@ function AccountSection() {
           <>
             <View style={styles.accountEmailRow}>
               <Text style={styles.accountEmailLabel}>Signed in as</Text>
-              <Text
-                numberOfLines={1}
-                style={styles.accountEmail}
-              >
+              <Text numberOfLines={1} style={styles.accountEmail}>
                 {email}
               </Text>
             </View>
             <View style={styles.accountDivider} />
           </>
         ) : null}
-        <Pressable
-          onPress={signOut}
-          style={styles.accountSignOutRow}
-        >
-          <Text style={styles.accountSignOutText}>
-            Sign out
-          </Text>
+        <Pressable onPress={signOut} style={styles.accountSignOutRow}>
+          <Text style={styles.accountSignOutText}>Sign out</Text>
           <ChevronRight size={16} color={colors.textFaint} />
         </Pressable>
       </View>
@@ -517,17 +477,12 @@ function DangerSection() {
     <View style={styles.mt28}>
       <SectionLabel>DANGER ZONE</SectionLabel>
       <View style={styles.dangerCard}>
-        <Text style={styles.dangerTitle}>
-          Reset all data
-        </Text>
+        <Text style={styles.dangerTitle}>Reset all data</Text>
         <Text style={styles.dangerText}>
           Permanently deletes all tasks, recurring rules and timers. Your contexts and sign-in are
           kept. This cannot be undone.
         </Text>
-        <Pressable
-          onPress={() => setModal(true)}
-          style={styles.dangerBtn}
-        >
+        <Pressable onPress={() => setModal(true)} style={styles.dangerBtn}>
           <Trash2 size={13} color={colors.accentNow} />
           <Text style={styles.dangerBtnText}>Reset…</Text>
         </Pressable>
@@ -560,22 +515,12 @@ function ResetModal({ onClose }: { onClose: () => void }) {
   return (
     <Modal transparent visible animationType="fade" statusBarTranslucent onRequestClose={onClose}>
       <KeyboardAvoidingView behavior={isIOS ? 'padding' : undefined} style={styles.flex1}>
-        <Pressable
-          onPress={onClose}
-          style={styles.resetOverlay}
-        >
-          <Pressable
-            onPress={(e) => e.stopPropagation?.()}
-            style={styles.resetCard}
-          >
-            <Text style={styles.resetTitle}>
-              Reset all data
-            </Text>
+        <Pressable onPress={onClose} style={styles.resetOverlay}>
+          <Pressable onPress={(e) => e.stopPropagation?.()} style={styles.resetCard}>
+            <Text style={styles.resetTitle}>Reset all data</Text>
             <Text style={styles.resetBody}>
               This permanently deletes all tasks, recurring rules and timers. Your contexts and
-              sign-in are kept. Type{' '}
-              <Text style={styles.resetBodyEmphasis}>RESET</Text> to
-              confirm.
+              sign-in are kept. Type <Text style={styles.resetBodyEmphasis}>RESET</Text> to confirm.
             </Text>
             <TextInput
               value={text}
@@ -587,20 +532,10 @@ function ResetModal({ onClose }: { onClose: () => void }) {
               autoFocus
               style={[styles.resetInput, webInputReset]}
             />
-            {error ? (
-              <Text style={styles.resetErrorText}>
-                {error}
-              </Text>
-            ) : null}
+            {error ? <Text style={styles.resetErrorText}>{error}</Text> : null}
             <View style={styles.resetActions}>
-              <Pressable
-                onPress={onClose}
-                disabled={busy}
-                style={styles.resetCancel}
-              >
-                <Text style={styles.resetCancelText}>
-                  Cancel
-                </Text>
+              <Pressable onPress={onClose} disabled={busy} style={styles.resetCancel}>
+                <Text style={styles.resetCancelText}>Cancel</Text>
               </Pressable>
               <Pressable
                 onPress={doReset}
@@ -631,12 +566,91 @@ function ResetModal({ onClose }: { onClose: () => void }) {
   );
 }
 
-function SectionLabel({ children }: { children: string }) {
+// Diagnostic for the OTA update system: which bundle is live (embedded build vs an
+// OTA), its channel/runtime, plus a manual check and a restart-to-apply control.
+function UpdatesSection() {
+  const {
+    currentlyRunning,
+    isUpdatePending,
+    isChecking,
+    isDownloading,
+    isRestarting,
+    lastCheckForUpdateTimeSinceRestart,
+  } = useUpdates();
+
+  const check = useCallback(() => {
+    Updates.checkForUpdateAsync()
+      .then((r) => (r.isAvailable ? Updates.fetchUpdateAsync() : undefined))
+      .catch(() => {});
+  }, []);
+  const apply = useCallback(() => {
+    Updates.reloadAsync().catch(() => {});
+  }, []);
+
+  const r = currentlyRunning;
+  const busy = isChecking || isDownloading;
+  const lastChecked = lastCheckForUpdateTimeSinceRestart
+    ? lastCheckForUpdateTimeSinceRestart.toLocaleTimeString([], {
+        hour: 'numeric',
+        minute: '2-digit',
+      })
+    : null;
+
   return (
-    <Text style={styles.sectionLabel}>
-      {children}
-    </Text>
+    <View style={styles.mt28}>
+      <SectionLabel>UPDATES</SectionLabel>
+      <View style={styles.accountCard}>
+        {!Updates.isEnabled ? (
+          <Text style={styles.updatesNote}>
+            Over-the-air updates run only in release / preview builds — not in Expo Go or a dev
+            client.
+          </Text>
+        ) : (
+          <>
+            <DiagRow label="Running" value={r.isEmbeddedLaunch ? 'Embedded build' : 'OTA update'} />
+            <DiagRow label="Channel" value={r.channel ?? '—'} />
+            <DiagRow label="Runtime" value={r.runtimeVersion ?? '—'} mono />
+            <DiagRow label="Update ID" value={r.updateId ? r.updateId.slice(0, 8) : '—'} mono />
+            {lastChecked ? <DiagRow label="Last checked" value={lastChecked} /> : null}
+            {isUpdatePending ? (
+              <Pressable onPress={apply} disabled={isRestarting} style={styles.updatesApplyRow}>
+                <RefreshCw size={15} color={colors.bgBase} />
+                <Text style={styles.updatesApplyText}>
+                  {isRestarting ? 'Restarting…' : 'Update ready — restart to apply'}
+                </Text>
+              </Pressable>
+            ) : (
+              <Pressable onPress={check} disabled={busy} style={styles.updatesCheckRow}>
+                <Text style={styles.updatesCheckText}>
+                  {busy ? 'Checking…' : 'Check for updates'}
+                </Text>
+                {busy ? (
+                  <ActivityIndicator size="small" color={colors.textMuted} />
+                ) : (
+                  <RefreshCw size={15} color={colors.textFaint} />
+                )}
+              </Pressable>
+            )}
+          </>
+        )}
+      </View>
+    </View>
   );
+}
+
+function DiagRow({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+  return (
+    <View style={styles.diagRow}>
+      <Text style={styles.diagLabel}>{label}</Text>
+      <Text style={[styles.diagValue, mono ? styles.diagValueMono : null]} numberOfLines={1}>
+        {value}
+      </Text>
+    </View>
+  );
+}
+
+function SectionLabel({ children }: { children: string }) {
+  return <Text style={styles.sectionLabel}>{children}</Text>;
 }
 
 const styles = StyleSheet.create({
@@ -910,4 +924,37 @@ const styles = StyleSheet.create({
     color: colors.textFaint,
     marginBottom: 10,
   },
+  updatesNote: { fontSize: 12, lineHeight: 18, color: colors.textMuted, padding: 14 },
+  diagRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+  },
+  diagLabel: { fontSize: 12.5, color: colors.textMuted },
+  diagValue: { flex: 1, textAlign: 'right', fontSize: 12.5, color: colors.textSecondary },
+  diagValueMono: { fontFamily: monoFont, fontSize: 11, color: '#B8BFCC' },
+  updatesCheckRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 14,
+    paddingVertical: 13,
+    borderTopWidth: 1,
+    borderTopColor: colors.borderSubtle,
+    marginTop: 4,
+  },
+  updatesCheckText: { fontSize: 15, fontWeight: '500', color: colors.accentPrimary },
+  updatesApplyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 13,
+    marginTop: 4,
+    backgroundColor: colors.accentPrimary,
+  },
+  updatesApplyText: { fontSize: 14, fontWeight: '600', color: colors.bgBase },
 });

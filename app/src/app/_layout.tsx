@@ -14,6 +14,7 @@ import { useAuthStore } from '../store/auth';
 import { useTasksStore } from '../store/tasks';
 import { ReminderModal } from '../features/reminders/reminder-modal';
 import { NotificationBridge } from '../features/reminders/notification-bridge';
+import { OtaUpdater } from '../features/updates/ota-updater';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 SystemUI.setBackgroundColorAsync(colors.bgBase).catch(() => {});
@@ -53,6 +54,7 @@ export default function RootLayout() {
               }}
             />
             {Platform.OS !== 'web' ? <NotificationBridge /> : null}
+            {Platform.OS !== 'web' ? <OtaUpdater /> : null}
             <ReminderModal />
           </BottomSheetModalProvider>
         </SafeAreaProvider>
