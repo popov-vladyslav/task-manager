@@ -98,6 +98,10 @@ export async function sendReminders(now: Date = new Date()): Promise<number> {
     await sendPush(title, t.title, { taskId: t.id });
     await db.insert(notificationLog).values({ taskId: t.id, kind: 'initial' });
   }
+  // Repeat-reminders key off notification_log, not remind_at, so clearing this is safe.
+  if (due.length) {
+    await db.update(tasks).set({ remindAt: null }).where(inArray(tasks.id, due.map((t) => t.id)));
+  }
   return due.length;
 }
 

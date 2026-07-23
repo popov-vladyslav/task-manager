@@ -13,6 +13,7 @@ import { colors } from '../theme';
 import { useAuthStore } from '../store/auth';
 import { useTasksStore } from '../store/tasks';
 import { ReminderModal } from '../features/reminders/reminder-modal';
+import { TopToast } from '../components/top-toast';
 import { NotificationBridge } from '../features/reminders/notification-bridge';
 import { OtaUpdater } from '../features/updates/ota-updater';
 
@@ -56,6 +57,7 @@ export default function RootLayout() {
             {Platform.OS !== 'web' ? <NotificationBridge /> : null}
             {Platform.OS !== 'web' ? <OtaUpdater /> : null}
             <ReminderModal />
+            <TopToast />
           </BottomSheetModalProvider>
         </SafeAreaProvider>
       </KeyboardProvider>

@@ -3,7 +3,7 @@ import type { CalendarData } from '@task-manager/shared';
 import { api } from '../lib/api';
 import { storage } from '../lib/storage';
 import { rangeFor, shiftAnchor, startOfDay, type CalMode } from '../features/calendar/calendar-dates';
-import { useTasksStore } from './tasks';
+import { isPendingDelete, useTasksStore } from './tasks';
 
 const MODE_KEY = 'log.calMode';
 const MODES: CalMode[] = ['day', '3day', 'week', 'month'];
@@ -44,7 +44,8 @@ export const useCalendarStore = create<CalendarState>((set, get) => ({
     set({ loading: true });
     try {
       const data = await api.getCalendar(from.toISOString(), to.toISOString());
-      set({ data, loading: false });
+      const blocks = data.blocks.filter((b) => !isPendingDelete(b.id));
+      set({ data: { ...data, blocks }, loading: false });
     } catch {
       set({ loading: false });
     }

@@ -27,12 +27,14 @@ function WebField({
   mode,
   value,
   onChange,
+  min,
 }: {
   label: string;
   icon: ReactNode;
   mode: 'date' | 'datetime';
   value: string | null;
   onChange: (iso: string | null) => void;
+  min?: string;
 }) {
   const onInput = (e: { target: { value: string } }) => {
     const v = e.target.value;
@@ -41,7 +43,12 @@ function WebField({
       return;
     }
     const d = new Date(v);
-    onChange(Number.isNaN(d.getTime()) ? null : d.toISOString());
+    if (Number.isNaN(d.getTime())) {
+      onChange(null);
+      return;
+    }
+    if (min && d < new Date(min)) return;
+    onChange(d.toISOString());
   };
 
   return (
@@ -52,6 +59,7 @@ function WebField({
         <input
           type={mode === 'date' ? 'date' : 'datetime-local'}
           value={toInputValue(value, mode)}
+          min={min}
           onChange={onInput}
           style={inputStyle}
         />
@@ -79,6 +87,7 @@ export function DateFieldsSection({
   onChangeDuration,
   showReminder = true,
 }: Props) {
+  const nowMin = toInputValue(new Date().toISOString(), 'datetime'); // reminders can't be in the past
   return (
     <View style={styles.container}>
       <View style={styles.row}>
@@ -96,6 +105,7 @@ export function DateFieldsSection({
             mode="datetime"
             value={remindAt}
             onChange={onChangeRemind}
+            min={nowMin}
           />
         ) : null}
       </View>

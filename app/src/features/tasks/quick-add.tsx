@@ -261,7 +261,9 @@ function PanelBody({
           { label: 'Tomorrow', v: atNoon(1) },
           { label: '+7 days', v: atNoon(7) },
           ...(value ? [{ label: 'Clear', v: null as string | null }] : []),
-        ].map((chip) => (
+        ]
+          .filter((chip) => panel !== 'reminder' || chip.v == null || new Date(chip.v).getTime() > Date.now())
+          .map((chip) => (
           <Pressable
             key={chip.label}
             onPress={() => setValue(chip.v)}
@@ -277,6 +279,7 @@ function PanelBody({
       {Platform.OS !== 'web' ? (
         <DateTimePicker
           value={value ? new Date(value) : new Date()}
+          minimumDate={panel === 'reminder' ? new Date() : undefined}
           mode={isAndroid ? 'date' : 'datetime'}
           display="spinner"
           themeVariant="dark"

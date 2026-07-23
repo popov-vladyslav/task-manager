@@ -1,11 +1,12 @@
 import { memo, useCallback, useEffect, useState, type ReactElement, type ReactNode } from 'react';
-import { StyleSheet } from 'react-native';
+import { RefreshControl, StyleSheet } from 'react-native';
 import ReorderableList, {
   type ReorderableListReorderEvent,
   useReorderableDrag,
 } from 'react-native-reorderable-list';
 import type { Task } from '@task-manager/shared';
 import { haptics } from '../../lib/haptics';
+import { colors } from '../../theme';
 
 interface Props {
   tasks: Task[];
@@ -13,6 +14,7 @@ interface Props {
   onReorder: (movedId: string, afterId: string | null, beforeId: string | null) => void;
   footer?: ReactNode; // rendered below the list (e.g. the "Show completed" section)
   empty?: ReactNode; // rendered when there are no open tasks
+  onRefresh?: () => void | Promise<void>; // pull-to-refresh handler
 }
 
 // memo'd so an unchanged row skips re-render when the list re-renders — relies on
@@ -25,8 +27,6 @@ const DragRow = memo(function DragRow({
   renderCard: Props['renderCard'];
 }) {
   const drag = useReorderableDrag();
-  // Pickup feedback the moment the long-press lifts the card into a drag — the
-  // most noticeable haptic of the reorder (the drop adds a lighter settle tick).
   const startDrag = useCallback(() => {
     haptics.impact('medium');
     drag();
@@ -41,15 +41,26 @@ const DragRow = memo(function DragRow({
 // The list owns a local `data` copy that it reorders synchronously on drop, so
 // its internal indices never point past the array (the crash we saw on drag-off).
 // The store is updated in parallel to persist; when it re-emits, we re-sync.
-export function DraggableTaskList({ tasks, renderCard, onReorder, footer, empty }: Props) {
+export function DraggableTaskList({ tasks, renderCard, onReorder, footer, empty, onRefresh }: Props) {
   const [data, setData] = useState(tasks);
   useEffect(() => setData(tasks), [tasks]);
+
+  const [refreshing, setRefreshing] = useState(false);
+  const handleRefresh = useCallback(async () => {
+    if (!onRefresh) return;
+    setRefreshing(true);
+    try {
+      await onRefresh();
+    } finally {
+      setRefreshing(false);
+    }
+  }, [onRefresh]);
 
   const handleReorder = ({ from, to }: ReorderableListReorderEvent) => {
     if (from === to) return;
     const moved = data[from];
     if (!moved) return;
-    haptics.impact('medium'); // the drop settled into a new position
+    haptics.impact('medium');
     const order = [...data];
     order.splice(from, 1);
     order.splice(Math.max(0, Math.min(to, order.length)), 0, moved);
@@ -72,6 +83,16 @@ export function DraggableTaskList({ tasks, renderCard, onReorder, footer, empty 
       style={styles.list}
       contentContainerStyle={styles.content}
       showsVerticalScrollIndicator={false}
+      refreshControl={
+        onRefresh ? (
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor={colors.accentPrimary}
+            colors={[colors.accentPrimary]}
+          />
+        ) : undefined
+      }
       automaticallyAdjustKeyboardInsets
       keyboardShouldPersistTaps="handled"
       keyboardDismissMode="interactive"

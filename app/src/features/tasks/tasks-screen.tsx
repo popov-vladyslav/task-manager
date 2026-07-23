@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -15,6 +15,7 @@ import type { Context, Task } from '@task-manager/shared';
 import { colors, headerDate, monoFont, WIDE_BREAKPOINT } from '../../theme';
 import { haptics } from '../../lib/haptics';
 import { useTasksStore } from '../../store/tasks';
+import { useToastStore } from '../../store/toast';
 import { useAuthStore } from '../../store/auth';
 import { SideNavLinks } from '../nav/nav-chrome';
 import { TaskCard } from './task-card';
@@ -40,6 +41,7 @@ export function TasksScreen() {
     toggleComplete,
     patchTask,
     removeTask,
+    undoRemove,
     reorder,
     pendingOpenTaskId,
     requestOpenTask,
@@ -47,7 +49,6 @@ export function TasksScreen() {
 
   const [selected, setSelected] = useState<Task | null>(null);
   const [focusTitle, setFocusTitle] = useState(false); // autofocus the title for a just-created task
-  const [toast, setToast] = useState<string | null>(null);
   const [showCompleted, setShowCompleted] = useState(false);
 
   // Data is normally prefetched under the splash screen (see _layout). Only load
@@ -129,29 +130,19 @@ export function TasksScreen() {
     if (next) loadCompleted();
   };
 
-  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(
-    () => () => {
-      if (toastTimer.current) clearTimeout(toastTimer.current);
-    },
-    [],
-  );
-
-  const flash = useCallback((msg: string) => {
-    setToast(msg);
-    if (toastTimer.current) clearTimeout(toastTimer.current);
-    toastTimer.current = setTimeout(() => setToast(null), 2200);
-  }, []);
-
   // Stable per-row handlers (parameterized by task/id) so TaskCard's memo holds and
   // rows don't all re-render when the parent does.
   const onToggle = useCallback(
     (task: Task) => {
       haptics.success();
       toggleComplete(task);
-      flash(task.recurrenceId ? 'Done. Next instance scheduled.' : 'Done ✓');
+      useToastStore.getState().show({
+        title: task.recurrenceId ? 'Completed · next instance scheduled' : 'Task completed',
+        message: task.title,
+        onUndo: () => uncomplete(task),
+      });
     },
-    [toggleComplete, flash],
+    [toggleComplete, uncomplete],
   );
 
   const onOpenDetail = useCallback((task: Task) => {
@@ -163,7 +154,18 @@ export function TasksScreen() {
     (id: string, title: string) => patchTask(id, { title }),
     [patchTask],
   );
-  const onDeleteTask = useCallback((id: string) => removeTask(id), [removeTask]);
+  const onDeleteTask = useCallback(
+    (id: string) => {
+      const task = useTasksStore.getState().tasks.find((t) => t.id === id);
+      removeTask(id);
+      useToastStore.getState().show({
+        title: 'Task deleted',
+        message: task?.title,
+        onUndo: () => undoRemove(id),
+      });
+    },
+    [removeTask, undoRemove],
+  );
 
   // Quick-add: create straight from the top input with any attributes picked in
   // the keyboard-accessory panels. Stays on the list (no auto-open of the detail).
@@ -180,6 +182,7 @@ export function TasksScreen() {
       remindAt: input.remindAt,
       durationMin: input.durationMin,
     });
+    useToastStore.getState().show({ title: 'Task created', message: input.title });
   };
 
   const completedSection = (
@@ -243,6 +246,7 @@ export function TasksScreen() {
     ) : (
       <DraggableTaskList
         tasks={visible}
+        onRefresh={load}
         onReorder={(movedId, afterId, beforeId) =>
           reorder(movedId, afterId, beforeId, activeContextId == null ? 'global' : 'context')
         }
@@ -252,16 +256,6 @@ export function TasksScreen() {
       />
     );
 
-  const toastNode = toast ? (
-    // Full-width absolute row so the pill centers on web too: `alignSelf` doesn't
-    // center an out-of-flow element on react-native-web (it collapsed bottom-left).
-    <View pointerEvents="none" style={styles.toastWrap}>
-      <View style={styles.toastPill}>
-        <Text style={styles.toastText}>{toast}</Text>
-      </View>
-    </View>
-  ) : null;
-
   const detailNode = selected ? (
     <TaskDetail
       task={selected}
@@ -269,7 +263,7 @@ export function TasksScreen() {
       autoFocusTitle={focusTitle}
       onClose={() => setSelected(null)}
       onPatch={patchTask}
-      onDelete={removeTask}
+      onDelete={onDeleteTask}
     />
   ) : null;
 
@@ -318,7 +312,6 @@ export function TasksScreen() {
           <View style={styles.wideListWrap}>{list}</View>
         </View>
 
-        {toastNode}
         {detailNode}
       </View>
     );
@@ -351,7 +344,6 @@ export function TasksScreen() {
 
       <QuickAddBar contexts={contexts} />
 
-      {toastNode}
       {detailNode}
     </View>
   );
@@ -504,16 +496,6 @@ const styles = StyleSheet.create({
   },
   listSpinner: { marginTop: 40 },
   emptyText: { color: colors.textMuted, textAlign: 'center', marginTop: 40 },
-  toastWrap: { position: 'absolute', left: 0, right: 0, bottom: 96, alignItems: 'center' },
-  toastPill: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 999,
-    backgroundColor: colors.bgElevated,
-    borderWidth: 1,
-    borderColor: colors.borderStrong,
-  },
-  toastText: { fontSize: 12, color: colors.textPrimary },
   wideRoot: { flex: 1, flexDirection: 'row', backgroundColor: colors.bgBase },
   sidebar: {
     width: 240,

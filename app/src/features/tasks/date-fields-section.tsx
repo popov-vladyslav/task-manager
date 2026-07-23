@@ -92,6 +92,10 @@ export function DateFieldsSection({
   const onChange = isDue ? onChangeDue : onChangeRemind;
   const mode: 'date' | 'datetime' = 'datetime';
 
+  const minReminder = picker === 'remind' ? new Date() : undefined;
+  const rawPickerValue = value ? new Date(value) : new Date();
+  const pickerValue = minReminder && rawPickerValue < minReminder ? minReminder : rawPickerValue;
+
   // onValueChange fires only when a value is picked (Android cancel → onDismiss).
   const onPickerChange = (_e: DateTimePickerChangeEvent, d: Date) => {
     if (isAndroid) setPicker(null); // the dialog closes after a pick
@@ -132,7 +136,8 @@ export function DateFieldsSection({
       {picker && !isAndroid ? (
         <View style={styles.pickerBox}>
           <DateTimePicker
-            value={value ? new Date(value) : new Date()}
+            value={pickerValue}
+            minimumDate={minReminder}
             mode={mode}
             display="spinner"
             themeVariant="dark"
@@ -150,7 +155,8 @@ export function DateFieldsSection({
 
       {picker && isAndroid ? (
         <DateTimePicker
-          value={value ? new Date(value) : new Date()}
+          value={pickerValue}
+          minimumDate={minReminder}
           mode={mode === 'datetime' ? 'date' : mode}
           onValueChange={onPickerChange}
           onDismiss={() => setPicker(null)}
