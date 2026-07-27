@@ -26,6 +26,7 @@ import sharp from 'sharp';
 
 const DIR = path.dirname(fileURLToPath(import.meta.url));
 const OUT = path.resolve(DIR, '../assets/images');
+const SRC = path.resolve(DIR, '../assets/icons-src');
 
 /** Tight bounding box of the glyph, in glyph units. */
 const BBOX = { x: 11, y: 9, w: 78, h: 80 };
@@ -44,9 +45,17 @@ const TILE_BG = `
     </defs>
     <rect width="{SIZE}" height="{SIZE}" fill="url(#bg)"/>`;
 
+const MARK = (colour) => `
+      <path d="M50 16 A34 34 0 1 1 16 50" stroke-width="10"/>
+      <circle cx="50" cy="16" r="7" fill="${colour}" stroke="none"/>
+      <path d="M33 52 L46 65 L69 38" stroke-width="9"/>`;
+
+const STROKE = 'fill="none" stroke-linecap="round" stroke-linejoin="round"';
+
 /**
- * The mark itself. `fill` scales the glyph so its bounding-box HEIGHT occupies
- * that fraction of the canvas; width follows at fill * 78/80.
+ * The mark centred on a square canvas. `fill` scales the glyph so its
+ * bounding-box HEIGHT occupies that fraction of the canvas; width follows at
+ * fill * 78/80.
  */
 function svg({ size, fill, colour, background }) {
   const scale = (size * fill) / BBOX.h;
@@ -56,10 +65,19 @@ function svg({ size, fill, colour, background }) {
 
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">${bg}
     <g transform="translate(${size / 2} ${size / 2}) scale(${scale}) translate(${-cx} ${-cy})"
-       fill="none" stroke="${colour}" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M50 16 A34 34 0 1 1 16 50" stroke-width="10"/>
-      <circle cx="50" cy="16" r="7" fill="${colour}" stroke="none"/>
-      <path d="M33 52 L46 65 L69 38" stroke-width="9"/>
+       ${STROKE} stroke="${colour}">${MARK(colour)}
+    </g>
+  </svg>`;
+}
+
+/** The mark cropped to exactly its bounding box — used to compose the splash. */
+function tightGlyphSvg({ height, colour }) {
+  const scale = height / BBOX.h;
+  const width = Math.round(BBOX.w * scale);
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${Math.round(height)}" viewBox="0 0 ${width} ${Math.round(height)}">
+    <g transform="scale(${scale}) translate(${-BBOX.x} ${-BBOX.y})"
+       ${STROKE} stroke="${colour}">${MARK(colour)}
     </g>
   </svg>`;
 }
@@ -93,13 +111,6 @@ const TARGETS = [
     note: 'Android 13+ themed layer',
   },
   {
-    file: 'splash-icon.png',
-    size: 1024,
-    fill: 0.52,
-    colour: AMBER,
-    note: `splash art, transparent on ${BASE}`,
-  },
-  {
     file: 'notification-icon.png',
     size: 96,
     // Rendered at 1024 then downscaled, so the small output stays clean.
@@ -118,6 +129,23 @@ const TARGETS = [
     note: 'web',
   },
 ];
+
+/**
+ * Splash — mark above the "TASK MANAGER" wordmark, transparent, centred on
+ * BASE by the expo-splash-screen plugin.
+ *
+ * The wordmark is a raster master (`icons-src/wordmark-task-manager.png`,
+ * lifted from the previously shipped splash) rather than live text: its
+ * typeface is not bundled in the repo, so rendering it as SVG <text> would
+ * silently substitute whatever font the machine happens to have. Sizing it
+ * relative to the mark keeps the proportions of the old splash.
+ */
+const SPLASH = {
+  canvasWidth: 1024,
+  glyphFill: 0.52, // of canvas width, matching splash.svg
+  wordmarkToGlyphWidth: 496 / 320, // ratio measured off the old splash
+  gapToGlyphHeight: 26 / 150, // ratio from the splash design mock
+};
 
 await mkdir(OUT, { recursive: true });
 
@@ -151,11 +179,53 @@ for (const t of TARGETS) {
   );
 }
 
+{
+  const W = SPLASH.canvasWidth;
+  const glyphH = Math.round(W * SPLASH.glyphFill);
+  const glyphW = Math.round((glyphH * BBOX.w) / BBOX.h);
+  const gap = Math.round(glyphH * SPLASH.gapToGlyphHeight);
+
+  const wmSrc = path.join(SRC, 'wordmark-task-manager.png');
+  const wmMeta = await sharp(wmSrc).metadata();
+  const wmW = Math.round(glyphW * SPLASH.wordmarkToGlyphWidth);
+  const wmH = Math.round((wmMeta.height * wmW) / wmMeta.width);
+
+  const H = glyphH + gap + wmH;
+
+  const glyph = await sharp(Buffer.from(tightGlyphSvg({ height: glyphH, colour: AMBER })))
+    .png()
+    .toBuffer();
+  const wordmark = await sharp(wmSrc).resize({ width: wmW }).png().toBuffer();
+
+  const dest = path.join(OUT, 'splash-icon.png');
+  await sharp({
+    create: {
+      width: W,
+      height: H,
+      channels: 4,
+      background: { r: 0, g: 0, b: 0, alpha: 0 },
+    },
+  })
+    .composite([
+      { input: glyph, left: Math.round((W - glyphW) / 2), top: 0 },
+      { input: wordmark, left: Math.round((W - wmW) / 2), top: glyphH + gap },
+    ])
+    .png({ compressionLevel: 9 })
+    .toFile(dest);
+
+  const meta = await sharp(dest).metadata();
+  console.log(
+    `${'splash-icon.png'.padEnd(30)} ${meta.width}x${meta.height}  ` +
+      `${meta.channels}ch alpha=${meta.hasAlpha}  fill=${Math.round(SPLASH.glyphFill * 100)}%  ` +
+      `— splash: mark + wordmark, transparent on ${BASE}`,
+  );
+}
+
 // The masters are kept purely as provenance; regenerate them so a future edit
 // to BBOX/fill stays in sync with what shipped.
 await writeFile(
-  path.resolve(DIR, '../assets/icons-src/GENERATED.md'),
-  `# icons-src\n\nSVG masters from the Claude Design export\n(\`design-export/mobile-task-manager-prototype/project/assets/\`).\n\nThese are reference only. The shipped PNGs in \`../images/\` are generated by\n\`app/scripts/generate-app-icons.mjs\`, which composes the same glyph from its\ntight bounding box (\`viewBox 11 9 78 80\`) and re-applies padding per platform.\n\nFills: iOS 82% · Android adaptive 60% · splash 52% · notification 58%.\n`,
+  path.resolve(SRC, 'GENERATED.md'),
+  `# icons-src\n\nSVG masters from the Claude Design export\n(\`design-export/mobile-task-manager-prototype/project/assets/\`), plus\n\`wordmark-task-manager.png\` — the "TASK MANAGER" wordmark lifted from the\npreviously shipped splash, kept because its typeface is not bundled here.\n\nThese are reference only. The shipped PNGs in \`../images/\` are generated by\n\`app/scripts/generate-app-icons.mjs\`, which composes the same glyph from its\ntight bounding box (\`viewBox 11 9 78 80\`) and re-applies padding per platform.\n\nFills: iOS 82% · Android adaptive 60% · splash 52% · notification 58%.\n`,
 );
 
 console.log('\nDone.');
