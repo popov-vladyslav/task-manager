@@ -139,6 +139,12 @@ const TARGETS = [
  * typeface is not bundled in the repo, so rendering it as SVG <text> would
  * silently substitute whatever font the machine happens to have. Sizing it
  * relative to the mark keeps the proportions of the old splash.
+ *
+ * The canvas MUST stay square. expo-splash-screen pads a non-square source
+ * into a square when it generates the native launch-screen asset, but the
+ * runtime splash view (held open by preventAutoHideAsync while expo-updates
+ * checks in) works from the source as authored. A non-square source therefore
+ * renders at two different scales and the splash visibly jumps between them.
  */
 const SPLASH = {
   canvasWidth: 1024,
@@ -190,7 +196,9 @@ for (const t of TARGETS) {
   const wmW = Math.round(glyphW * SPLASH.wordmarkToGlyphWidth);
   const wmH = Math.round((wmMeta.height * wmW) / wmMeta.width);
 
-  const H = glyphH + gap + wmH;
+  // Square canvas, lockup centred — see the note on SPLASH above.
+  const H = W;
+  const contentTop = Math.round((H - (glyphH + gap + wmH)) / 2);
 
   const glyph = await sharp(Buffer.from(tightGlyphSvg({ height: glyphH, colour: AMBER })))
     .png()
@@ -207,8 +215,12 @@ for (const t of TARGETS) {
     },
   })
     .composite([
-      { input: glyph, left: Math.round((W - glyphW) / 2), top: 0 },
-      { input: wordmark, left: Math.round((W - wmW) / 2), top: glyphH + gap },
+      { input: glyph, left: Math.round((W - glyphW) / 2), top: contentTop },
+      {
+        input: wordmark,
+        left: Math.round((W - wmW) / 2),
+        top: contentTop + glyphH + gap,
+      },
     ])
     .png({ compressionLevel: 9 })
     .toFile(dest);
