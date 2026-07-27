@@ -23,6 +23,7 @@ export default tseslint.config(
       'patches/**',
       // Reference/vendored bundles and generated output — not our source.
       'design/**',
+      'design-export/**',
       'docs/**',
       'secrets/**',
       '.playwright-mcp/**',

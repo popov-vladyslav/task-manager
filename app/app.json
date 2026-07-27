@@ -49,12 +49,19 @@
         {
           "backgroundColor": "#0B0E13",
           "image": "./assets/images/splash-icon.png",
-          "imageWidth": 180
+          "imageWidth": 200,
+          "resizeMode": "contain"
         }
       ],
       "expo-secure-store",
       "@react-native-community/datetimepicker",
-      "expo-notifications",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/notification-icon.png",
+          "color": "#E8A33D"
+        }
+      ],
       "expo-image",
       "expo-status-bar",
       "expo-web-browser"

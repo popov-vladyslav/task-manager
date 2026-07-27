@@ -9,4 +9,5 @@ app/android
 app/ios
 app/expo-env.d.ts
 server/drizzle
+design-export
 *.md
