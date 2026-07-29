@@ -31,7 +31,7 @@ export async function requestMagicLink(email: string, platform?: string): Promis
   const link = isNative
     ? `${APP_SCHEME}://auth?token=${token}`
     : `${env.APP_URL}/auth?token=${token}`;
-  await sendMagicLink(env.OWNER_EMAIL, link);
+  await sendMagicLink(env.OWNER_EMAIL, link, token);
 }
 
 export async function verifyMagicLink(token: string): Promise<AuthTokens> {
