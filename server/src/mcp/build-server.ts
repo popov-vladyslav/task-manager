@@ -6,6 +6,7 @@ import * as contextsSvc from '../services/contexts';
 import * as commentsSvc from '../services/comments';
 import * as timerSvc from '../services/timer';
 import { ruleFromSpec } from '../lib/recurrence';
+import { fmtTask } from '../lib/mcp-task-format';
 
 function text(s: string) {
   return { content: [{ type: 'text' as const, text: s }] };
@@ -43,22 +44,6 @@ function toRuleString(r: RecurrenceMcpInput): { rule: string } | { error: string
   } catch (e) {
     return { error: e instanceof Error ? e.message : 'Invalid recurrence.' };
   }
-}
-
-function fmtTask(t: Task, contextLabel?: string): string {
-  const bits = [`• ${t.title}`, `[${t.id}]`];
-  if (contextLabel) bits.push(`(${contextLabel})`);
-  if (t.dueAt) {
-    bits.push(`due ${t.dueAt.slice(0, 16).replace('T', ' ')}`);
-    if (t.durationMin) bits.push(`${t.durationMin}min`);
-  }
-  if (t.remindAt) bits.push(`remind ${t.remindAt.slice(0, 16).replace('T', ' ')}`);
-  if (t.recurrenceRule) {
-    bits.push(`repeats ${t.recurrenceRule}${t.nextInstance ? ` (next ${t.nextInstance})` : ''}`);
-  }
-  if (t.status !== 'active') bits.push(t.status);
-  if (t.commentsCount) bits.push(`${t.commentsCount} comment(s)`);
-  return bits.join(' ');
 }
 
 async function contextLabels(): Promise<Map<number, string>> {
@@ -196,7 +181,8 @@ export function buildMcpServer(): McpServer {
   reg(
     'list_tasks',
     {
-      description: 'List open tasks. Filter by context slug, status, or overdue.',
+      description:
+        'List open tasks. Filter by context slug, status, or overdue. Each task with a deadline reports duration_min — its block length in minutes; when no explicit duration was set this is the implicit default and is marked "(default)".',
       inputSchema: {
         context: z.string().optional(),
         status: z.enum(['active', 'waiting', 'done', 'missed']).optional(),
@@ -229,7 +215,8 @@ export function buildMcpServer(): McpServer {
   reg(
     'get_today',
     {
-      description: "Today's agenda: open tasks due today or overdue, plus any running timer.",
+      description:
+        'Today\'s agenda: open tasks due today or overdue, plus any running timer. Each task reports duration_min — its block length in minutes; when no explicit duration was set this is the implicit default and is marked "(default)".',
       inputSchema: {},
     },
     async () => {
