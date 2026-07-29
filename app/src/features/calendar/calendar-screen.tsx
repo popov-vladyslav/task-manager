@@ -17,6 +17,7 @@ import { colors, monoFont, WIDE_BREAKPOINT } from '../../theme';
 import { haptics } from '../../lib/haptics';
 import { useCalendarStore } from '../../store/calendar';
 import { useTasksStore } from '../../store/tasks';
+import { useRefreshOnFocus } from '../../lib/use-refresh-on-focus';
 import { SideNavLinks } from '../nav/nav-chrome';
 import { useAuthStore } from '../../store/auth';
 import { api } from '../../lib/api';
@@ -59,8 +60,18 @@ export function CalendarScreen() {
   const { width } = useWindowDimensions();
   const wide = width >= WIDE_BREAKPOINT;
 
-  const { mode, anchor, data, load, hydrateMode, setMode, shift, goToDay, goToToday } =
-    useCalendarStore();
+  const {
+    mode,
+    anchor,
+    data,
+    load,
+    refreshIfStale,
+    hydrateMode,
+    setMode,
+    shift,
+    goToDay,
+    goToToday,
+  } = useCalendarStore();
   const contexts = useTasksStore((s) => s.contexts);
 
   const [detailTask, setDetailTask] = useState<Task | null>(null);
@@ -77,6 +88,10 @@ export function CalendarScreen() {
     hydrateMode(); // restore last-selected mode (defaults to Day), then load
     if (useTasksStore.getState().contexts.length === 0) useTasksStore.getState().load();
   }, [hydrateMode]);
+
+  // Blocks move from the other tabs (and from MCP / the scheduler), so refetch the
+  // visible range when this screen regains focus — silent, and only if stale.
+  useRefreshOnFocus(refreshIfStale);
 
   const colorOf = (id: number | null) =>
     (id != null && contexts.find((c) => c.id === id)?.color) || colors.textMuted;

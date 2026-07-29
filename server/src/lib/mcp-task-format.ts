@@ -1,4 +1,4 @@
-import { DEFAULT_DURATION_MIN, type Task } from '@task-manager/shared';
+import { DEFAULT_DURATION_MIN, formatTrackedShort, type Task } from '@task-manager/shared';
 
 // One-line rendering of a task for the MCP tools. Pure, so the payload a client
 // actually receives is unit-testable.
@@ -23,6 +23,10 @@ export function fmtTask(t: Task, contextLabel?: string): string {
     if (duration) bits.push(duration);
   }
   if (t.remindAt) bits.push(`remind ${t.remindAt.slice(0, 16).replace('T', ' ')}`);
+  // Time actually spent, accumulated across timer sessions. Omitted when never
+  // tracked, so an untouched task stays terse.
+  const tracked = formatTrackedShort(t.trackedSec);
+  if (tracked) bits.push(`tracked=${tracked}`);
   if (t.recurrenceRule) {
     bits.push(`repeats ${t.recurrenceRule}${t.nextInstance ? ` (next ${t.nextInstance})` : ''}`);
   }

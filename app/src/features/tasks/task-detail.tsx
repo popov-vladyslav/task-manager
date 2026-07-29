@@ -20,7 +20,8 @@ import {
   BottomSheetTextInput,
   type BottomSheetBackdropProps,
 } from '@gorhom/bottom-sheet';
-import { ChevronRight, MessageSquare, Trash2, X } from 'lucide-react-native';
+import { ChevronRight, MessageSquare, Timer, Trash2, X } from 'lucide-react-native';
+import { formatTrackedLong } from '@task-manager/shared';
 import type {
   Comment,
   Context,
@@ -163,6 +164,9 @@ function DetailContent({
   Input,
 }: Props & { wide: boolean; Input: InputComponent }) {
   const adjustCommentCount = useTasksStore((s) => s.adjustCommentCount);
+  // Accumulated timer time, spelled out here (the card shows a compact form).
+  // Nothing is rendered when the task has never been tracked.
+  const tracked = formatTrackedLong(task.trackedSec);
   const [title, setTitle] = useState(task.title);
   const [comments, setComments] = useState<Comment[]>([]);
   const [draft, setDraft] = useState('');
@@ -343,6 +347,14 @@ function DetailContent({
         </View>
       </View>
 
+      {tracked ? (
+        <View style={styles.trackedRow}>
+          <Timer size={13} color={colors.accentTimer} />
+          <Text style={styles.trackedLabel}>Time tracked</Text>
+          <Text style={styles.trackedValue}>{tracked}</Text>
+        </View>
+      ) : null}
+
       <View>
         <FieldLabel>Comments</FieldLabel>
         {comments.map((c) => (
@@ -470,6 +482,17 @@ export function TaskDetail(props: Props) {
 }
 
 const styles = StyleSheet.create({
+  trackedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: radius.card,
+    backgroundColor: colors.bgCard,
+  },
+  trackedLabel: { flex: 1, fontSize: 13, color: colors.textSecondary },
+  trackedValue: { fontFamily: monoFont, fontSize: 13, color: colors.accentTimer },
   pill: {
     paddingHorizontal: 12,
     paddingVertical: 6,

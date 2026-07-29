@@ -36,6 +36,9 @@ export interface Task {
   // is a scheduled calendar block of `durationMin` minutes (defaults to 30).
   // durationMin is non-null iff dueAt is non-null (enforced in the service).
   durationMin: number | null;
+  // Total time tracked on this task, in seconds, accumulated across every timer
+  // session. 0 when it has never been tracked (the UI then shows nothing).
+  trackedSec: number;
   sortGlobal: number;
   sortContext: number;
   recurrenceId: string | null;

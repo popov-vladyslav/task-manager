@@ -8,8 +8,8 @@ import {
   type GestureResponderEvent,
 } from 'react-native';
 import Swipeable, { type SwipeableMethods } from 'react-native-gesture-handler/ReanimatedSwipeable';
-import { Bell, Clock, Info, MessageSquare, Play, Repeat, Trash2 } from 'lucide-react-native';
-import type { Context, Task } from '@task-manager/shared';
+import { Bell, Clock, Info, MessageSquare, Play, Repeat, Timer, Trash2 } from 'lucide-react-native';
+import { formatTrackedShort, type Context, type Task } from '@task-manager/shared';
 import {
   colors,
   contextStripWidth,
@@ -58,6 +58,8 @@ function TaskCardBase({
   const due = shortDate(task.dueAt);
   const remind = shortTime(task.remindAt);
   const next = task.recurrenceId ? nextInstanceLabel(task.nextInstance) : null;
+  // Accumulated timer time — compact, and absent entirely when nothing was tracked.
+  const tracked = formatTrackedShort(task.trackedSec);
 
   const openTimer = useTimerStore((s) => s.open);
   const inputRef = useRef<TextInput>(null);
@@ -85,7 +87,7 @@ function TaskCardBase({
     else if (!t) setTitle(task.title); // don't allow an empty title
   };
 
-  const hasMeta = !!(context || due || remind || next || task.commentsCount);
+  const hasMeta = !!(context || due || remind || next || tracked || task.commentsCount);
 
   // Swipe left → reveal two actions: Details (open the sheet) and Delete.
   const renderRightActions = () => (
@@ -181,6 +183,13 @@ function TaskCardBase({
                   icon={<Repeat size={9} color={colors.textMuted} />}
                   text={next}
                   color={colors.textMuted}
+                />
+              ) : null}
+              {tracked ? (
+                <Badge
+                  icon={<Timer size={9} color={colors.accentTimer} />}
+                  text={tracked}
+                  color={colors.accentTimer}
                 />
               ) : null}
               {task.commentsCount > 0 ? (

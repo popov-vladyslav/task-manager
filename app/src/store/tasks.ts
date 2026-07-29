@@ -7,6 +7,14 @@ import { TOAST_DURATION_MS, useToastStore } from './toast';
 const DELETE_UNDO_MS = TOAST_DURATION_MS + 1000;
 const pendingDeletes = new Map<string, { task: Task; timer: ReturnType<typeof setTimeout> }>();
 
+// Data younger than this is considered fresh, so a screen regaining focus right
+// after boot (or right after you tabbed away and back) doesn't refetch.
+const STALE_AFTER_MS = 10_000;
+
+// The single in-flight load(), shared by every caller so focus events, mount and
+// pull-to-refresh can never stack up duplicate requests.
+let inFlightLoad: Promise<void> | null = null;
+
 export function isPendingDelete(id: string): boolean {
   return pendingDeletes.has(id);
 }
@@ -18,10 +26,12 @@ interface TasksState {
   activeContextId: number | null; // null = "All"
   loading: boolean;
   hydrated: boolean;
+  lastLoadedAt: number | null; // client ms of the last successful load
   error: string | null;
   pendingOpenTaskId: string | null; // set by a tapped notification; consumed by the screen
 
-  load: () => Promise<void>;
+  load: (opts?: { silent?: boolean }) => Promise<void>;
+  refreshIfStale: (maxAgeMs?: number) => Promise<void>;
   loadCompleted: () => Promise<void>;
   uncomplete: (task: Task) => Promise<void>;
   setActiveContext: (id: number | null) => void;
@@ -34,7 +44,12 @@ interface TasksState {
   resetData: () => Promise<void>; // wipes tasks/recurrence/timers; keeps contexts
   addTask: (
     title: string,
-    extra?: { contextId?: number | null; dueAt?: string | null; remindAt?: string | null; durationMin?: number | null },
+    extra?: {
+      contextId?: number | null;
+      dueAt?: string | null;
+      remindAt?: string | null;
+      durationMin?: number | null;
+    },
   ) => Promise<Task | null>;
   toggleComplete: (task: Task) => Promise<void>;
   patchTask: (id: string, patch: Parameters<typeof api.updateTask>[1]) => Promise<void>;
@@ -57,18 +72,37 @@ export const useTasksStore = create<TasksState>((set, get) => ({
   activeContextId: null,
   loading: false,
   hydrated: false,
+  lastLoadedAt: null,
   error: null,
   pendingOpenTaskId: null,
 
-  async load() {
-    set({ loading: true, error: null });
-    try {
-      const [contexts, tasks] = await Promise.all([api.listContexts(), api.listTasks()]);
-      const open = pendingDeletes.size ? tasks.filter((t) => !pendingDeletes.has(t.id)) : tasks;
-      set({ contexts, tasks: open, loading: false, hydrated: true });
-    } catch (e) {
-      set({ loading: false, error: e instanceof Error ? e.message : 'Failed to load' });
-    }
+  async load(opts) {
+    // Coalesce concurrent callers (focus + pull-to-refresh firing together, or
+    // focus firing rapidly while tabbing) onto one request.
+    if (inFlightLoad) return inFlightLoad;
+    // `silent` keeps `loading` false so an already-populated screen never flashes
+    // its full-screen spinner on a background refresh.
+    if (!opts?.silent) set({ loading: true, error: null });
+    inFlightLoad = (async () => {
+      try {
+        const [contexts, tasks] = await Promise.all([api.listContexts(), api.listTasks()]);
+        const open = pendingDeletes.size ? tasks.filter((t) => !pendingDeletes.has(t.id)) : tasks;
+        set({ contexts, tasks: open, loading: false, hydrated: true, lastLoadedAt: Date.now() });
+      } catch (e) {
+        set({ loading: false, error: e instanceof Error ? e.message : 'Failed to load' });
+      } finally {
+        inFlightLoad = null;
+      }
+    })();
+    return inFlightLoad;
+  },
+
+  // Silent background refresh, skipped while the data is still fresh — so
+  // returning to a screen you just left costs nothing.
+  async refreshIfStale(maxAgeMs = STALE_AFTER_MS) {
+    const { lastLoadedAt } = get();
+    if (lastLoadedAt != null && Date.now() - lastLoadedAt < maxAgeMs) return;
+    await get().load({ silent: true });
   },
 
   async loadCompleted() {
@@ -170,7 +204,9 @@ export const useTasksStore = create<TasksState>((set, get) => ({
       pendingDeletes.delete(id);
       api.deleteTask(id).catch(() => {
         if (!get().tasks.some((t) => t.id === id)) set({ tasks: [task, ...get().tasks] });
-        useToastStore.getState().show({ title: 'Couldn’t delete task — restored', message: task.title });
+        useToastStore
+          .getState()
+          .show({ title: 'Couldn’t delete task — restored', message: task.title });
       });
     }, DELETE_UNDO_MS);
     pendingDeletes.set(id, { task, timer });
@@ -205,7 +241,8 @@ export const useTasksStore = create<TasksState>((set, get) => ({
     const b = sortOf(beforeId);
     // Fractional index between neighbors — applied optimistically so the list
     // settles in place instead of snapping back during the API round-trip.
-    const newSort = a == null && b == null ? 0 : a == null ? b! - 1 : b == null ? a + 1 : (a + b) / 2;
+    const newSort =
+      a == null && b == null ? 0 : a == null ? b! - 1 : b == null ? a + 1 : (a + b) / 2;
     set({ tasks: current.map((t) => (t.id === id ? { ...t, [key]: newSort } : t)) });
     try {
       const updated = await api.reorderTask(id, { afterId, beforeId, scope });

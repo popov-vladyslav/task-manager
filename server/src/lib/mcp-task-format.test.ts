@@ -11,6 +11,7 @@ const BASE: Task = {
   dueAt: '2026-07-31T09:00:00.000Z',
   remindAt: null,
   durationMin: 45,
+  trackedSec: 0,
   sortGlobal: 0,
   sortContext: 0,
   recurrenceId: null,
@@ -59,4 +60,9 @@ test('the rest of the line is unchanged', () => {
   assert.match(line, /repeats daily \(next 2026-08-01\)/);
   assert.match(line, /waiting/);
   assert.match(line, /2 comment\(s\)/);
+});
+
+test('tracked time appears when there is any, and is omitted at zero', () => {
+  assert.doesNotMatch(fmtTask(BASE), /tracked=/);
+  assert.match(fmtTask({ ...BASE, trackedSec: 80 * 60 }), /tracked=1h 20m/);
 });
