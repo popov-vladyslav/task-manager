@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Platform, StyleSheet } from 'react-native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -14,6 +14,7 @@ import { useAuthStore } from '../store/auth';
 import { useTasksStore } from '../store/tasks';
 import { ReminderModal } from '../features/reminders/reminder-modal';
 import { TopToast } from '../components/top-toast';
+import { SplashOverlay } from '../components/splash-overlay';
 import { NotificationBridge } from '../features/reminders/notification-bridge';
 import { OtaUpdater } from '../features/updates/ota-updater';
 
@@ -22,15 +23,24 @@ SystemUI.setBackgroundColorAsync(colors.bgBase).catch(() => {});
 
 export default function RootLayout() {
   // Cold-start boot: restore the session and prefetch the task list *under the
-  // splash screen*, then reveal — so there's no post-launch spinner. hideAsync
-  // runs even if a request fails (load() resolves on error), so we never hang.
+  // splash overlay*, then reveal — so there's no post-launch spinner. `booted`
+  // flips even if a request fails (load() resolves on error), so we never hang.
+  //
+  // SplashOverlay is a React copy of the native launch screen; it hides the
+  // native splash itself once it has laid out, which avoids the size jump
+  // expo-splash-screen's own loading view introduces. `splashGone` unmounts it
+  // after the fade so it stops covering the app.
+  const [booted, setBooted] = useState(false);
+  const [splashGone, setSplashGone] = useState(false);
+  const handleSplashHidden = useCallback(() => setSplashGone(true), []);
+
   useEffect(() => {
     (async () => {
       try {
         await useAuthStore.getState().load();
         if (useAuthStore.getState().jwt) await useTasksStore.getState().load();
       } finally {
-        SplashScreen.hideAsync().catch(() => {});
+        setBooted(true);
       }
     })();
   }, []);
@@ -58,6 +68,9 @@ export default function RootLayout() {
             {Platform.OS !== 'web' ? <OtaUpdater /> : null}
             <ReminderModal />
             <TopToast />
+            {Platform.OS !== 'web' && !splashGone ? (
+              <SplashOverlay visible={!booted} onHidden={handleSplashHidden} />
+            ) : null}
           </BottomSheetModalProvider>
         </SafeAreaProvider>
       </KeyboardProvider>

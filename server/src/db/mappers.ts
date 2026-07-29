@@ -32,6 +32,7 @@ export function toTask(r: InferSelectModel<typeof tasks>, extras: TaskExtras): T
     dueAt: iso(r.dueAt),
     remindAt: iso(r.remindAt),
     durationMin: r.durationMin ?? null,
+    trackedSec: r.trackedSec ?? 0,
     sortGlobal: r.sortGlobal,
     sortContext: r.sortContext,
     recurrenceId: r.recurrenceId ?? null,

@@ -39,7 +39,15 @@ export default function TabsLayout() {
   return (
     <Tabs style={styles.tabs}>
       <View style={styles.slot}>
-        <TabSlot />
+        {/* TabSlot's ScreenContainer ships `flexShrink: 0`. On native that is
+            harmless — a ScrollView's content is measured in its own pass and
+            never grows its parent. On web an RNW ScrollView is a plain div, so
+            its content DOES feed the ancestors' intrinsic height: the container
+            grew past this bounded slot, nothing could shrink, and the overflow
+            was clipped by `body { overflow: hidden }` instead of scrolled.
+            Letting it shrink again keeps every screen's height bounded, so the
+            ScrollView inside scrolls itself. Inert on native. */}
+        <TabSlot style={styles.slotScreens} />
       </View>
 
       {/* Mobile keeps the bottom bar here; wide viewports use each screen's sidebar. */}
@@ -67,5 +75,6 @@ const styles = StyleSheet.create({
   },
   tabs: { flex: 1, backgroundColor: colors.bgBase },
   slot: { flex: 1 },
+  slotScreens: { flexShrink: 1, minHeight: 0 },
   hidden: { display: 'none' },
 });

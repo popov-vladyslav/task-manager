@@ -44,18 +44,26 @@ export const tasks = pgTable('tasks', {
   id: uuid('id').primaryKey().defaultRandom(),
   title: text('title').notNull(),
   contextId: integer('context_id').references(() => contexts.id),
-  status: text('status', { enum: ['active', 'waiting', 'done'] })
+  // 'missed' is terminal, like 'done' — a recurring occurrence that was
+  // superseded by the next one without being completed (0006 migration).
+  status: text('status', { enum: ['active', 'waiting', 'done', 'missed'] })
     .notNull()
     .default('active'),
   dueAt: timestamp('due_at', { withTimezone: true }),
   remindAt: timestamp('remind_at', { withTimezone: true }),
   durationMin: integer('duration_min'),
+  // Total seconds tracked across all closed time_entries for this task. Kept in
+  // sync whenever an interval is closed (services/timer.ts); time_entries stays
+  // the source of truth.
+  trackedSec: integer('tracked_sec').notNull().default(0),
   sortGlobal: real('sort_global').notNull().default(0),
   sortContext: real('sort_context').notNull().default(0),
   recurrenceId: uuid('recurrence_id'),
   completedAt: timestamp('completed_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-  createdVia: text('created_via', { enum: ['app', 'mcp'] }).notNull().default('app'),
+  createdVia: text('created_via', { enum: ['app', 'mcp'] })
+    .notNull()
+    .default('app'),
 });
 
 export const comments = pgTable('comments', {

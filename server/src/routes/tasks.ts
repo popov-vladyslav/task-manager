@@ -27,7 +27,7 @@ const createSchema = z.object({
 const updateSchema = z.object({
   title: z.string().min(1).optional(),
   contextId: z.number().int().nullable().optional(),
-  status: z.enum(['active', 'waiting', 'done']).optional(),
+  status: z.enum(['active', 'waiting', 'done', 'missed']).optional(),
   dueAt: z.string().nullable().optional(),
   remindAt: z.string().nullable().optional(),
   durationMin: z.number().int().positive().nullable().optional(),

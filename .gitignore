@@ -25,3 +25,6 @@ expo-env.d.ts
 
 # stray screenshots at repo root (asset PNGs live under app/)
 /*.png
+
+# Claude Design handoff bundle (SVG masters vendored into app/assets/icons-src/)
+design-export/

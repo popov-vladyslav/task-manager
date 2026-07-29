@@ -2,7 +2,14 @@
 // Timestamps cross the wire as ISO-8601 strings (the DB layer maps Date <-> string).
 // NOTE: task priority is intentionally out of scope (removed from DB, API, and UI).
 
-export type TaskStatus = 'active' | 'waiting' | 'done';
+// 'done' and 'missed' are both terminal: neither shows in an active list.
+// 'missed' closes out a recurring occurrence that was superseded by the next
+// one without ever being completed (see services/recurring.ts). Only the
+// recurrence engine sets it; ordinary one-off tasks are never marked missed.
+export type TaskStatus = 'active' | 'waiting' | 'done' | 'missed';
+
+// Statuses that keep a task out of every open/active list.
+export const TERMINAL_STATUSES = ['done', 'missed'] as const satisfies readonly TaskStatus[];
 export type CreatedVia = 'app' | 'mcp';
 export type ReorderScope = 'global' | 'context';
 
@@ -29,6 +36,9 @@ export interface Task {
   // is a scheduled calendar block of `durationMin` minutes (defaults to 30).
   // durationMin is non-null iff dueAt is non-null (enforced in the service).
   durationMin: number | null;
+  // Total time tracked on this task, in seconds, accumulated across every timer
+  // session. 0 when it has never been tracked (the UI then shows nothing).
+  trackedSec: number;
   sortGlobal: number;
   sortContext: number;
   recurrenceId: string | null;

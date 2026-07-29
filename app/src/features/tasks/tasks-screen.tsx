@@ -15,6 +15,7 @@ import type { Context, Task } from '@task-manager/shared';
 import { colors, headerDate, monoFont, WIDE_BREAKPOINT } from '../../theme';
 import { haptics } from '../../lib/haptics';
 import { useTasksStore } from '../../store/tasks';
+import { useRefreshOnFocus } from '../../lib/use-refresh-on-focus';
 import { useToastStore } from '../../store/toast';
 import { useAuthStore } from '../../store/auth';
 import { SideNavLinks } from '../nav/nav-chrome';
@@ -34,6 +35,7 @@ export function TasksScreen() {
     activeContextId,
     loading,
     load,
+    refreshIfStale,
     loadCompleted,
     uncomplete,
     setActiveContext,
@@ -56,6 +58,11 @@ export function TasksScreen() {
   useEffect(() => {
     if (!useTasksStore.getState().hydrated) load();
   }, [load]);
+
+  // Tabbing away and back can leave the list stale (the scheduler spawns
+  // recurring instances, MCP writes tasks). Refetch on focus — silently, and
+  // only if the data has actually aged (see the store).
+  useRefreshOnFocus(refreshIfStale);
 
   // Keep the open detail in sync with store updates (e.g. after a patch).
   useEffect(() => {

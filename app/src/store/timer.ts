@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { api } from '../lib/api';
+import { useTasksStore } from './tasks';
 
 // A focus session shown as a full-screen timer. Pause ends the current backend
 // time_entry (recording the worked period) and Resume starts a new one, so the
@@ -57,6 +58,9 @@ export const useTimerStore = create<TimerState>((set, get) => ({
     set({ running: false, runningSince: null, baseMs: baseMs + (Date.now() - runningSince) });
     try {
       await api.stopTimer();
+      // The backend just credited this interval to the task's total — pull it in
+      // so the card/detail figures are current.
+      await useTasksStore.getState().load({ silent: true });
     } catch {
       /* ignore — close() will try again */
     }
@@ -83,5 +87,8 @@ export const useTimerStore = create<TimerState>((set, get) => ({
         /* ignore */
       }
     }
+    // Refresh regardless of wasRunning: a paused session already wrote its
+    // intervals, and the totals on the list should reflect them on return.
+    await useTasksStore.getState().load({ silent: true });
   },
 }));

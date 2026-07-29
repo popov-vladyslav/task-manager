@@ -1,4 +1,5 @@
-import { and, asc, eq, ne, sql } from 'drizzle-orm';
+import { and, asc, eq, notInArray, sql } from 'drizzle-orm';
+import { TERMINAL_STATUSES } from '@task-manager/shared';
 import type { Context, CreateContextInput, UpdateContextInput } from '@task-manager/shared';
 import { db } from '../db/client';
 import { contexts, recurrenceRules, tasks } from '../db/schema';
@@ -78,7 +79,7 @@ export async function deleteContext(id: number): Promise<void> {
   const [{ openCount }] = await db
     .select({ openCount: sql<number>`count(*)::int` })
     .from(tasks)
-    .where(and(eq(tasks.contextId, id), ne(tasks.status, 'done')));
+    .where(and(eq(tasks.contextId, id), notInArray(tasks.status, [...TERMINAL_STATUSES])));
   if (Number(openCount) > 0) {
     throw conflict(`${openCount} open task(s) still use this context — move or delete them first.`);
   }
@@ -86,7 +87,10 @@ export async function deleteContext(id: number): Promise<void> {
   await db.transaction(async (tx) => {
     // Only done tasks remain (open ones were blocked above); detach them + rules.
     await tx.update(tasks).set({ contextId: null }).where(eq(tasks.contextId, id));
-    await tx.update(recurrenceRules).set({ contextId: null }).where(eq(recurrenceRules.contextId, id));
+    await tx
+      .update(recurrenceRules)
+      .set({ contextId: null })
+      .where(eq(recurrenceRules.contextId, id));
     await tx.delete(contexts).where(eq(contexts.id, id));
   });
 }
