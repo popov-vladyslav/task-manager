@@ -44,7 +44,9 @@ export const tasks = pgTable('tasks', {
   id: uuid('id').primaryKey().defaultRandom(),
   title: text('title').notNull(),
   contextId: integer('context_id').references(() => contexts.id),
-  status: text('status', { enum: ['active', 'waiting', 'done'] })
+  // 'missed' is terminal, like 'done' — a recurring occurrence that was
+  // superseded by the next one without being completed (0006 migration).
+  status: text('status', { enum: ['active', 'waiting', 'done', 'missed'] })
     .notNull()
     .default('active'),
   dueAt: timestamp('due_at', { withTimezone: true }),

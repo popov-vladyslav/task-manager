@@ -199,7 +199,7 @@ export function buildMcpServer(): McpServer {
       description: 'List open tasks. Filter by context slug, status, or overdue.',
       inputSchema: {
         context: z.string().optional(),
-        status: z.enum(['active', 'waiting', 'done']).optional(),
+        status: z.enum(['active', 'waiting', 'done', 'missed']).optional(),
         overdue: z.boolean().optional(),
       },
     },
@@ -304,7 +304,7 @@ export function buildMcpServer(): McpServer {
         due_at: z.string().nullable().optional(),
         remind_at: z.string().nullable().optional(),
         duration_min: z.number().int().positive().nullable().optional(),
-        status: z.enum(['active', 'waiting', 'done']).optional(),
+        status: z.enum(['active', 'waiting', 'done', 'missed']).optional(),
         recurrence: recurrenceInput.nullable().optional(),
       },
     },

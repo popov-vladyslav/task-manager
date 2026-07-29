@@ -1,4 +1,4 @@
-import { and, isNotNull, lte } from 'drizzle-orm';
+import { and, isNotNull, lte, ne } from 'drizzle-orm';
 import { DEFAULT_DURATION_MIN, type CalendarData } from '@task-manager/shared';
 import { db } from '../db/client';
 import { tasks } from '../db/schema';
@@ -32,7 +32,10 @@ export async function getCalendar(fromISO: string, toISO: string): Promise<Calen
       status: tasks.status,
     })
     .from(tasks)
-    .where(and(isNotNull(tasks.dueAt), lte(tasks.dueAt, to)));
+    // Completed tasks stay (flagged done). Occurrences closed out as 'missed'
+    // are dropped: the block never happened, and rendering it would be
+    // indistinguishable from one still pending.
+    .where(and(isNotNull(tasks.dueAt), lte(tasks.dueAt, to), ne(tasks.status, 'missed')));
 
   const blocks = rows
     .map((r) => {

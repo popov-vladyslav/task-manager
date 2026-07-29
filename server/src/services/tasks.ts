@@ -1,5 +1,5 @@
-import { and, asc, eq, ilike, isNotNull, lte, ne, sql } from 'drizzle-orm';
-import { DEFAULT_DURATION_MIN } from '@task-manager/shared';
+import { and, asc, eq, ilike, isNotNull, lte, notInArray, sql } from 'drizzle-orm';
+import { DEFAULT_DURATION_MIN, TERMINAL_STATUSES } from '@task-manager/shared';
 import type {
   CreateTaskInput,
   ReorderInput,
@@ -65,7 +65,9 @@ export async function listTasks(filter: ListFilter): Promise<Task[]> {
   const conds = [];
   if (filter.contextId != null) conds.push(eq(tasks.contextId, filter.contextId));
   if (filter.status) conds.push(eq(tasks.status, filter.status));
-  else conds.push(ne(tasks.status, 'done')); // default: open tasks only
+  // Default: open tasks only. 'done' and 'missed' are both terminal — a
+  // recurring occurrence closed out as 'missed' must not show in any list.
+  else conds.push(notInArray(tasks.status, [...TERMINAL_STATUSES]));
   if (filter.dueBefore) {
     conds.push(isNotNull(tasks.dueAt));
     conds.push(lte(tasks.dueAt, filter.dueBefore));
@@ -100,7 +102,12 @@ export async function searchOpenTasks(query: string): Promise<Task[]> {
     .select(selection)
     .from(tasks)
     .leftJoin(recurrenceRules, eq(tasks.recurrenceId, recurrenceRules.id))
-    .where(and(ne(tasks.status, 'done'), ilike(tasks.title, `%${query.trim()}%`)))
+    .where(
+      and(
+        notInArray(tasks.status, [...TERMINAL_STATUSES]),
+        ilike(tasks.title, `%${query.trim()}%`),
+      ),
+    )
     .orderBy(asc(tasks.sortGlobal));
   return rows.map(rowToTask);
 }

@@ -2,7 +2,14 @@
 // Timestamps cross the wire as ISO-8601 strings (the DB layer maps Date <-> string).
 // NOTE: task priority is intentionally out of scope (removed from DB, API, and UI).
 
-export type TaskStatus = 'active' | 'waiting' | 'done';
+// 'done' and 'missed' are both terminal: neither shows in an active list.
+// 'missed' closes out a recurring occurrence that was superseded by the next
+// one without ever being completed (see services/recurring.ts). Only the
+// recurrence engine sets it; ordinary one-off tasks are never marked missed.
+export type TaskStatus = 'active' | 'waiting' | 'done' | 'missed';
+
+// Statuses that keep a task out of every open/active list.
+export const TERMINAL_STATUSES = ['done', 'missed'] as const satisfies readonly TaskStatus[];
 export type CreatedVia = 'app' | 'mcp';
 export type ReorderScope = 'global' | 'context';
 
