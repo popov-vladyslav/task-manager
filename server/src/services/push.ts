@@ -3,6 +3,7 @@ import { and, eq, inArray, isNotNull, lte, notExists, sql } from 'drizzle-orm';
 import { db } from '../db/client';
 import { contexts, notificationLog, pushTokens, settings, tasks } from '../db/schema';
 import { composeNotificationTitle } from '../lib/notification-title';
+import { dispatchReminders } from '../lib/reminder-dispatch';
 import { summaryPushBody } from '../lib/morning-summary';
 import { getMorningSummary } from './summary';
 
@@ -66,6 +67,12 @@ async function sendPush(title: string, body: string, data: Record<string, unknow
 }
 
 // send-reminders (every minute): active tasks past remind_at without an 'initial' log.
+//
+// Claim-then-send (see lib/reminder-dispatch.ts): the 'initial' log row is
+// written *before* the push, and the push only goes out if that write won the
+// race. The notExists filter below is just a cheap prefilter now — the partial
+// unique index on notification_log(task_id) where kind='initial' (drizzle/0009)
+// is what actually makes a second delivery impossible.
 export async function sendReminders(now: Date = new Date()): Promise<number> {
   const due = await db
     .select({
@@ -91,28 +98,45 @@ export async function sendReminders(now: Date = new Date()): Promise<number> {
       ),
     );
 
-  for (const t of due) {
-    const title = composeNotificationTitle(
-      { contextName: t.contextName, contextColor: t.contextColor, dueAt: t.dueAt },
-      'reminder',
-      now,
-    );
-    await sendPush(title, t.title, { taskId: t.id });
-    await db.insert(notificationLog).values({ taskId: t.id, kind: 'initial' });
-  }
+  const sent = await dispatchReminders(due, {
+    claim: async (t) => {
+      const claimed = await db
+        .insert(notificationLog)
+        .values({ taskId: t.id, kind: 'initial' })
+        .onConflictDoNothing()
+        .returning({ id: notificationLog.id });
+      return claimed.length > 0;
+    },
+    send: async (t) => {
+      const title = composeNotificationTitle(
+        { contextName: t.contextName, contextColor: t.contextColor, dueAt: t.dueAt },
+        'reminder',
+        now,
+      );
+      await sendPush(title, t.title, { taskId: t.id });
+    },
+    release: async (t) => {
+      await db
+        .delete(notificationLog)
+        .where(and(eq(notificationLog.taskId, t.id), eq(notificationLog.kind, 'initial')));
+    },
+  });
+
   // Repeat-reminders key off notification_log, not remind_at, so clearing this is safe.
-  if (due.length) {
+  // Only the tasks we actually notified about — one we lost the claim on is being
+  // handled by the run that won it.
+  if (sent.length) {
     await db
       .update(tasks)
       .set({ remindAt: null })
       .where(
         inArray(
           tasks.id,
-          due.map((t) => t.id),
+          sent.map((t) => t.id),
         ),
       );
   }
-  return due.length;
+  return sent.length;
 }
 
 // repeat-reminders (every 15 min): opt-in via settings; re-notify tasks whose initial
