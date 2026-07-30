@@ -3,6 +3,9 @@ import { and, eq, inArray, isNotNull, lte, notExists, sql } from 'drizzle-orm';
 import { db } from '../db/client';
 import { contexts, notificationLog, pushTokens, settings, tasks } from '../db/schema';
 import { composeNotificationTitle } from '../lib/notification-title';
+import { dispatchReminders } from '../lib/reminder-dispatch';
+import { summaryPushBody } from '../lib/morning-summary';
+import { getMorningSummary } from './summary';
 
 const expo = new Expo();
 
@@ -64,6 +67,12 @@ async function sendPush(title: string, body: string, data: Record<string, unknow
 }
 
 // send-reminders (every minute): active tasks past remind_at without an 'initial' log.
+//
+// Claim-then-send (see lib/reminder-dispatch.ts): the 'initial' log row is
+// written *before* the push, and the push only goes out if that write won the
+// race. The notExists filter below is just a cheap prefilter now — the partial
+// unique index on notification_log(task_id) where kind='initial' (drizzle/0009)
+// is what actually makes a second delivery impossible.
 export async function sendReminders(now: Date = new Date()): Promise<number> {
   const due = await db
     .select({
@@ -89,20 +98,45 @@ export async function sendReminders(now: Date = new Date()): Promise<number> {
       ),
     );
 
-  for (const t of due) {
-    const title = composeNotificationTitle(
-      { contextName: t.contextName, contextColor: t.contextColor, dueAt: t.dueAt },
-      'reminder',
-      now,
-    );
-    await sendPush(title, t.title, { taskId: t.id });
-    await db.insert(notificationLog).values({ taskId: t.id, kind: 'initial' });
-  }
+  const sent = await dispatchReminders(due, {
+    claim: async (t) => {
+      const claimed = await db
+        .insert(notificationLog)
+        .values({ taskId: t.id, kind: 'initial' })
+        .onConflictDoNothing()
+        .returning({ id: notificationLog.id });
+      return claimed.length > 0;
+    },
+    send: async (t) => {
+      const title = composeNotificationTitle(
+        { contextName: t.contextName, contextColor: t.contextColor, dueAt: t.dueAt },
+        'reminder',
+        now,
+      );
+      await sendPush(title, t.title, { taskId: t.id });
+    },
+    release: async (t) => {
+      await db
+        .delete(notificationLog)
+        .where(and(eq(notificationLog.taskId, t.id), eq(notificationLog.kind, 'initial')));
+    },
+  });
+
   // Repeat-reminders key off notification_log, not remind_at, so clearing this is safe.
-  if (due.length) {
-    await db.update(tasks).set({ remindAt: null }).where(inArray(tasks.id, due.map((t) => t.id)));
+  // Only the tasks we actually notified about — one we lost the claim on is being
+  // handled by the run that won it.
+  if (sent.length) {
+    await db
+      .update(tasks)
+      .set({ remindAt: null })
+      .where(
+        inArray(
+          tasks.id,
+          sent.map((t) => t.id),
+        ),
+      );
   }
-  return due.length;
+  return sent.length;
 }
 
 // repeat-reminders (every 15 min): opt-in via settings; re-notify tasks whose initial
@@ -143,4 +177,46 @@ export async function repeatReminders(now: Date = new Date()): Promise<number> {
     await db.insert(notificationLog).values({ taskId: r.id, kind: 'repeat' });
   }
   return rows.length;
+}
+
+// Key in `settings` holding the last date (YYYY-MM-DD, local) the morning summary
+// push went out. Cheaper than a notification_log kind (whose enum would need a
+// migration) and enough to make the send idempotent per day — so a restart at
+// 07:30 can't double-notify.
+const SUMMARY_SENT_KEY = 'morning_summary_last_sent';
+
+function localDateStr(d: Date): string {
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${d.getFullYear()}-${m}-${day}`;
+}
+
+// morning-summary (once a day): how many ordinary tasks were left unfinished.
+// The notification carries only the count — tapping it opens the in-app sheet
+// (data.kind is what the app's NotificationBridge keys off), which is where the
+// per-task actions live. Returns the number of tasks reported, 0 if nothing was
+// sent.
+export async function sendMorningSummary(now: Date = new Date()): Promise<number> {
+  const today = localDateStr(now);
+  const [sent] = await db.select().from(settings).where(eq(settings.key, SUMMARY_SENT_KEY));
+  if (sent?.value === today) return 0; // already notified today
+
+  const { yesterday, older } = await getMorningSummary(now);
+  const total = yesterday.length + older.length;
+  // Nothing overdue → stay silent rather than sending "0 tasks".
+  if (total === 0) return 0;
+
+  await sendPush(
+    "Yesterday's leftovers",
+    summaryPushBody({ yesterday: yesterday.length, older: older.length }),
+    {
+      kind: 'morning-summary',
+    },
+  );
+
+  await db
+    .insert(settings)
+    .values({ key: SUMMARY_SENT_KEY, value: today })
+    .onConflictDoUpdate({ target: settings.key, set: { value: today } });
+  return total;
 }

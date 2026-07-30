@@ -5,6 +5,7 @@ import type {
   Context,
   CreateContextInput,
   CreateTaskInput,
+  MorningSummary,
   ReorderInput,
   Task,
   TimeEntry,
@@ -87,7 +88,8 @@ export const api = {
   resetData: () => request<void>('/api/data', { method: 'DELETE', body: { confirm: 'RESET' } }),
   listTasks: (params?: { context?: number; status?: string }) =>
     request<Task[]>(`/api/tasks${qs(params)}`),
-  createTask: (input: CreateTaskInput) => request<Task>('/api/tasks', { method: 'POST', body: input }),
+  createTask: (input: CreateTaskInput) =>
+    request<Task>('/api/tasks', { method: 'POST', body: input }),
   getTask: (id: string) => request<Task>(`/api/tasks/${id}`),
   updateTask: (id: string, patch: UpdateTaskInput) =>
     request<Task>(`/api/tasks/${id}`, { method: 'PATCH', body: patch }),
@@ -108,4 +110,5 @@ export const api = {
   stopTimer: () => request<TimeEntry | null>('/api/timer/stop', { method: 'POST' }),
   getCalendar: (fromISO: string, toISO: string) =>
     request<CalendarData>(`/api/calendar${qs({ from: fromISO, to: toISO })}`),
+  getMorningSummary: () => request<MorningSummary>('/api/summary/morning'),
 };

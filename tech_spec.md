@@ -76,6 +76,8 @@ CREATE TABLE comments (
   created_at timestamptz NOT NULL DEFAULT now()
 );
 
+-- DESCOPED (see STATUS.md): photos were never implemented; the table was dropped
+-- in migration 0008 and `photosCount` removed from the Task contract.
 CREATE TABLE photos (
   id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   task_id    uuid REFERENCES tasks(id) ON DELETE CASCADE,
@@ -158,8 +160,8 @@ POST   /api/tasks/:id/reorder  { after_id?, before_id?, scope: 'global'|'context
 
 POST   /api/tasks/:id/comments { body }
 DELETE /api/comments/:id
-POST   /api/tasks/:id/photos   → { upload_url, r2_key }   (presigned PUT в R2)
-DELETE /api/photos/:id
+POST   /api/tasks/:id/photos   → DESCOPED, never implemented (see STATUS.md)
+DELETE /api/photos/:id         → DESCOPED, never implemented
 
 GET    /api/routines
 POST   /api/routines           { title, time_hint? }

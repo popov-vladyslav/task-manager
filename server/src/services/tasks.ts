@@ -37,25 +37,22 @@ function timeOf(d: Date | string | null | undefined): string | null {
   return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
 }
 
-// Task columns + derived comment/photo counts + the linked recurrence rule.
+// Task columns + the derived comment count + the linked recurrence rule.
 const selection = {
   task: tasks,
   rule: recurrenceRules.rule,
   commentsCount: sql<number>`(select count(*)::int from comments c where c.task_id = ${tasks.id})`,
-  photosCount: sql<number>`(select count(*)::int from photos p where p.task_id = ${tasks.id})`,
 };
 
 type Row = {
   task: typeof tasks.$inferSelect;
   rule: string | null;
   commentsCount: number;
-  photosCount: number;
 };
 
 function rowToTask(r: Row): Task {
   return toTask(r.task, {
     commentsCount: Number(r.commentsCount ?? 0),
-    photosCount: Number(r.photosCount ?? 0),
     nextInstance: r.rule ? computeNext(r.rule) : null,
     recurrenceRule: r.rule,
   });

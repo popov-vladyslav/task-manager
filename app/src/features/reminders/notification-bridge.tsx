@@ -4,6 +4,7 @@ import * as Notifications from 'expo-notifications';
 import { registerReminderCategory, snoozeMinutesFor } from '../../lib/push';
 import { api } from '../../lib/api';
 import { useTasksStore } from '../../store/tasks';
+import { useSummaryStore } from '../../store/summary';
 import { useRemindersStore } from '../../store/reminders';
 
 // Native-only bridge for reminder notifications. Rendered only on native — the
@@ -19,6 +20,15 @@ export function NotificationBridge() {
   useEffect(() => {
     if (!lastResponse) return;
     const content = lastResponse.notification.request.content;
+
+    // The morning summary carries a count, not a task: tapping it opens the
+    // review sheet where the tasks can be moved to today or unscheduled.
+    if (content.data?.kind === 'morning-summary') {
+      router.navigate('/'); // Tasks tab
+      void useSummaryStore.getState().open();
+      return;
+    }
+
     const taskId = content.data?.taskId;
     if (typeof taskId !== 'string') return;
     const minutes = snoozeMinutesFor(lastResponse.actionIdentifier);
@@ -35,7 +45,9 @@ export function NotificationBridge() {
       const content = n.request.content;
       const taskId = content.data?.taskId;
       if (typeof taskId === 'string') {
-        useRemindersStore.getState().show({ taskId, title: content.body ?? content.title ?? 'Reminder' });
+        useRemindersStore
+          .getState()
+          .show({ taskId, title: content.body ?? content.title ?? 'Reminder' });
       }
     });
     return () => sub.remove();

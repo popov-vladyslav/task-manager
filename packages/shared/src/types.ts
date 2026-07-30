@@ -48,7 +48,6 @@ export interface Task {
   createdVia: CreatedVia;
   // Derived fields for the list/detail UI (populated by the service layer):
   commentsCount: number;
-  photosCount: number;
   nextInstance: string | null; // computed from the recurrence rule, when recurring
 }
 
@@ -140,6 +139,16 @@ export interface CalendarBlock {
 
 export interface CalendarData {
   blocks: CalendarBlock[];
+}
+
+// Morning summary (GET /api/summary/morning): unfinished ORDINARY tasks from
+// before today. `yesterday` is the actionable list; `older` is the potentially
+// long, stale pile the UI keeps collapsed. Occurrences of recurring tasks are
+// never included — a skipped routine must not nag.
+export interface MorningSummary {
+  yesterday: Task[];
+  older: Task[];
+  generatedAt: string;
 }
 
 // Auth
