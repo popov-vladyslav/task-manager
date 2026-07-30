@@ -6,6 +6,7 @@ import { composeNotificationTitle } from '../lib/notification-title';
 import { dispatchReminders } from '../lib/reminder-dispatch';
 import { summaryPushBody } from '../lib/morning-summary';
 import { getMorningSummary } from './summary';
+import { invalidateReminderClocks } from './reminder-clock';
 
 const expo = new Expo();
 
@@ -136,6 +137,9 @@ export async function sendReminders(now: Date = new Date()): Promise<number> {
         ),
       );
   }
+  // This send consumed the remind_at values it fired on and wrote 'initial' log
+  // rows, so both the next-reminder and next-repeat times have moved.
+  if (sent.length) invalidateReminderClocks();
   return sent.length;
 }
 
@@ -176,6 +180,8 @@ export async function repeatReminders(now: Date = new Date()): Promise<number> {
     await sendPush(title, r.title, { taskId: r.id });
     await db.insert(notificationLog).values({ taskId: r.id, kind: 'repeat' });
   }
+  // Each 'repeat' row pushes that task's next eligible repeat out by repeat_after_h.
+  if (rows.length) invalidateReminderClocks();
   return rows.length;
 }
 

@@ -6,6 +6,7 @@ import * as ScreenOrientation from 'expo-screen-orientation';
 import * as SplashScreen from 'expo-splash-screen';
 import * as SystemUI from 'expo-system-ui';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { ObserveRoot, useObserve } from 'expo-observe';
 import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -23,7 +24,7 @@ import { OtaUpdater } from '../features/updates/ota-updater';
 SplashScreen.preventAutoHideAsync().catch(() => {});
 SystemUI.setBackgroundColorAsync(colors.bgBase).catch(() => {});
 
-export default function RootLayout() {
+function RootLayout() {
   // Cold-start boot: restore the session and prefetch the task list *under the
   // splash overlay*, then reveal — so there's no post-launch spinner. `booted`
   // flips even if a request fails (load() resolves on error), so we never hang.
@@ -54,6 +55,23 @@ export default function RootLayout() {
     if (!booted || !useAuthStore.getState().jwt) return;
     void useSummaryStore.getState().maybeShowForToday();
   }, [booted]);
+
+  // EAS Observe TTI. The app isn't usable the moment boot work resolves — the
+  // splash overlay still covers the whole UI until it has faded out, so marking
+  // interactive at `booted` would report a TTI the user never experienced.
+  // Signal it when both are true. Web renders no overlay (so `splashGone` never
+  // flips there), hence the platform branch.
+  //
+  // This lives at the root rather than per-screen on purpose: the overlay is
+  // global, so a screen-level call would fire underneath it, and only the first
+  // markInteractive() of a session is recorded — the early one would win and
+  // under-report TTI. Every entry route mounts through this layout, so no
+  // session is left without the mark.
+  const { markInteractive } = useObserve();
+  const interactive = booted && (Platform.OS === 'web' || splashGone);
+  useEffect(() => {
+    if (interactive) markInteractive();
+  }, [interactive, markInteractive]);
 
   // App config allows all orientations (so the timer can rotate); lock everything
   // else to portrait. The timer screen unlocks/relocks around itself.
@@ -88,6 +106,10 @@ export default function RootLayout() {
     </GestureHandlerRootView>
   );
 }
+
+// ObserveRoot measures Time to First Render automatically; TTI is the
+// markInteractive() call above.
+export default ObserveRoot.wrap(RootLayout);
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bgBase },
