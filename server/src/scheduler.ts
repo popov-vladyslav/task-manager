@@ -1,7 +1,7 @@
 import cron from 'node-cron';
 import { env } from './env';
 import { spawnDueRecurring } from './services/recurring';
-import { repeatReminders, sendReminders } from './services/push';
+import { repeatReminders, sendMorningSummary, sendReminders } from './services/push';
 
 // node-cron jobs (tech_spec §5). Runs in-process on the single API instance.
 export function startScheduler(): void {
@@ -29,6 +29,19 @@ export function startScheduler(): void {
       spawnDueRecurring()
         .then((n) => n && console.log(`[cron] spawned ${n} recurring task(s)`))
         .catch((e) => console.error('[cron] spawn-recurring', e));
+    },
+    { timezone },
+  );
+
+  // morning summary at 07:30 Europe/Warsaw: one push with the count of ordinary
+  // tasks left unfinished. Tapping it opens the in-app sheet that can reschedule
+  // them to today or drop their scheduled time.
+  cron.schedule(
+    '30 7 * * *',
+    () => {
+      sendMorningSummary()
+        .then((n) => n && console.log(`[cron] morning summary: ${n} overdue task(s)`))
+        .catch((e) => console.error('[cron] morning-summary', e));
     },
     { timezone },
   );

@@ -12,10 +12,12 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { colors } from '../theme';
 import { useAuthStore } from '../store/auth';
 import { useTasksStore } from '../store/tasks';
+import { useSummaryStore } from '../store/summary';
 import { ReminderModal } from '../features/reminders/reminder-modal';
 import { TopToast } from '../components/top-toast';
 import { SplashOverlay } from '../components/splash-overlay';
 import { NotificationBridge } from '../features/reminders/notification-bridge';
+import { MorningSummarySheet } from '../features/summary/morning-summary-sheet';
 import { OtaUpdater } from '../features/updates/ota-updater';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -45,6 +47,14 @@ export default function RootLayout() {
     })();
   }, []);
 
+  // First open of the day: review what was left unfinished. Runs after boot so it
+  // never competes with the splash, and no-ops when signed out, when there is
+  // nothing overdue, or when today's summary was already seen.
+  useEffect(() => {
+    if (!booted || !useAuthStore.getState().jwt) return;
+    void useSummaryStore.getState().maybeShowForToday();
+  }, [booted]);
+
   // App config allows all orientations (so the timer can rotate); lock everything
   // else to portrait. The timer screen unlocks/relocks around itself.
   useEffect(() => {
@@ -67,6 +77,7 @@ export default function RootLayout() {
             {Platform.OS !== 'web' ? <NotificationBridge /> : null}
             {Platform.OS !== 'web' ? <OtaUpdater /> : null}
             <ReminderModal />
+            <MorningSummarySheet />
             <TopToast />
             {Platform.OS !== 'web' && !splashGone ? (
               <SplashOverlay visible={!booted} onHidden={handleSplashHidden} />

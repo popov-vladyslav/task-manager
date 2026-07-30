@@ -13,6 +13,7 @@ import { startScheduler } from './scheduler';
 import { mcpAuthRouter } from '@modelcontextprotocol/sdk/server/auth/router.js';
 import { oauthProvider, approveHandler } from './mcp/oauth';
 import dataRouter from './routes/data';
+import summaryRouter from './routes/summary';
 import { requireAuth } from './middleware/auth';
 import { errorHandler } from './middleware/error';
 
@@ -69,6 +70,7 @@ app.use('/api/timer', requireAuth, timerRouter);
 app.use('/api/calendar', requireAuth, calendarRouter);
 app.use('/api/push', requireAuth, pushRouter);
 app.use('/api/data', requireAuth, dataRouter);
+app.use('/api/summary', requireAuth, summaryRouter);
 
 // MCP server for the claude.ai connector (Bearer MCP_TOKEN, not JWT).
 app.use('/mcp', mcpRouter);

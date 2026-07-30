@@ -1,0 +1,14 @@
+-- Photos were descoped (STATUS.md: "dropped entirely (was tech_spec §7/§11)") and
+-- the table has never been written to — no upload endpoint, no UI, no MCP surface.
+-- Removing the dead table and the derived `photosCount` it fed.
+--
+-- ORDERING — this migration MUST NOT run before the code in the same commit is
+-- deployed. The task-list query in services/tasks.ts used to carry a
+-- `(select count(*) from photos ...)` subquery, so dropping the table while an
+-- older build is still serving makes every task read fail with "relation photos
+-- does not exist" — the app and the MCP tools go blank until the new build is
+-- live. The dev and prod database is the same Neon instance, so running this
+-- locally hits production too.
+--
+-- Safe order: deploy the code from this commit first, then apply this migration.
+DROP TABLE IF EXISTS photos;

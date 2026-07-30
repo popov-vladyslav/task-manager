@@ -18,7 +18,6 @@ export function toContext(r: InferSelectModel<typeof contexts>): Context {
 
 export interface TaskExtras {
   commentsCount: number;
-  photosCount: number;
   nextInstance: string | null;
   recurrenceRule: string | null;
 }
@@ -41,7 +40,6 @@ export function toTask(r: InferSelectModel<typeof tasks>, extras: TaskExtras): T
     createdAt: r.createdAt.toISOString(),
     createdVia: r.createdVia,
     commentsCount: extras.commentsCount,
-    photosCount: extras.photosCount,
     nextInstance: extras.nextInstance,
   };
 }

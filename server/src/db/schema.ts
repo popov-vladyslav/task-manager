@@ -73,13 +73,6 @@ export const comments = pgTable('comments', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
-export const photos = pgTable('photos', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  taskId: uuid('task_id').references(() => tasks.id, { onDelete: 'cascade' }),
-  r2Key: text('r2_key').notNull(),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-});
-
 export const timeEntries = pgTable('time_entries', {
   id: uuid('id').primaryKey().defaultRandom(),
   taskId: uuid('task_id').references(() => tasks.id, { onDelete: 'cascade' }),
