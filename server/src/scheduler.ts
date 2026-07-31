@@ -3,6 +3,8 @@ import { env } from './env';
 import { pool } from './db/client';
 import { spawnDueRecurring } from './services/recurring';
 import { repeatReminders, sendMorningSummary, sendReminders } from './services/push';
+import { invalidateReminderClocks, reminderClock, repeatClock } from './services/reminder-clock';
+import type { ReminderClock } from './lib/reminder-clock';
 
 // Postgres advisory-lock keys, one per job. Arbitrary but must stay stable.
 const JOB_LOCKS = {
@@ -50,6 +52,37 @@ function guarded(name: keyof typeof JOB_LOCKS, job: () => Promise<void>): () => 
   };
 }
 
+// Like `guarded`, but asks an in-memory clock whether the job can possibly have
+// work before doing anything at all.
+//
+// The check must come *before* withJobLock: taking the advisory lock opens a
+// pooled connection and runs a query, so a lock-first gate would still wake the
+// database on every tick and the Neon compute would never suspend. With the gate
+// here, a tick with nothing due costs zero connections and zero queries.
+function gated(
+  name: keyof typeof JOB_LOCKS,
+  clock: ReminderClock,
+  job: () => Promise<void>,
+): () => void {
+  return () => {
+    (async () => {
+      const before = clock.peek();
+      if (!(await clock.due(new Date()))) {
+        // Log only when the cached answer changed — a skip line every minute is
+        // noise, but the transitions are what make the gate observable in logs.
+        const after = clock.peek();
+        if (before?.getTime() !== after?.getTime()) {
+          console.log(
+            `[cron] ${name} idle until ${after ? after.toISOString() : 'further notice'}`,
+          );
+        }
+        return;
+      }
+      await withJobLock(name, job);
+    })().catch((e) => console.error(`[cron] ${name}`, e));
+  };
+}
+
 // node-cron jobs (tech_spec §5). Runs in-process on the single API instance.
 export function startScheduler(): void {
   const timezone = env.TZ || 'Europe/Warsaw';
@@ -75,6 +108,10 @@ export function startScheduler(): void {
     guarded('spawn-recurring', async () => {
       const n = await spawnDueRecurring();
       if (n) console.log(`[cron] spawned ${n} recurring task(s)`);
+      // Midnight rollover: re-read the reminder clocks unconditionally. Today's
+      // spawns carry new remind_at values, and yesterday's occurrences were just
+      // closed as 'missed' — both move the next fire time.
+      invalidateReminderClocks();
     }),
     { timezone },
   );
@@ -91,19 +128,21 @@ export function startScheduler(): void {
     { timezone },
   );
 
-  // send due reminders every minute
+  // send due reminders every minute — but the tick only reaches the database once
+  // the cached next remind_at has actually arrived (services/reminder-clock.ts).
   cron.schedule(
     '* * * * *',
-    guarded('send-reminders', async () => {
+    gated('send-reminders', reminderClock, async () => {
       const n = await sendReminders();
       if (n) console.log(`[cron] sent ${n} reminder(s)`);
     }),
   );
 
-  // repeat reminders every 15 minutes (opt-in via settings)
+  // repeat reminders every 15 minutes (opt-in via settings), likewise gated —
+  // while the setting is off, this job never touches the database at all.
   cron.schedule(
     '*/15 * * * *',
-    guarded('repeat-reminders', async () => {
+    gated('repeat-reminders', repeatClock, async () => {
       const n = await repeatReminders();
       if (n) console.log(`[cron] sent ${n} repeat reminder(s)`);
     }),

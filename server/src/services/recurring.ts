@@ -3,6 +3,7 @@ import { TERMINAL_STATUSES } from '@task-manager/shared';
 import { db } from '../db/client';
 import { recurrenceRules, tasks } from '../db/schema';
 import { localDateStr, planRecurringSpawn, type OpenOccurrence } from '../lib/recurrence-plan';
+import { invalidateReminderClocks } from './reminder-clock';
 
 // For each active rule whose day is today (Europe/Warsaw) and that hasn't spawned
 // today, create the task instance and stamp last_spawned. Idempotent per day.
@@ -78,5 +79,9 @@ export async function spawnDueRecurring(now: Date = new Date()): Promise<number>
     });
     spawned += 1;
   }
+  // Spawned instances carry their own remind_at and are inserted directly here,
+  // bypassing services/tasks.ts — so this is the only place that can tell the
+  // scheduler's cache about them.
+  if (spawned > 0) invalidateReminderClocks();
   return spawned;
 }

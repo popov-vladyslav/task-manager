@@ -13,6 +13,7 @@ import { toTask } from '../db/mappers';
 import { between } from '../lib/frac-index';
 import { nextInstance as computeNext } from '../lib/recurrence';
 import { badRequest, notFound } from '../lib/errors';
+import { invalidateReminderClocks } from './reminder-clock';
 
 interface ListFilter {
   contextId?: number;
@@ -166,6 +167,9 @@ export async function createTask(input: CreateTaskInput): Promise<Task> {
     return row.id;
   });
 
+  // The scheduler caches when the next push is due and skips the database until
+  // then; a new remind_at is invisible to it until the cache is dropped.
+  invalidateReminderClocks();
   return getTask(id);
 }
 
@@ -265,12 +269,16 @@ export async function updateTask(id: string, patch: UpdateTaskInput): Promise<Ta
     }
   });
 
+  // Unconditional: remind_at is not the only field that moves the next push —
+  // completing a task or changing its status takes it out of the due set too.
+  invalidateReminderClocks();
   return getTask(id);
 }
 
 export async function deleteTask(id: string): Promise<void> {
   const [row] = await db.delete(tasks).where(eq(tasks.id, id)).returning({ id: tasks.id });
   if (!row) throw notFound('Task not found');
+  invalidateReminderClocks();
 }
 
 // Snooze a task's reminder by `minutes` from now, and clear its notification log
@@ -286,6 +294,7 @@ export async function snoozeTask(id: string, minutes: number): Promise<Task> {
     if (!row) throw notFound('Task not found');
     await tx.delete(notificationLog).where(eq(notificationLog.taskId, id));
   });
+  invalidateReminderClocks();
   return getTask(id);
 }
 
