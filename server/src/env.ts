@@ -10,9 +10,16 @@ const schema = z.object({
   JWT_SECRET: z.string().min(16),
   OWNER_EMAIL: z.email(),
   TZ: z.string().default('Europe/Warsaw'),
+  // Deployment marker: 'prod' | 'stage' (unset locally).
+  APP_ENV: z.string().optional(),
   PORT: z.coerce.number().default(4000),
   // Optional in dev — when absent, magic links are logged to the server console.
   RESEND_API_KEY: z.string().optional(),
+  // Sender for outgoing mail, e.g. `task manager <noreply@task-tracker.net>`.
+  // Must be an address on a domain verified in Resend. Unset falls back to
+  // Resend's shared sandbox sender, which only delivers to the account owner's
+  // own address — fine for local/stage, NOT viable once anyone can sign up.
+  MAIL_FROM: z.string().optional(),
   // Bearer token for the MCP server (claude.ai connector). When unset, /mcp is disabled.
   MCP_TOKEN: z.string().min(16).optional(),
   // Public base URL of the Expo web app, used to build the magic-link target.

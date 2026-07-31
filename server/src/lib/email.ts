@@ -3,7 +3,17 @@ import { env } from '../env';
 // Product name as it appears to the user — subject line, From name and body.
 export const PRODUCT_NAME = 'task manager';
 
-const FROM = `${PRODUCT_NAME} <onboarding@resend.dev>`;
+// Resend's shared sandbox sender. It only delivers to the Resend account
+// owner's own verified address, so it is a dev/stage convenience only — open
+// sign-up on it would silently drop every other user's confirmation code.
+const SANDBOX_FROM = `${PRODUCT_NAME} <onboarding@resend.dev>`;
+
+// Set MAIL_FROM (an address on a Resend-verified domain) in prod.
+export const FROM = env.MAIL_FROM ?? SANDBOX_FROM;
+
+// True when mail can only reach the Resend account owner — used to fail loudly
+// rather than pretend a confirmation code was delivered.
+export const usingSandboxSender = FROM === SANDBOX_FROM;
 
 export const MAGIC_LINK_SUBJECT = `Your ${PRODUCT_NAME} sign-in code`;
 
