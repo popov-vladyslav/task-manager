@@ -1,5 +1,5 @@
 import { and, asc, eq, notInArray, sql } from 'drizzle-orm';
-import { TERMINAL_STATUSES } from '@task-manager/shared';
+import { TERMINAL_STATUSES, seedContexts } from '@task-manager/shared';
 import type { Context, CreateContextInput, UpdateContextInput } from '@task-manager/shared';
 import { db } from '../db/client';
 import { contexts, recurrenceRules, tasks } from '../db/schema';
@@ -56,6 +56,15 @@ export async function createContext(input: CreateContextInput): Promise<Context>
     })
     .returning();
   return toContext(row);
+}
+
+// Starter contexts for a brand-new account. Called by sign-up once accounts
+// exist; until then nothing calls it. Gains an owner argument when `contexts`
+// gets its user_id column.
+export async function createStarterContexts(): Promise<void> {
+  await db.insert(contexts).values(
+    seedContexts.map((c, i) => ({ slug: c.slug, label: c.label, color: c.color, sortOrder: i })),
+  );
 }
 
 export async function updateContext(id: number, patch: UpdateContextInput): Promise<Context> {
