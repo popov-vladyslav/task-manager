@@ -10,6 +10,7 @@ import calendarRouter from './routes/calendar';
 import pushRouter from './routes/push';
 import mcpRouter from './routes/mcp';
 import mcpTokensRouter from './routes/mcp-tokens';
+import accountRouter from './routes/account';
 import { mcpAuthRouter } from '@modelcontextprotocol/sdk/server/auth/router.js';
 import { oauthProvider, approveHandler } from './mcp/oauth';
 import dataRouter from './routes/data';
@@ -67,6 +68,7 @@ export function createApp(): express.Express {
   app.use('/api/data', requireAuth, dataRouter);
   app.use('/api/summary', requireAuth, summaryRouter);
   app.use('/api/mcp-token', requireAuth, mcpTokensRouter);
+  app.use('/api/account', requireAuth, accountRouter);
 
   // MCP server for the claude.ai connector (Bearer MCP_TOKEN, not JWT).
   app.use('/mcp', mcpRouter);
