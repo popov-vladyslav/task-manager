@@ -4,7 +4,7 @@
 import { after, before, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { eq } from 'drizzle-orm';
-import { closePool, resetDb, startTestServer, type TestServer } from './harness';
+import { closePool, mcpCall, resetDb, startTestServer, type TestServer } from './harness';
 import { db } from '../db/client';
 import { loginCodes, users } from '../db/schema';
 import { hashToken } from '../lib/tokens';
@@ -54,27 +54,14 @@ async function signUp(email: string): Promise<Account> {
   return { id: row.id, headers, mcpToken: line.split('token:')[1].trim() };
 }
 
-// Minimal JSON-RPC over the Streamable HTTP transport.
-async function callTool(
+// Minimal JSON-RPC over the Streamable HTTP transport (harness helper, bound to
+// this suite's server).
+function callTool(
   bearer: string,
   name: string,
   args: Record<string, unknown> = {},
 ): Promise<{ status: number; text: string }> {
-  const res = await fetch(`${server.baseUrl}/mcp`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${bearer}`,
-      'Content-Type': 'application/json',
-      Accept: 'application/json, text/event-stream',
-    },
-    body: JSON.stringify({
-      jsonrpc: '2.0',
-      id: 1,
-      method: 'tools/call',
-      params: { name, arguments: args },
-    }),
-  });
-  return { status: res.status, text: await res.text() };
+  return mcpCall(server.baseUrl, bearer, name, args);
 }
 
 before(async () => {

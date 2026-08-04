@@ -68,3 +68,27 @@ export async function startTestServer(): Promise<TestServer> {
 export async function closePool(): Promise<void> {
   await pool.end();
 }
+
+/** JSON-RPC call against the real /mcp endpoint, as an MCP client would. */
+export async function mcpCall(
+  baseUrl: string,
+  bearer: string,
+  name: string,
+  args: Record<string, unknown> = {},
+): Promise<{ status: number; text: string }> {
+  const res = await fetch(`${baseUrl}/mcp`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${bearer}`,
+      'Content-Type': 'application/json',
+      Accept: 'application/json, text/event-stream',
+    },
+    body: JSON.stringify({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'tools/call',
+      params: { name, arguments: args },
+    }),
+  });
+  return { status: res.status, text: await res.text() };
+}
