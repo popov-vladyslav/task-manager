@@ -82,12 +82,12 @@ router.post('/:id/snooze', async (req, res) => {
 });
 
 router.get('/:id/comments', async (req, res) => {
-  res.json(await commentsSvc.listComments(req.params.id));
+  res.json(await commentsSvc.listComments(requireUserId(req), req.params.id));
 });
 
 router.post('/:id/comments', async (req, res) => {
   const { body } = z.object({ body: z.string().min(1) }).parse(req.body);
-  res.status(201).json(await commentsSvc.addComment(req.params.id, body));
+  res.status(201).json(await commentsSvc.addComment(requireUserId(req), req.params.id, body));
 });
 
 export default router;

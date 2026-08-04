@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import * as svc from '../services/data';
 import { badRequest } from '../lib/errors';
+import { requireUserId } from '../middleware/auth';
 
 const router = Router();
 
@@ -12,7 +13,7 @@ const resetSchema = z.object({ confirm: z.string() });
 router.delete('/', async (req, res) => {
   const { confirm } = resetSchema.parse(req.body ?? {});
   if (confirm !== 'RESET') throw badRequest("Send { confirm: 'RESET' } to wipe data.");
-  await svc.resetData();
+  await svc.resetData(requireUserId(req));
   res.status(204).end();
 });
 

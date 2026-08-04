@@ -1,7 +1,8 @@
-import { eq, isNull, sql } from 'drizzle-orm';
+import { and, eq, isNull, sql } from 'drizzle-orm';
 import type { ActiveTimer, TimeEntry } from '@task-manager/shared';
 import { db } from '../db/client';
 import { timeEntries, tasks } from '../db/schema';
+import { ownedBy } from '../db/scope';
 import { notFound } from '../lib/errors';
 
 const iso = (d: Date | null): string | null => (d ? d.toISOString() : null);
@@ -26,7 +27,11 @@ const MAX_SESSION_MS = 8 * 60 * 60 * 1000;
 // `credit: false` closes the entry without adding anything: used for an orphan
 // left behind by a hard kill, where the elapsed wall-clock is not time actually
 // worked and would otherwise silently inflate the total by up to 8 hours.
+// The owner predicate is load-bearing, not decoration: "the running entry" was
+// table-wide, so starting or stopping a timer would have closed whichever entry
+// happened to be open — including another account's.
 async function closeRunningEntry(
+  userId: string,
   endedAt: Date,
   opts?: { credit?: boolean },
 ): Promise<typeof timeEntries.$inferSelect | null> {
@@ -34,7 +39,7 @@ async function closeRunningEntry(
     const [row] = await tx
       .update(timeEntries)
       .set({ endedAt })
-      .where(isNull(timeEntries.endedAt))
+      .where(and(ownedBy(timeEntries.userId, userId), isNull(timeEntries.endedAt)))
       .returning();
     if (!row || !row.taskId) return row ?? null;
 
@@ -44,7 +49,7 @@ async function closeRunningEntry(
         await tx
           .update(tasks)
           .set({ trackedSec: sql`${tasks.trackedSec} + ${seconds}` })
-          .where(eq(tasks.id, row.taskId));
+          .where(and(ownedBy(tasks.userId, userId), eq(tasks.id, row.taskId)));
       }
     }
     return row;
@@ -59,20 +64,20 @@ async function closeRunningEntry(
 // Note the ordinary hard-kill case never reaches here: on next launch the app
 // adopts the still-running entry (store/timer.ts `load`), so a genuine session
 // continues and is credited normally when it stops.
-async function reconcileStaleTimer(): Promise<void> {
+async function reconcileStaleTimer(userId: string): Promise<void> {
   const [running] = await db
     .select({ id: timeEntries.id, startedAt: timeEntries.startedAt })
     .from(timeEntries)
-    .where(isNull(timeEntries.endedAt));
+    .where(and(ownedBy(timeEntries.userId, userId), isNull(timeEntries.endedAt)));
   if (running && Date.now() - running.startedAt.getTime() > MAX_SESSION_MS) {
-    await closeRunningEntry(running.startedAt, { credit: false });
+    await closeRunningEntry(userId, running.startedAt, { credit: false });
   }
 }
 
 // The single running entry (ended_at IS NULL), enriched with its task title.
 // Reconciles a stale orphan first, so a read also cleans up after a crash.
-export async function getActiveTimer(): Promise<ActiveTimer | null> {
-  await reconcileStaleTimer();
+export async function getActiveTimer(userId: string): Promise<ActiveTimer | null> {
+  await reconcileStaleTimer(userId);
   const [row] = await db
     .select({
       id: timeEntries.id,
@@ -82,7 +87,7 @@ export async function getActiveTimer(): Promise<ActiveTimer | null> {
     })
     .from(timeEntries)
     .innerJoin(tasks, eq(tasks.id, timeEntries.taskId))
-    .where(isNull(timeEntries.endedAt));
+    .where(and(ownedBy(timeEntries.userId, userId), isNull(timeEntries.endedAt)));
   if (!row) return null;
   return {
     id: row.id,
@@ -96,20 +101,23 @@ export async function getActiveTimer(): Promise<ActiveTimer | null> {
 // tapping Play on any card "just works". The one_running_timer index still
 // guarantees a single active entry. The interrupted entry is credited — it was
 // real worked time.
-export async function startTimer(taskId: string): Promise<ActiveTimer> {
-  const [task] = await db.select().from(tasks).where(eq(tasks.id, taskId));
+export async function startTimer(userId: string, taskId: string): Promise<ActiveTimer> {
+  const [task] = await db
+    .select()
+    .from(tasks)
+    .where(and(ownedBy(tasks.userId, userId), eq(tasks.id, taskId)));
   if (!task) throw notFound('Task not found');
-  await closeRunningEntry(new Date());
+  await closeRunningEntry(userId, new Date());
   const [row] = await db
     .insert(timeEntries)
-    .values({ taskId, startedAt: new Date(), userId: task.userId })
+    .values({ taskId, startedAt: new Date(), userId })
     .returning();
   return { id: row.id, taskId, taskTitle: task.title, startedAt: row.startedAt.toISOString() };
 }
 
 // Close the running entry, crediting its length to the task's total (no-op
 // returns null if nothing is running).
-export async function stopTimer(): Promise<TimeEntry | null> {
-  const row = await closeRunningEntry(new Date());
+export async function stopTimer(userId: string): Promise<TimeEntry | null> {
+  const row = await closeRunningEntry(userId, new Date());
   return row ? toEntry(row) : null;
 }

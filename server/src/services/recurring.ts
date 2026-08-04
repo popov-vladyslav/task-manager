@@ -29,6 +29,10 @@ export async function spawnDueRecurring(now: Date = new Date()): Promise<number>
     );
   if (rules.length === 0) return 0;
 
+  // Deliberately global, like the rules query above: this is a cron job that
+  // spawns for every account. It is safe to mix owners here because a rule id is
+  // a UUID, so `o.recurrenceId === rule.id` can only ever match occurrences of
+  // that rule — i.e. of that rule's owner. The writes below are still scoped.
   const openOccurrences: OpenOccurrence[] = (
     await db
       .select({ id: tasks.id, recurrenceId: tasks.recurrenceId })
@@ -58,6 +62,11 @@ export async function spawnDueRecurring(now: Date = new Date()): Promise<number>
           .set({ status: 'missed' })
           .where(
             and(
+              // Defence in depth: these ids came from this rule's own
+              // occurrences, so the owner filter should be redundant — but a
+              // cross-account status write must be impossible, not merely
+              // unlikely.
+              eq(tasks.userId, plan.userId),
               inArray(tasks.id, plan.missedOccurrenceIds),
               // Re-check under the transaction: the occurrence may have been
               // completed between the read above and here.

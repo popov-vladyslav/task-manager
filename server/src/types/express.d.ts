@@ -6,6 +6,8 @@ declare global {
   namespace Express {
     interface Request {
       userId?: string;
+      /** Set by the /mcp auth middleware: the account a tool call acts as. */
+      mcpUserId?: string;
     }
   }
 }

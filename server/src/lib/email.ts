@@ -87,3 +87,69 @@ export async function sendMagicLink(email: string, link: string, token: string):
     throw new Error(`Resend failed: ${res.status} ${await res.text()}`);
   }
 }
+
+export const MCP_TOKEN_SUBJECT = `Your ${PRODUCT_NAME} MCP token`;
+
+// The token is emailed and never shown in the app or returned by the API, so
+// this email is the ONLY place a user ever sees it. It is not recoverable —
+// only a hash is stored — so losing it means regenerating, which immediately
+// invalidates the old one. Deliberately carries no link: this is a credential,
+// not a sign-in.
+export function buildMcpTokenEmail(token: string): { html: string; text: string } {
+  const safeToken = escapeHtml(token);
+
+  const html = [
+    `<p>Here is your personal ${PRODUCT_NAME} MCP token. Paste it into your AI assistant ` +
+      `to connect it to your tasks:</p>`,
+    `<p style="font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:15px;` +
+      `word-break:break-all;background:#f4f4f5;border:1px solid #e4e4e7;border-radius:8px;` +
+      `padding:12px 14px;margin:0 0 16px">${safeToken}</p>`,
+    `<p>Treat it like a password: anyone holding it can read and change your tasks. ` +
+      `We cannot show it to you again — if you lose it, generate a new one, which stops ` +
+      `the old one working immediately.</p>`,
+    `<p>If you did not request this, revoke it in Settings.</p>`,
+  ].join('');
+
+  const text = [
+    `Your personal ${PRODUCT_NAME} MCP token:`,
+    '',
+    token,
+    '',
+    'Paste it into your AI assistant to connect it to your tasks.',
+    'Treat it like a password. We cannot show it again — if you lose it, generate a',
+    'new one, which stops the old one working immediately.',
+    'If you did not request this, revoke it in Settings.',
+  ].join('\n');
+
+  return { html, text };
+}
+
+// Same fallback as sendMagicLink: with no Resend key the token is logged so the
+// flow can be exercised locally and in tests without sending real mail.
+export async function sendMcpToken(email: string, token: string): Promise<void> {
+  if (!env.RESEND_API_KEY) {
+    console.log(`\n[mcp-token] ${email}\n  token: ${token}\n`);
+    return;
+  }
+
+  const { html, text } = buildMcpTokenEmail(token);
+
+  const res = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${env.RESEND_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      from: FROM,
+      to: email,
+      subject: MCP_TOKEN_SUBJECT,
+      html,
+      text,
+    }),
+  });
+
+  if (!res.ok) {
+    throw new Error(`Resend failed: ${res.status} ${await res.text()}`);
+  }
+}

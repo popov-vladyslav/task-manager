@@ -18,6 +18,7 @@ import {
 } from '@modelcontextprotocol/sdk/server/auth/errors.js';
 import { db } from '../db/client';
 import { oauthClients } from '../db/schema';
+import { resolveToken, tokenOwnerIfLive } from '../services/mcp-tokens';
 import { env } from '../env';
 
 const ACCESS_TTL_SEC = 60 * 60; // 1 hour
@@ -39,6 +40,9 @@ interface CodeRec {
   codeChallenge: string;
   scopes?: string[];
   exp: number;
+  // Resolved at approval time from the personal token the user pasted.
+  userId: string;
+  tokenId: string;
 }
 
 // Short-lived, single-process artifacts (used within seconds). Clients (DCR) and
@@ -68,16 +72,27 @@ const clientsStore: OAuthRegisteredClientsStore = {
   },
 };
 
-function issueTokens(clientId: string, scopes: string[]): OAuthTokens {
+// `sub` is the account; `tid` is the mcp_tokens row the grant hangs off. The
+// tid is what makes revocation bite: these JWTs are stateless and long-lived, so
+// without a server-side record to check, a revoked personal token would leave
+// the connector working for up to 90 days.
+function issueTokens(
+  clientId: string,
+  scopes: string[],
+  userId: string,
+  tokenId: string,
+): OAuthTokens {
   const scope = scopes.join(' ');
   const access = jwt.sign(
-    { sub: env.OWNER_EMAIL, typ: 'mcp_access', cid: clientId, scope },
+    { sub: userId, tid: tokenId, typ: 'mcp_access', cid: clientId, scope },
     env.JWT_SECRET,
     { expiresIn: ACCESS_TTL_SEC },
   );
-  const refresh = jwt.sign({ sub: env.OWNER_EMAIL, typ: 'mcp_refresh', cid: clientId }, env.JWT_SECRET, {
-    expiresIn: REFRESH_TTL_SEC,
-  });
+  const refresh = jwt.sign(
+    { sub: userId, tid: tokenId, typ: 'mcp_refresh', cid: clientId },
+    env.JWT_SECRET,
+    { expiresIn: REFRESH_TTL_SEC },
+  );
   return {
     access_token: access,
     token_type: 'bearer',
@@ -142,7 +157,7 @@ export const oauthProvider: OAuthServerProvider = {
     if (rec.clientId !== client.client_id) throw new InvalidGrantError('Code was issued to another client');
     if (redirectUri && rec.redirectUri !== redirectUri) throw new InvalidGrantError('redirect_uri mismatch');
     codes.delete(authorizationCode); // single use
-    return issueTokens(client.client_id, rec.scopes ?? []);
+    return issueTokens(client.client_id, rec.scopes ?? [], rec.userId, rec.tokenId);
   },
 
   async exchangeRefreshToken(client, refreshToken, scopes) {
@@ -155,7 +170,12 @@ export const oauthProvider: OAuthServerProvider = {
     if (payload.typ !== 'mcp_refresh' || payload.cid !== client.client_id) {
       throw new InvalidGrantError('Invalid refresh token');
     }
-    return issueTokens(client.client_id, scopes ?? []);
+    // Re-check on refresh as well as on use: otherwise a revoked token could be
+    // traded for a fresh 1-hour access token indefinitely.
+    const tokenId = typeof payload.tid === 'string' ? payload.tid : '';
+    const userId = tokenId ? await tokenOwnerIfLive(tokenId) : null;
+    if (!userId) throw new InvalidGrantError('The MCP token behind this grant was revoked');
+    return issueTokens(client.client_id, scopes ?? [], userId, tokenId);
   },
 
   async verifyAccessToken(token): Promise<AuthInfo> {
@@ -166,19 +186,27 @@ export const oauthProvider: OAuthServerProvider = {
       throw new InvalidTokenError('Invalid access token');
     }
     if (payload.typ !== 'mcp_access') throw new InvalidTokenError('Wrong token type');
+
+    // One indexed read per call, deliberately: it is what turns "revoked" into
+    // "stops working now" rather than "stops working when the JWT expires".
+    const tokenId = typeof payload.tid === 'string' ? payload.tid : '';
+    if (!tokenId) throw new InvalidTokenError('Token predates per-user MCP tokens');
+    const userId = await tokenOwnerIfLive(tokenId);
+    if (!userId) throw new InvalidTokenError('The MCP token behind this grant was revoked');
+
     const scope = typeof payload.scope === 'string' ? payload.scope : '';
     return {
       token,
       clientId: String(payload.cid ?? ''),
       scopes: scope ? scope.split(' ').filter(Boolean) : [],
       expiresAt: payload.exp,
-      extra: { sub: payload.sub },
+      extra: { userId },
     };
   },
 };
 
 // POST /oauth/approve — owner enters the MCP token; we mint a code and redirect to Claude.
-export function approveHandler(req: Request, res: Response) {
+export async function approveHandler(req: Request, res: Response): Promise<void> {
   sweep();
   const pendingId = String((req.body as Record<string, unknown>)?.pending ?? '');
   const secret = String((req.body as Record<string, unknown>)?.secret ?? '');
@@ -189,7 +217,11 @@ export function approveHandler(req: Request, res: Response) {
     res.status(400).send(approvalPage(pendingId, 'Session expired — restart from Claude.'));
     return;
   }
-  if (!env.MCP_TOKEN || secret !== env.MCP_TOKEN) {
+  // The page already asked for "your MCP token" — it now resolves that token to
+  // an account instead of comparing it to one shared secret, which is what makes
+  // the connector per-user (decision 0002).
+  const resolved = await resolveToken(secret);
+  if (!resolved) {
     res.status(401).send(approvalPage(pendingId, 'Incorrect token.'));
     return;
   }
@@ -202,6 +234,8 @@ export function approveHandler(req: Request, res: Response) {
     codeChallenge: p.codeChallenge,
     scopes: p.scopes,
     exp: Date.now() + CODE_TTL_MS,
+    userId: resolved.userId,
+    tokenId: resolved.tokenId,
   });
 
   const url = new URL(p.redirectUri);

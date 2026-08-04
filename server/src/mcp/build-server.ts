@@ -230,7 +230,7 @@ export function buildMcpServer(userId: string): McpServer {
       const [list, labels, active] = await Promise.all([
         tasksSvc.tasksDueToday(userId),
         contextLabels(userId),
-        timerSvc.getActiveTimer(),
+        timerSvc.getActiveTimer(userId),
       ]);
       const tasksSection = list.length
         ? 'Due today / overdue:\n' +
@@ -279,7 +279,7 @@ export function buildMcpServer(userId: string): McpServer {
         durationMin: duration_min ?? null,
         recurrence: recurrenceRule,
       });
-      if (comment) await commentsSvc.addComment(task.id, comment);
+      if (comment) await commentsSvc.addComment(userId, task.id, comment);
       logWrite('create_task', { id: task.id, title });
       return text(`Created: ${fmtTask(task)}`);
     },
@@ -373,7 +373,7 @@ export function buildMcpServer(userId: string): McpServer {
     async ({ id, title_match }) => {
       const r = await resolveTask(userId, id, title_match);
       if (!r.task) return text(unresolvedText(r.candidates, title_match));
-      const active = await timerSvc.startTimer(r.task.id);
+      const active = await timerSvc.startTimer(userId, r.task.id);
       logWrite('start_timer', { taskId: active.taskId });
       return text(`Timer started for "${active.taskTitle}".`);
     },
@@ -383,8 +383,8 @@ export function buildMcpServer(userId: string): McpServer {
     'stop_timer',
     { description: 'Stop the running time tracker.', inputSchema: {} },
     async () => {
-      const active = await timerSvc.getActiveTimer();
-      const stopped = await timerSvc.stopTimer();
+      const active = await timerSvc.getActiveTimer(userId);
+      const stopped = await timerSvc.stopTimer(userId);
       if (!stopped || !stopped.endedAt) return text('No timer running.');
       const mins = Math.round(
         (Date.parse(stopped.endedAt) - Date.parse(stopped.startedAt)) / 60000,
@@ -407,7 +407,7 @@ export function buildMcpServer(userId: string): McpServer {
     async ({ id, title_match, body }) => {
       const r = await resolveTask(userId, id, title_match);
       if (!r.task) return text(unresolvedText(r.candidates, title_match));
-      await commentsSvc.addComment(r.task.id, body);
+      await commentsSvc.addComment(userId, r.task.id, body);
       logWrite('add_comment', { id: r.task.id });
       return text(`Comment added to "${r.task.title}".`);
     },
