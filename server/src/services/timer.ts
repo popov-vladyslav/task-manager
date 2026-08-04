@@ -100,7 +100,10 @@ export async function startTimer(taskId: string): Promise<ActiveTimer> {
   const [task] = await db.select().from(tasks).where(eq(tasks.id, taskId));
   if (!task) throw notFound('Task not found');
   await closeRunningEntry(new Date());
-  const [row] = await db.insert(timeEntries).values({ taskId, startedAt: new Date() }).returning();
+  const [row] = await db
+    .insert(timeEntries)
+    .values({ taskId, startedAt: new Date(), userId: task.userId })
+    .returning();
   return { id: row.id, taskId, taskTitle: task.title, startedAt: row.startedAt.toISOString() };
 }
 

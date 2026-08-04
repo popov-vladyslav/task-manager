@@ -44,9 +44,12 @@ export async function spawnDueRecurring(now: Date = new Date()): Promise<number>
     // daily-idempotency guard relies on all of them landing (a partial would let
     // the rule re-spawn, or leave two occurrences open).
     await db.transaction(async (tx) => {
+      // Top-of-list is per owner: another user's ordering must not shift this
+      // occurrence's position.
       const [{ minSort }] = await tx
         .select({ minSort: sql<number>`coalesce(min(${tasks.sortGlobal}), 1)` })
-        .from(tasks);
+        .from(tasks)
+        .where(eq(tasks.userId, plan.userId));
       const top = Number(minSort) - 1;
 
       if (plan.missedOccurrenceIds.length > 0) {
@@ -64,6 +67,7 @@ export async function spawnDueRecurring(now: Date = new Date()): Promise<number>
       }
 
       await tx.insert(tasks).values({
+        userId: plan.userId,
         title: plan.title,
         contextId: plan.contextId,
         dueAt: plan.dueAt,

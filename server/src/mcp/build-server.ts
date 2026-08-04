@@ -46,8 +46,8 @@ function toRuleString(r: RecurrenceMcpInput): { rule: string } | { error: string
   }
 }
 
-async function contextLabels(): Promise<Map<number, string>> {
-  const cs = await contextsSvc.listContexts();
+async function contextLabels(userId: string): Promise<Map<number, string>> {
+  const cs = await contextsSvc.listContexts(userId);
   return new Map(cs.map((c) => [c.id, c.label]));
 }
 
@@ -56,16 +56,16 @@ interface Resolved {
   candidates: Task[];
 }
 
-async function resolveTask(id?: string, titleMatch?: string): Promise<Resolved> {
+async function resolveTask(userId: string, id?: string, titleMatch?: string): Promise<Resolved> {
   if (id) {
     try {
-      return { task: await tasksSvc.getTask(id), candidates: [] };
+      return { task: await tasksSvc.getTask(userId, id), candidates: [] };
     } catch {
       return { candidates: [] };
     }
   }
   if (titleMatch) {
-    const matches = await tasksSvc.searchOpenTasks(titleMatch);
+    const matches = await tasksSvc.searchOpenTasks(userId, titleMatch);
     return matches.length === 1 ? { task: matches[0], candidates: [] } : { candidates: matches };
   }
   return { candidates: [] };
@@ -83,7 +83,10 @@ function unresolvedText(candidates: Task[], query?: string): string {
 
 // Builds a fresh MCP server with all tools bound to the service layer.
 // Priority is intentionally out of scope.
-export function buildMcpServer(): McpServer {
+// `userId` scopes every tool call to one account. The legacy static token
+// resolves it to the owner (services/users.ts); per-user tokens supply their
+// own — see routes/mcp.ts.
+export function buildMcpServer(userId: string): McpServer {
   const server = new McpServer({ name: 'log-task-manager', version: '1.0.0' });
 
   // The MCP SDK bundles zod v3, but this project is on zod v4 — their schema types
@@ -108,7 +111,7 @@ export function buildMcpServer(): McpServer {
     'list_contexts',
     { description: 'List the work contexts (slug, label, color).', inputSchema: {} },
     async () => {
-      const cs = await contextsSvc.listContexts();
+      const cs = await contextsSvc.listContexts(userId);
       return text(
         cs.map((c) => `${c.slug} — ${c.label} (${c.color})`).join('\n') || 'No contexts.',
       );
@@ -127,7 +130,11 @@ export function buildMcpServer(): McpServer {
       },
     },
     async ({ label, color, exclude_from_all }) => {
-      const c = await contextsSvc.createContext({ label, color, excludeFromAll: exclude_from_all });
+      const c = await contextsSvc.createContext(userId, {
+        label,
+        color,
+        excludeFromAll: exclude_from_all,
+      });
       logWrite('create_context', { id: c.id, slug: c.slug });
       return text(`Created context: ${c.slug} — ${c.label} (${c.color})`);
     },
@@ -146,13 +153,13 @@ export function buildMcpServer(): McpServer {
       },
     },
     async ({ slug, label, color, exclude_from_all }) => {
-      const c = await contextsSvc.findContextBySlug(slug);
+      const c = await contextsSvc.findContextBySlug(userId, slug);
       if (!c) return text(`Unknown context '${slug}'.`);
       const patch: { label?: string; color?: string; excludeFromAll?: boolean } = {};
       if (label !== undefined) patch.label = label;
       if (color !== undefined) patch.color = color;
       if (exclude_from_all !== undefined) patch.excludeFromAll = exclude_from_all;
-      const updated = await contextsSvc.updateContext(c.id, patch);
+      const updated = await contextsSvc.updateContext(userId, c.id, patch);
       logWrite('update_context', { id: updated.id, slug: updated.slug });
       return text(`Updated context: ${updated.slug} — ${updated.label} (${updated.color})`);
     },
@@ -166,10 +173,10 @@ export function buildMcpServer(): McpServer {
       inputSchema: { slug: z.string().min(1) },
     },
     async ({ slug }) => {
-      const c = await contextsSvc.findContextBySlug(slug);
+      const c = await contextsSvc.findContextBySlug(userId, slug);
       if (!c) return text(`Unknown context '${slug}'.`);
       try {
-        await contextsSvc.deleteContext(c.id);
+        await contextsSvc.deleteContext(userId, c.id);
       } catch (err) {
         return text(err instanceof Error ? err.message : 'Could not delete context.');
       }
@@ -192,16 +199,16 @@ export function buildMcpServer(): McpServer {
     async ({ context, status, overdue }) => {
       let contextId: number | undefined;
       if (context) {
-        const c = await contextsSvc.findContextBySlug(context);
+        const c = await contextsSvc.findContextBySlug(userId, context);
         if (!c) return text(`Unknown context '${context}'.`);
         contextId = c.id;
       }
-      const list = await tasksSvc.listTasks({
+      const list = await tasksSvc.listTasks(userId, {
         contextId,
         status,
         dueBefore: overdue ? new Date() : undefined,
       });
-      const labels = await contextLabels();
+      const labels = await contextLabels(userId);
       return text(
         list.length
           ? list
@@ -221,8 +228,8 @@ export function buildMcpServer(): McpServer {
     },
     async () => {
       const [list, labels, active] = await Promise.all([
-        tasksSvc.tasksDueToday(),
-        contextLabels(),
+        tasksSvc.tasksDueToday(userId),
+        contextLabels(userId),
         timerSvc.getActiveTimer(),
       ]);
       const tasksSection = list.length
@@ -254,7 +261,7 @@ export function buildMcpServer(): McpServer {
     async ({ title, context, due_at, remind_at, duration_min, recurrence, comment }) => {
       let contextId: number | null = null;
       if (context) {
-        const c = await contextsSvc.findContextBySlug(context);
+        const c = await contextsSvc.findContextBySlug(userId, context);
         if (!c) return text(`Unknown context '${context}'.`);
         contextId = c.id;
       }
@@ -264,7 +271,7 @@ export function buildMcpServer(): McpServer {
         if ('error' in r) return text(r.error);
         recurrenceRule = { rule: r.rule, remindTime: recurrence.remind_time ?? null };
       }
-      const task = await tasksSvc.createTask({
+      const task = await tasksSvc.createTask(userId, {
         title,
         contextId,
         dueAt: due_at ?? null,
@@ -296,16 +303,16 @@ export function buildMcpServer(): McpServer {
       },
     },
     async (a) => {
-      const r = await resolveTask(a.id, a.title_match);
+      const r = await resolveTask(userId, a.id, a.title_match);
       if (!r.task) return text(unresolvedText(r.candidates, a.title_match));
-      const patch: Parameters<typeof tasksSvc.updateTask>[1] = {};
+      const patch: Parameters<typeof tasksSvc.updateTask>[2] = {};
       if (a.title !== undefined) patch.title = a.title;
       if (a.due_at !== undefined) patch.dueAt = a.due_at;
       if (a.remind_at !== undefined) patch.remindAt = a.remind_at;
       if (a.duration_min !== undefined) patch.durationMin = a.duration_min;
       if (a.status !== undefined) patch.status = a.status;
       if (a.context !== undefined) {
-        const c = await contextsSvc.findContextBySlug(a.context);
+        const c = await contextsSvc.findContextBySlug(userId, a.context);
         if (!c) return text(`Unknown context '${a.context}'.`);
         patch.contextId = c.id;
       }
@@ -318,7 +325,7 @@ export function buildMcpServer(): McpServer {
           patch.recurrence = { rule: rr.rule, remindTime: a.recurrence.remind_time ?? null };
         }
       }
-      const updated = await tasksSvc.updateTask(r.task.id, patch);
+      const updated = await tasksSvc.updateTask(userId, r.task.id, patch);
       logWrite('update_task', { id: updated.id });
       return text(`Updated: ${fmtTask(updated)}`);
     },
@@ -331,9 +338,9 @@ export function buildMcpServer(): McpServer {
       inputSchema: { id: z.string().optional(), title_match: z.string().optional() },
     },
     async ({ id, title_match }) => {
-      const r = await resolveTask(id, title_match);
+      const r = await resolveTask(userId, id, title_match);
       if (!r.task) return text(unresolvedText(r.candidates, title_match));
-      const done = await tasksSvc.updateTask(r.task.id, { completed: true });
+      const done = await tasksSvc.updateTask(userId, r.task.id, { completed: true });
       logWrite('complete_task', { id: done.id });
       const next =
         done.recurrenceId && done.nextInstance ? ` Next instance: ${done.nextInstance}.` : '';
@@ -348,9 +355,9 @@ export function buildMcpServer(): McpServer {
       inputSchema: { id: z.string().optional(), title_match: z.string().optional() },
     },
     async ({ id, title_match }) => {
-      const r = await resolveTask(id, title_match);
+      const r = await resolveTask(userId, id, title_match);
       if (!r.task) return text(unresolvedText(r.candidates, title_match));
-      await tasksSvc.deleteTask(r.task.id);
+      await tasksSvc.deleteTask(userId, r.task.id);
       logWrite('delete_task', { id: r.task.id });
       return text(`Deleted: ${r.task.title}.`);
     },
@@ -364,7 +371,7 @@ export function buildMcpServer(): McpServer {
       inputSchema: { id: z.string().optional(), title_match: z.string().optional() },
     },
     async ({ id, title_match }) => {
-      const r = await resolveTask(id, title_match);
+      const r = await resolveTask(userId, id, title_match);
       if (!r.task) return text(unresolvedText(r.candidates, title_match));
       const active = await timerSvc.startTimer(r.task.id);
       logWrite('start_timer', { taskId: active.taskId });
@@ -398,7 +405,7 @@ export function buildMcpServer(): McpServer {
       },
     },
     async ({ id, title_match, body }) => {
-      const r = await resolveTask(id, title_match);
+      const r = await resolveTask(userId, id, title_match);
       if (!r.task) return text(unresolvedText(r.candidates, title_match));
       await commentsSvc.addComment(r.task.id, body);
       logWrite('add_comment', { id: r.task.id });

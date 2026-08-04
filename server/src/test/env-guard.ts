@@ -48,3 +48,10 @@ if (!url.includes(TEST_ENDPOINT_ID)) {
 }
 
 process.env.DATABASE_URL = url;
+
+// Never send real mail from a test run: lib/email.ts falls back to logging the
+// link and code when there is no key, which is what lets sign-up tests use
+// throwaway addresses. Blanked rather than deleted — env.ts calls dotenv's
+// config() again, and dotenv only skips keys already present in process.env, so
+// a deleted key would simply be restored from .env.
+process.env.RESEND_API_KEY = '';

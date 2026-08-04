@@ -15,9 +15,17 @@ export async function listComments(taskId: string): Promise<Comment[]> {
 }
 
 export async function addComment(taskId: string, body: string): Promise<Comment> {
-  const [task] = await db.select({ id: tasks.id }).from(tasks).where(eq(tasks.id, taskId));
+  // The comment inherits the task's owner: a comment can never belong to
+  // someone other than the person who owns the task it hangs off.
+  const [task] = await db
+    .select({ id: tasks.id, userId: tasks.userId })
+    .from(tasks)
+    .where(eq(tasks.id, taskId));
   if (!task) throw notFound('Task not found');
-  const [row] = await db.insert(comments).values({ taskId, body }).returning();
+  const [row] = await db
+    .insert(comments)
+    .values({ taskId, body, userId: task.userId })
+    .returning();
   return toComment(row);
 }
 

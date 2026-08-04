@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { PoolClient } from 'pg';
+import { env } from '../env';
 
 // Minimal, deterministic migration runner: applies every *.sql in drizzle/
 // (lexicographic order) exactly once, each in its own transaction, tracked in
@@ -15,6 +16,13 @@ export async function runMigrations(client: PoolClient, log = true): Promise<voi
     .readdirSync(dir)
     .filter((f) => f.endsWith('.sql'))
     .sort();
+
+  // Migrations that must attribute existing rows to the single pre-multi-user
+  // owner read this GUC (0010_multi_user.sql). Session-scoped, so it survives
+  // the per-file transactions below. `current_setting` throws when it is unset,
+  // which is deliberate: a misconfigured environment fails the migration rather
+  // than silently assigning data to the wrong account.
+  await client.query('SELECT set_config($1, $2, false)', ['app.owner_email', env.OWNER_EMAIL]);
 
   await client.query(
     `CREATE TABLE IF NOT EXISTS _migrations (

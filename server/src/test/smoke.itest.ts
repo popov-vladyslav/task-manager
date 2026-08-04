@@ -1,20 +1,15 @@
 import { after, before, test } from 'node:test';
 import assert from 'node:assert/strict';
-import type { Context } from '@task-manager/shared';
+import { eq } from 'drizzle-orm';
 import { closePool, resetDb, startTestServer, type TestServer } from './harness';
-import { env } from '../env';
-import { signAccess } from '../lib/jwt';
+import { db } from '../db/client';
+import { contexts, users } from '../db/schema';
 
 let server: TestServer;
-let auth: Record<string, string>;
 
 before(async () => {
   await resetDb();
   server = await startTestServer();
-  auth = {
-    Authorization: `Bearer ${signAccess(env.OWNER_EMAIL)}`,
-    'Content-Type': 'application/json',
-  };
 });
 
 after(async () => {
@@ -29,28 +24,24 @@ test('health endpoint responds without auth', async () => {
 });
 
 test('protected route rejects a request with no token', async () => {
-  const res = await fetch(`${server.baseUrl}/api/contexts`);
+  const res = await fetch(`${server.baseUrl}/api/contexts`, { headers: {} });
   assert.equal(res.status, 401);
 });
 
-// Full round trip through the migrated-from-zero schema: HTTP -> route ->
-// service -> Postgres -> back. Proves the harness wires the real app to the
-// test branch, which is all step 2 needs to establish.
-test('creates and reads back a context over HTTP', async () => {
-  const created = await fetch(`${server.baseUrl}/api/contexts`, {
-    method: 'POST',
-    headers: auth,
-    body: JSON.stringify({ label: 'Harness', color: '#ABCDEF' }),
-  });
-  assert.equal(created.status, 201);
-  const ctx = (await created.json()) as Context;
-  assert.equal(ctx.label, 'Harness');
+// Round trip through the migrated-from-zero schema. Goes through drizzle rather
+// than the HTTP API because the services are not owner-scoped yet — the
+// end-to-end HTTP create/read test arrives with step 9.
+test('owned rows round-trip through the migrated schema', async () => {
+  const [user] = await db
+    .insert(users)
+    .values({ email: 'smoke@example.test' })
+    .returning({ id: users.id });
 
-  const listed = await fetch(`${server.baseUrl}/api/contexts`, { headers: auth });
-  assert.equal(listed.status, 200);
-  const all = (await listed.json()) as Context[];
-  assert.ok(
-    all.some((c) => c.id === ctx.id && c.slug === ctx.slug),
-    'created context should appear in the list',
-  );
+  await db
+    .insert(contexts)
+    .values({ userId: user.id, slug: 'smoke', label: 'Smoke', color: '#ABCDEF' });
+
+  const rows = await db.select().from(contexts).where(eq(contexts.userId, user.id));
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].slug, 'smoke');
 });

@@ -2,6 +2,7 @@ import { and, asc, isNotNull, isNull, lt, notInArray, sql } from 'drizzle-orm';
 import { TERMINAL_STATUSES, type MorningSummary } from '@task-manager/shared';
 import { db } from '../db/client';
 import { tasks } from '../db/schema';
+import { ownedBy } from '../db/scope';
 import { toTask } from '../db/mappers';
 import { bucketOverdue, startOfLocalDay } from '../lib/morning-summary';
 
@@ -9,7 +10,10 @@ import { bucketOverdue, startOfLocalDay } from '../lib/morning-summary';
 // older pile. ORDINARY TASKS ONLY: `recurrence_id IS NULL` excludes every
 // occurrence of a recurring task, so a skipped daily routine never nags here —
 // the recurrence engine closes those out as 'missed' instead.
-export async function getMorningSummary(now: Date = new Date()): Promise<MorningSummary> {
+export async function getMorningSummary(
+  userId: string,
+  now: Date = new Date(),
+): Promise<MorningSummary> {
   const todayStart = startOfLocalDay(now);
 
   const rows = await db
@@ -20,6 +24,7 @@ export async function getMorningSummary(now: Date = new Date()): Promise<Morning
     .from(tasks)
     .where(
       and(
+        ownedBy(tasks.userId, userId),
         isNull(tasks.recurrenceId),
         isNotNull(tasks.dueAt),
         lt(tasks.dueAt, todayStart),

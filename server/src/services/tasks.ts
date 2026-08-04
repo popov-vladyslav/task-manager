@@ -8,12 +8,30 @@ import type {
   UpdateTaskInput,
 } from '@task-manager/shared';
 import { db } from '../db/client';
-import { tasks, recurrenceRules, notificationLog } from '../db/schema';
+import { tasks, recurrenceRules, notificationLog, contexts } from '../db/schema';
 import { toTask } from '../db/mappers';
+import { ownedBy, type Executor } from '../db/scope';
 import { between } from '../lib/frac-index';
 import { nextInstance as computeNext } from '../lib/recurrence';
 import { badRequest, notFound } from '../lib/errors';
 import { invalidateReminderClocks } from './reminder-clock';
+
+// A task may only point at a context its own owner holds. Without this, a
+// crafted contextId would attach one user's task to another user's context —
+// ownership of the row being written is not enough, the rows it REFERENCES must
+// be checked too.
+async function assertContextOwned(
+  executor: Executor,
+  userId: string,
+  contextId: number | null | undefined,
+): Promise<void> {
+  if (contextId == null) return;
+  const [row] = await executor
+    .select({ id: contexts.id })
+    .from(contexts)
+    .where(and(ownedBy(contexts.userId, userId), eq(contexts.id, contextId)));
+  if (!row) throw badRequest('Unknown context');
+}
 
 interface ListFilter {
   contextId?: number;
@@ -59,8 +77,8 @@ function rowToTask(r: Row): Task {
   });
 }
 
-export async function listTasks(filter: ListFilter): Promise<Task[]> {
-  const conds = [];
+export async function listTasks(userId: string, filter: ListFilter): Promise<Task[]> {
+  const conds = [ownedBy(tasks.userId, userId)];
   if (filter.contextId != null) conds.push(eq(tasks.contextId, filter.contextId));
   if (filter.status) conds.push(eq(tasks.status, filter.status));
   // Default: open tasks only. 'done' and 'missed' are both terminal — a
@@ -84,24 +102,25 @@ export async function listTasks(filter: ListFilter): Promise<Task[]> {
   return rows.map(rowToTask);
 }
 
-export async function getTask(id: string): Promise<Task> {
+export async function getTask(userId: string, id: string): Promise<Task> {
   const rows = await db
     .select(selection)
     .from(tasks)
     .leftJoin(recurrenceRules, eq(tasks.recurrenceId, recurrenceRules.id))
-    .where(eq(tasks.id, id));
+    .where(and(ownedBy(tasks.userId, userId), eq(tasks.id, id)));
   if (!rows[0]) throw notFound('Task not found');
   return rowToTask(rows[0]);
 }
 
 // Fuzzy title search over open tasks — used by MCP `title_match`.
-export async function searchOpenTasks(query: string): Promise<Task[]> {
+export async function searchOpenTasks(userId: string, query: string): Promise<Task[]> {
   const rows = await db
     .select(selection)
     .from(tasks)
     .leftJoin(recurrenceRules, eq(tasks.recurrenceId, recurrenceRules.id))
     .where(
       and(
+        ownedBy(tasks.userId, userId),
         notInArray(tasks.status, [...TERMINAL_STATUSES]),
         ilike(tasks.title, `%${query.trim()}%`),
       ),
@@ -111,17 +130,18 @@ export async function searchOpenTasks(query: string): Promise<Task[]> {
 }
 
 // Open tasks due today or overdue (Europe/Warsaw — the server runs in TZ).
-export async function tasksDueToday(now: Date = new Date()): Promise<Task[]> {
+export async function tasksDueToday(userId: string, now: Date = new Date()): Promise<Task[]> {
   const end = new Date(now);
   end.setHours(23, 59, 59, 999);
-  return listTasks({ status: 'active', dueBefore: end });
+  return listTasks(userId, { status: 'active', dueBefore: end });
 }
 
-export async function createTask(input: CreateTaskInput): Promise<Task> {
+export async function createTask(userId: string, input: CreateTaskInput): Promise<Task> {
   const title = input.title?.trim();
   if (!title) throw badRequest('Title is required');
   const contextId = input.contextId ?? null;
   const dueAt = input.dueAt ? new Date(input.dueAt) : null;
+  await assertContextOwned(db, userId, contextId);
 
   // One unit of work: a failure between the rule insert and the task insert would
   // otherwise leave an orphaned recurrence_rules row.
@@ -132,13 +152,15 @@ export async function createTask(input: CreateTaskInput): Promise<Task> {
         ming: sql<number>`coalesce(min(${tasks.sortGlobal}), 1)`,
         minc: sql<number>`coalesce(min(${tasks.sortContext}) filter (where ${tasks.contextId} is not distinct from ${contextId}), 1)`,
       })
-      .from(tasks);
+      .from(tasks)
+      .where(ownedBy(tasks.userId, userId));
 
     let recurrenceId: string | null = null;
     if (input.recurrence) {
       const [rule] = await tx
         .insert(recurrenceRules)
         .values({
+          userId,
           title,
           contextId,
           rule: input.recurrence.rule,
@@ -153,6 +175,7 @@ export async function createTask(input: CreateTaskInput): Promise<Task> {
     const [row] = await tx
       .insert(tasks)
       .values({
+        userId,
         title,
         contextId,
         dueAt,
@@ -170,24 +193,33 @@ export async function createTask(input: CreateTaskInput): Promise<Task> {
   // The scheduler caches when the next push is due and skips the database until
   // then; a new remind_at is invisible to it until the cache is dropped.
   invalidateReminderClocks();
-  return getTask(id);
+  return getTask(userId, id);
 }
 
-export async function updateTask(id: string, patch: UpdateTaskInput): Promise<Task> {
+export async function updateTask(
+  userId: string,
+  id: string,
+  patch: UpdateTaskInput,
+): Promise<Task> {
   // The task update and its dependent recurrence-rule writes (upsert / sync /
   // orphan-delete) are one unit so a mid-way failure can't leave a partial state.
   await db.transaction(async (tx) => {
     const [cur] = await tx
       .select({
         recurrenceId: tasks.recurrenceId,
+        // A rule created from an existing task inherits that task's owner.
+        userId: tasks.userId,
         title: tasks.title,
         contextId: tasks.contextId,
         dueAt: tasks.dueAt,
         durationMin: tasks.durationMin,
       })
       .from(tasks)
-      .where(eq(tasks.id, id));
+      .where(and(ownedBy(tasks.userId, userId), eq(tasks.id, id)));
     if (!cur) throw notFound('Task not found');
+
+    // Re-pointing a task at another user's context is a cross-account write.
+    await assertContextOwned(tx, userId, patch.contextId);
 
     const set: Partial<typeof tasks.$inferInsert> = {};
     if (patch.title !== undefined) set.title = patch.title;
@@ -234,11 +266,14 @@ export async function updateTask(id: string, patch: UpdateTaskInput): Promise<Ta
             defaultDueTime: timeOf(patch.dueAt !== undefined ? patch.dueAt : cur.dueAt),
             dueOffsetD: patch.recurrence.dueOffsetDays ?? 0,
           })
-          .where(eq(recurrenceRules.id, cur.recurrenceId));
+          .where(
+            and(ownedBy(recurrenceRules.userId, userId), eq(recurrenceRules.id, cur.recurrenceId)),
+          );
       } else {
         const [rule] = await tx
           .insert(recurrenceRules)
           .values({
+            userId: cur.userId,
             title: patch.title ?? cur.title,
             contextId: patch.contextId !== undefined ? patch.contextId : cur.contextId,
             rule: patch.recurrence.rule,
@@ -257,53 +292,67 @@ export async function updateTask(id: string, patch: UpdateTaskInput): Promise<Ta
       await tx
         .update(recurrenceRules)
         .set({ defaultDueTime: timeOf(patch.dueAt) })
-        .where(eq(recurrenceRules.id, cur.recurrenceId));
+        .where(
+          and(ownedBy(recurrenceRules.userId, userId), eq(recurrenceRules.id, cur.recurrenceId)),
+        );
     }
 
     if (Object.keys(set).length > 0) {
-      await tx.update(tasks).set(set).where(eq(tasks.id, id));
+      await tx.update(tasks).set(set).where(and(ownedBy(tasks.userId, userId), eq(tasks.id, id)));
     }
     // Delete the rule only after the task no longer references it (FK).
     if (orphanRuleId) {
-      await tx.delete(recurrenceRules).where(eq(recurrenceRules.id, orphanRuleId));
+      await tx
+        .delete(recurrenceRules)
+        .where(and(ownedBy(recurrenceRules.userId, userId), eq(recurrenceRules.id, orphanRuleId)));
     }
   });
 
   // Unconditional: remind_at is not the only field that moves the next push —
   // completing a task or changing its status takes it out of the due set too.
   invalidateReminderClocks();
-  return getTask(id);
+  return getTask(userId, id);
 }
 
-export async function deleteTask(id: string): Promise<void> {
-  const [row] = await db.delete(tasks).where(eq(tasks.id, id)).returning({ id: tasks.id });
+export async function deleteTask(userId: string, id: string): Promise<void> {
+  const [row] = await db
+    .delete(tasks)
+    .where(and(ownedBy(tasks.userId, userId), eq(tasks.id, id)))
+    .returning({ id: tasks.id });
   if (!row) throw notFound('Task not found');
   invalidateReminderClocks();
 }
 
 // Snooze a task's reminder by `minutes` from now, and clear its notification log
 // so the scheduler re-sends when the new remind_at arrives.
-export async function snoozeTask(id: string, minutes: number): Promise<Task> {
+export async function snoozeTask(userId: string, id: string, minutes: number): Promise<Task> {
   const remindAt = new Date(Date.now() + minutes * 60_000);
   await db.transaction(async (tx) => {
     const [row] = await tx
       .update(tasks)
       .set({ remindAt })
-      .where(eq(tasks.id, id))
+      .where(and(ownedBy(tasks.userId, userId), eq(tasks.id, id)))
       .returning({ id: tasks.id });
     if (!row) throw notFound('Task not found');
-    await tx.delete(notificationLog).where(eq(notificationLog.taskId, id));
+    await tx
+      .delete(notificationLog)
+      .where(and(ownedBy(notificationLog.userId, userId), eq(notificationLog.taskId, id)));
   });
   invalidateReminderClocks();
-  return getTask(id);
+  return getTask(userId, id);
 }
 
-export async function reorderTask(id: string, input: ReorderInput): Promise<Task> {
+export async function reorderTask(userId: string, id: string, input: ReorderInput): Promise<Task> {
   const col = input.scope === 'context' ? tasks.sortContext : tasks.sortGlobal;
 
   const neighborSort = async (nid?: string | null): Promise<number | null> => {
     if (!nid) return null;
-    const [n] = await db.select({ s: col }).from(tasks).where(eq(tasks.id, nid));
+    // Neighbours must be the caller's own tasks — otherwise another user's
+    // ordering could be used to position (and thereby probe) rows.
+    const [n] = await db
+      .select({ s: col })
+      .from(tasks)
+      .where(and(ownedBy(tasks.userId, userId), eq(tasks.id, nid)));
     return n ? n.s : null;
   };
 
@@ -313,7 +362,11 @@ export async function reorderTask(id: string, input: ReorderInput): Promise<Task
 
   const set: Partial<typeof tasks.$inferInsert> =
     input.scope === 'context' ? { sortContext: newSort } : { sortGlobal: newSort };
-  const [row] = await db.update(tasks).set(set).where(eq(tasks.id, id)).returning({ id: tasks.id });
+  const [row] = await db
+    .update(tasks)
+    .set(set)
+    .where(and(ownedBy(tasks.userId, userId), eq(tasks.id, id)))
+    .returning({ id: tasks.id });
   if (!row) throw notFound('Task not found');
-  return getTask(row.id);
+  return getTask(userId, row.id);
 }

@@ -4,6 +4,7 @@ import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/
 import { requireBearerAuth } from '@modelcontextprotocol/sdk/server/auth/middleware/bearerAuth.js';
 import { env } from '../env';
 import { buildMcpServer } from '../mcp/build-server';
+import { getOwnerUserId } from '../services/users';
 import { oauthProvider } from '../mcp/oauth';
 
 const router = Router();
@@ -40,7 +41,9 @@ router.post('/', async (req, res) => {
   res.on('close', () => {
     transport.close();
   });
-  const server = buildMcpServer();
+  // Legacy static token / current OAuth flow are both owner-scoped until the
+  // per-user token cutover.
+  const server = buildMcpServer(await getOwnerUserId());
   await server.connect(transport);
   await transport.handleRequest(req, res, req.body);
 });

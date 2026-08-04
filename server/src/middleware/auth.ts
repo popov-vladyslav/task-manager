@@ -9,9 +9,20 @@ export function requireAuth(req: Request, _res: Response, next: NextFunction): v
     return;
   }
   try {
-    verifyAccess(header.slice(7));
+    // Rejects anything that is not an app access token — notably MCP OAuth
+    // tokens, which are signed with the same secret (see lib/jwt.ts).
+    const { sub } = verifyAccess(header.slice(7));
+    req.userId = sub;
     next();
   } catch {
     next(unauthorized('Invalid or expired token'));
   }
+}
+
+// Reads the id requireAuth resolved. Throwing rather than returning undefined
+// keeps callers honest: a route that forgot requireAuth fails loudly instead of
+// silently querying with `undefined` as the owner.
+export function requireUserId(req: Request): string {
+  if (!req.userId) throw unauthorized('Not authenticated');
+  return req.userId;
 }

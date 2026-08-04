@@ -58,13 +58,16 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ jwt, refresh });
   },
 
+  // The server ROTATES on refresh: the token we just sent is now dead and the
+  // response carries its replacement. Persisting the new one is not optional —
+  // keeping the old value would sign the device out at the next refresh.
   async tryRefresh() {
-    const refresh = get().refresh;
-    if (!refresh) return false;
+    const current = get().refresh;
+    if (!current) return false;
     try {
-      const { jwt } = await post<{ jwt: string }>('/auth/refresh', { refresh });
-      await storage.set(JWT_KEY, jwt);
-      set({ jwt });
+      const { jwt, refresh } = await post<AuthTokens>('/auth/refresh', { refresh: current });
+      await Promise.all([storage.set(JWT_KEY, jwt), storage.set(REFRESH_KEY, refresh)]);
+      set({ jwt, refresh });
       return true;
     } catch {
       return false;
