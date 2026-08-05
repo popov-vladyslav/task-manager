@@ -16,6 +16,7 @@ interface AuthState {
   signInWithToken: (magicToken: string) => Promise<void>;
   tryRefresh: () => Promise<boolean>;
   signOut: () => Promise<void>;
+  signOutEverywhere: () => Promise<void>;
 }
 
 async function post<T>(path: string, body: unknown): Promise<T> {
@@ -58,21 +59,50 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ jwt, refresh });
   },
 
+  // The server ROTATES on refresh: the token we just sent is now dead and the
+  // response carries its replacement. Persisting the new one is not optional —
+  // keeping the old value would sign the device out at the next refresh.
   async tryRefresh() {
-    const refresh = get().refresh;
-    if (!refresh) return false;
+    const current = get().refresh;
+    if (!current) return false;
     try {
-      const { jwt } = await post<{ jwt: string }>('/auth/refresh', { refresh });
-      await storage.set(JWT_KEY, jwt);
-      set({ jwt });
+      const { jwt, refresh } = await post<AuthTokens>('/auth/refresh', { refresh: current });
+      await Promise.all([storage.set(JWT_KEY, jwt), storage.set(REFRESH_KEY, refresh)]);
+      set({ jwt, refresh });
       return true;
     } catch {
       return false;
     }
   },
 
+  // Ends this device's session on the server too, so the refresh token row is
+  // gone rather than merely forgotten locally. Local state is cleared either
+  // way — a failed request must never leave the app stuck signed in.
   async signOut() {
+    const refresh = get().refresh;
+    try {
+      if (refresh) await post('/auth/signout', { refresh });
+    } catch {
+      /* best effort */
+    }
     await Promise.all([storage.remove(JWT_KEY), storage.remove(REFRESH_KEY)]);
     set({ jwt: null, refresh: null });
+  },
+
+  // Revokes every device's refresh token. Access tokens already issued remain
+  // valid for their short lifetime, which is why that TTL is 15 minutes.
+  async signOutEverywhere() {
+    const jwt = get().jwt;
+    try {
+      if (jwt) {
+        await fetch(`${API_URL}/auth/signout-all`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${jwt}` },
+        });
+      }
+    } catch {
+      /* best effort */
+    }
+    await get().signOut();
   },
 }));

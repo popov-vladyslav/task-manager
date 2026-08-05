@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from 'react';
+import { useCallback, useEffect, useRef, useState, type ComponentType } from 'react';
 import {
   ActivityIndicator,
   Modal,
@@ -27,6 +27,8 @@ import * as Updates from 'expo-updates';
 import { useUpdates } from 'expo-updates';
 import { ChevronRight, EyeOff, Plus, RefreshCw, Trash2, X } from 'lucide-react-native';
 import type { Context } from '@task-manager/shared';
+import { api, type McpTokenMetadata } from '../../lib/api';
+import { API_URL } from '../../lib/config';
 import { colors, headerDate, monoFont, webInputReset, WIDE_BREAKPOINT } from '../../theme';
 import { useTasksStore } from '../../store/tasks';
 import { useAuthStore } from '../../store/auth';
@@ -57,23 +59,6 @@ type InputComponent = ComponentType<TextInputProps>;
 // and crashes — so use a plain TextInput inside the sheet on web.
 const SheetInput: InputComponent = isWeb ? TextInput : BottomSheetTextInput;
 
-// The owner email lives in the JWT `sub` claim (single-user app). Decode it
-// client-side so "Signed in as …" can be shown without a /me round-trip.
-function jwtSub(token: string | null): string | null {
-  if (!token) return null;
-  try {
-    const part = token.split('.')[1];
-    if (!part) return null;
-    let b64 = part.replace(/-/g, '+').replace(/_/g, '/');
-    b64 += '='.repeat((4 - (b64.length % 4)) % 4);
-    if (typeof globalThis.atob !== 'function') return null;
-    const sub = JSON.parse(globalThis.atob(b64)).sub;
-    return typeof sub === 'string' ? sub : null;
-  } catch {
-    return null;
-  }
-}
-
 export function SettingsScreen() {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
@@ -92,6 +77,7 @@ export function SettingsScreen() {
     <>
       <ContextsSection contexts={contexts} />
       <AccountSection />
+      <McpTokenSection />
       <UpdatesSection />
       <DangerSection />
     </>
@@ -439,11 +425,32 @@ function EditorForm({
 
 function AccountSection() {
   const router = useRouter();
-  const jwt = useAuthStore((s) => s.jwt);
-  const email = useMemo(() => jwtSub(jwt), [jwt]);
+  const [email, setEmail] = useState<string | null>(null);
+
+  // Asked of the server rather than decoded from the token: the JWT identifies
+  // the account to the API, it is not a source of display data.
+  useEffect(() => {
+    let alive = true;
+    void api
+      .getAccount()
+      .then((a) => {
+        if (alive) setEmail(a.email);
+      })
+      .catch(() => {
+        /* leave it blank rather than showing something wrong */
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   const signOut = async () => {
     await useAuthStore.getState().signOut();
+    router.replace('/sign-in');
+  };
+
+  const signOutEverywhere = async () => {
+    await useAuthStore.getState().signOutEverywhere();
     router.replace('/sign-in');
   };
 
@@ -466,6 +473,162 @@ function AccountSection() {
           <Text style={styles.accountSignOutText}>Sign out</Text>
           <ChevronRight size={16} color={colors.textFaint} />
         </Pressable>
+        <View style={styles.accountDivider} />
+        <Pressable onPress={signOutEverywhere} style={styles.accountSignOutRow}>
+          <Text style={styles.accountSignOutText}>Sign out all devices</Text>
+          <ChevronRight size={16} color={colors.textFaint} />
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
+function formatStamp(iso: string): string {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString();
+}
+
+// The MCP token is emailed and never rendered here — the app has no way to show
+// it, by design. That is why the recovery path is "regenerate" (which kills the
+// old one) rather than "reveal".
+// The endpoint this build talks to, so the panel shows the right URL per
+// environment without anyone reasoning about stage vs prod.
+const MCP_URL = `${API_URL.replace(/\/$/, '')}/mcp`;
+
+// Per-client steps live HERE rather than in the token email: client UIs get
+// renamed every few months, and an email is frozen the moment it is sent. This
+// screen ships with the app and can be corrected in an OTA update.
+function HowToConnect() {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <View style={styles.howBlock}>
+      <Pressable onPress={() => setOpen((v) => !v)} style={styles.howToggle}>
+        <ChevronRight size={14} color={colors.textFaint} />
+        <Text style={styles.howToggleText}>How to connect</Text>
+      </Pressable>
+
+      {open ? (
+        <View style={styles.howBody}>
+          <Text style={styles.howLabel}>Claude (claude.ai)</Text>
+          <Text style={styles.howStep}>Settings → Connectors → Add custom connector</Text>
+
+          <Text style={styles.howLabel}>Claude Code</Text>
+          <Text selectable style={styles.howStep}>
+            claude mcp add --transport http task-manager {MCP_URL}
+          </Text>
+
+          <Text style={styles.howLabel}>ChatGPT</Text>
+          <Text style={styles.howStep}>Settings → Connectors → Add</Text>
+
+          <Text style={styles.howNote}>
+            Any client that supports HTTP MCP with a bearer token will work. Menu names change
+            between app versions — look for “connectors” or “MCP servers”.
+          </Text>
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+function McpTokenSection() {
+  const [meta, setMeta] = useState<McpTokenMetadata | null>(null);
+  const [loaded, setLoaded] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const refresh = useCallback(async () => {
+    try {
+      setMeta(await api.getMcpToken());
+    } catch {
+      /* leave as-is */
+    } finally {
+      setLoaded(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+
+  const issue = async () => {
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    setNote(null);
+    try {
+      setMeta(await api.issueMcpToken());
+      setNote('Sent to your email address.');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not create a token');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const revoke = async () => {
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    setNote(null);
+    try {
+      await api.revokeMcpToken();
+      setMeta(null);
+      setNote('Token revoked.');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not revoke');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <View style={styles.mt28}>
+      <SectionLabel>AI ASSISTANT (MCP)</SectionLabel>
+      <View style={styles.accountCard}>
+        <View style={styles.mcpBody}>
+          <Text style={styles.mcpBlurb}>
+            Connect your own AI assistant to your tasks. The token is sent to your email and is
+            never shown here — if you lose it, generate a new one.
+          </Text>
+
+          {!loaded ? (
+            <ActivityIndicator color={colors.textFaint} />
+          ) : meta ? (
+            <>
+              <Text style={styles.mcpMeta}>Created {formatStamp(meta.createdAt)}</Text>
+              <Text style={styles.mcpMeta}>
+                {meta.lastUsedAt ? `Last used ${formatStamp(meta.lastUsedAt)}` : 'Never used'}
+              </Text>
+            </>
+          ) : (
+            <Text style={styles.mcpMeta}>No token yet.</Text>
+          )}
+
+          {note ? <Text style={styles.mcpNote}>{note}</Text> : null}
+          {error ? <Text style={styles.mcpError}>{error}</Text> : null}
+
+          <View style={styles.mcpButtons}>
+            <Pressable onPress={issue} disabled={busy} style={styles.mcpPrimaryBtn}>
+              <RefreshCw size={13} color={colors.bgSurface} />
+              <Text style={styles.mcpPrimaryBtnText}>
+                {meta ? 'Regenerate and email' : 'Email me a token'}
+              </Text>
+            </Pressable>
+            {meta ? (
+              <Pressable onPress={revoke} disabled={busy} style={styles.mcpRevokeBtn}>
+                <Text style={styles.mcpRevokeBtnText}>Revoke</Text>
+              </Pressable>
+            ) : null}
+          </View>
+
+          {meta ? (
+            <Text style={styles.mcpWarn}>Regenerating stops the current token working.</Text>
+          ) : null}
+
+          <HowToConnect />
+        </View>
       </View>
     </View>
   );
@@ -473,6 +636,7 @@ function AccountSection() {
 
 function DangerSection() {
   const [modal, setModal] = useState(false);
+  const [deleteModal, setDeleteModal] = useState(false);
   return (
     <View style={styles.mt28}>
       <SectionLabel>DANGER ZONE</SectionLabel>
@@ -487,8 +651,100 @@ function DangerSection() {
           <Text style={styles.dangerBtnText}>Reset…</Text>
         </Pressable>
       </View>
+      <View style={styles.dangerCard}>
+        <Text style={styles.dangerTitle}>Delete account</Text>
+        <Text style={styles.dangerText}>
+          Permanently deletes your account and everything in it — tasks, contexts, recurring rules,
+          tracked time, comments and any MCP token. You are signed out on every device. This cannot
+          be undone.
+        </Text>
+        <Pressable onPress={() => setDeleteModal(true)} style={styles.dangerBtn}>
+          <Trash2 size={13} color={colors.accentNow} />
+          <Text style={styles.dangerBtnText}>Delete account…</Text>
+        </Pressable>
+      </View>
       {modal ? <ResetModal onClose={() => setModal(false)} /> : null}
+      {deleteModal ? <DeleteAccountModal onClose={() => setDeleteModal(false)} /> : null}
     </View>
+  );
+}
+
+// Same type-to-confirm friction as the reset flow, with a harsher word and a
+// harsher outcome: this one ends the account, not just its contents.
+function DeleteAccountModal({ onClose }: { onClose: () => void }) {
+  const router = useRouter();
+  const [text, setText] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const ok = text.trim() === 'DELETE';
+
+  const doDelete = async () => {
+    if (!ok || busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await api.deleteAccount();
+      // The account is gone; clear local tokens and leave. signOut's server call
+      // will fail harmlessly — there is no session left to end.
+      await useAuthStore.getState().signOut();
+      router.replace('/sign-in');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not delete the account');
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Modal transparent visible animationType="fade" statusBarTranslucent onRequestClose={onClose}>
+      <KeyboardAvoidingView behavior={isIOS ? 'padding' : undefined} style={styles.flex1}>
+        <Pressable onPress={onClose} style={styles.resetOverlay}>
+          <Pressable onPress={(e) => e.stopPropagation?.()} style={styles.resetCard}>
+            <Text style={styles.resetTitle}>Delete account</Text>
+            <Text style={styles.resetBody}>
+              This permanently deletes your account and all of its data. It cannot be undone. Type{' '}
+              <Text style={styles.resetBodyEmphasis}>DELETE</Text> to confirm.
+            </Text>
+            <TextInput
+              value={text}
+              onChangeText={setText}
+              placeholder="DELETE"
+              placeholderTextColor={colors.textMuted}
+              autoCapitalize="characters"
+              autoCorrect={false}
+              autoFocus
+              style={[styles.resetInput, webInputReset]}
+            />
+            {error ? <Text style={styles.resetErrorText}>{error}</Text> : null}
+            <View style={styles.resetActions}>
+              <Pressable onPress={onClose} disabled={busy} style={styles.resetCancel}>
+                <Text style={styles.resetCancelText}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                onPress={doDelete}
+                disabled={!ok || busy}
+                style={[
+                  styles.resetConfirm,
+                  { backgroundColor: ok ? colors.accentNow : colors.bgElevated },
+                ]}
+              >
+                {busy ? (
+                  <ActivityIndicator size="small" color={colors.bgSurface} />
+                ) : (
+                  <Text
+                    style={[
+                      styles.resetConfirmText,
+                      { color: ok ? colors.bgSurface : colors.textMuted },
+                    ]}
+                  >
+                    Delete account
+                  </Text>
+                )}
+              </Pressable>
+            </View>
+          </Pressable>
+        </Pressable>
+      </KeyboardAvoidingView>
+    </Modal>
   );
 }
 
@@ -831,6 +1087,7 @@ const styles = StyleSheet.create({
   accountSignOutText: { fontSize: 15, fontWeight: '500', color: colors.accentPrimary },
   dangerCard: {
     borderRadius: 12,
+    marginBottom: 8,
     padding: 14,
     backgroundColor: 'rgba(217,102,139,0.06)',
     borderWidth: 1,
@@ -917,6 +1174,43 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
   },
+  mcpBody: { padding: 14, gap: 8 },
+  mcpBlurb: { fontSize: 12.5, lineHeight: 18, color: colors.textMuted },
+  mcpMeta: { fontSize: 12.5, color: colors.textFaint },
+  mcpNote: { fontSize: 12.5, color: colors.textPrimary, marginTop: 2 },
+  mcpError: { fontSize: 12.5, color: colors.accentNow, marginTop: 2 },
+  mcpButtons: { flexDirection: 'row', gap: 10, marginTop: 6 },
+  mcpPrimaryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderRadius: 11,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    backgroundColor: colors.accentPrimary,
+  },
+  mcpPrimaryBtnText: { fontSize: 13, fontWeight: '600', color: colors.bgSurface },
+  mcpRevokeBtn: {
+    borderRadius: 11,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    backgroundColor: colors.bgElevated,
+  },
+  mcpRevokeBtnText: { fontSize: 13, fontWeight: '500', color: colors.textPrimary },
+  mcpWarn: { fontSize: 11.5, color: colors.textFaint, marginTop: 2 },
+  howBlock: { marginTop: 10, borderTopWidth: 1, borderTopColor: colors.borderSubtle, paddingTop: 10 },
+  howToggle: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  howToggleText: { fontSize: 12.5, fontWeight: '500', color: colors.textSecondary },
+  howBody: { marginTop: 10, gap: 4 },
+  howLabel: {
+    fontFamily: monoFont,
+    fontSize: 10,
+    letterSpacing: 1.2,
+    color: colors.textFaint,
+    marginTop: 8,
+  },
+  howStep: { fontSize: 12.5, lineHeight: 18, color: colors.textMuted },
+  howNote: { fontSize: 11.5, lineHeight: 16, color: colors.textFaint, marginTop: 10 },
   sectionLabel: {
     fontFamily: monoFont,
     fontSize: 10.5,

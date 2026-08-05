@@ -1,6 +1,6 @@
 import { and, eq, isNotNull, min, notExists, sql } from 'drizzle-orm';
 import { db } from '../db/client';
-import { notificationLog, settings, tasks } from '../db/schema';
+import { notificationLog, tasks } from '../db/schema';
 import { ReminderClock } from '../lib/reminder-clock';
 
 // The database-backed clocks the scheduler gates its two reminder jobs on.
@@ -46,24 +46,37 @@ export const reminderClock = new ReminderClock({
 // delay a repeat.
 export const repeatClock = new ReminderClock({
   nextAt: async () => {
-    const [enabled] = await db.select().from(settings).where(eq(settings.key, 'repeat_reminders'));
-    if (!enabled || enabled.value !== true) return null; // opt-in: nothing to do, ever
-
-    const [afterCfg] = await db.select().from(settings).where(eq(settings.key, 'repeat_after_h'));
-    const hours = typeof afterCfg?.value === 'number' ? afterCfg.value : 3;
-
+    // Opt-in and the interval are PER USER. Reading one global row here would
+    // take an arbitrary account's preference: with two users, one of them
+    // turning repeats off could suppress the gate — and therefore repeats — for
+    // everyone. So the eligibility instant is computed per user in SQL and the
+    // earliest across all opted-in users wins.
     const result = await db.execute(sql`
-      select min(latest) as next from (
-        select max(n.sent_at) as latest
-        from notification_log n
-        join tasks t on t.id = n.task_id
-        where t.status = 'active'
-        group by n.task_id
+      with cfg as (
+        select s.user_id,
+               coalesce(
+                 (select (a.value #>> '{}')::numeric
+                    from settings a
+                   where a.user_id = s.user_id and a.key = 'repeat_after_h'),
+                 3
+               ) as hours
+          from settings s
+         where s.key = 'repeat_reminders' and s.value = 'true'::jsonb
+      ),
+      latest as (
+        select t.user_id, max(n.sent_at) as latest
+          from notification_log n
+          join tasks t on t.id = n.task_id
+         where t.status = 'active'
+         group by t.user_id, n.task_id
         having bool_or(n.kind = 'initial')
-      ) s
+      )
+      select min(l.latest + make_interval(hours => cfg.hours::int)) as next
+        from latest l
+        join cfg on cfg.user_id = l.user_id
     `);
     const next = (result.rows[0] as { next: Date | string | null } | undefined)?.next;
-    return next ? new Date(new Date(next).getTime() + hours * 3_600_000) : null;
+    return next ? new Date(next) : null;
   },
 });
 

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildMagicLinkEmail, MAGIC_LINK_SUBJECT, PRODUCT_NAME } from './email';
+import { buildMagicLinkEmail, buildMcpTokenEmail, MAGIC_LINK_SUBJECT, PRODUCT_NAME } from './email';
 
 const LINK = 'https://task-tracker.net/auth?token=abc123';
 const TOKEN = 'abc123';
@@ -37,4 +37,25 @@ test('link and token are html-escaped', () => {
   const { html } = buildMagicLinkEmail('https://x.test/auth?a=1&b=2', '<script>x</script>');
   assert.match(html, /a=1&amp;b=2/);
   assert.doesNotMatch(html, /<script>/);
+});
+
+test('the MCP token email carries the server URL, not just the token', () => {
+  const endpoint = 'https://stage-api.task-tracker.net/mcp';
+  const token = 'tok_abc123';
+  const { html, text } = buildMcpTokenEmail(token, endpoint);
+
+  // A credential with no endpoint is unusable — the recipient would have to be
+  // told the URL out of band.
+  for (const body of [html, text]) {
+    assert.ok(body.includes(endpoint), 'the server URL must be in the email');
+    assert.ok(body.includes(token), 'the token must be in the email');
+  }
+});
+
+test('the MCP token email carries no sign-in link', () => {
+  const { html, text } = buildMcpTokenEmail('tok_abc123', 'https://x.test/mcp');
+  // It is a credential, not a sign-in: an /auth link here would be a phishing
+  // shape and would confuse it with the magic-link email.
+  assert.doesNotMatch(html, /\/auth\?token=/);
+  assert.doesNotMatch(text, /\/auth\?token=/);
 });

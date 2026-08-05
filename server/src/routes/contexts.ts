@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import * as svc from '../services/contexts';
+import { requireUserId } from '../middleware/auth';
 
 const router = Router();
 
@@ -22,20 +23,22 @@ const updateSchema = z.object({
   excludeFromAll: z.boolean().optional(),
 });
 
-router.get('/', async (_req, res) => {
-  res.json(await svc.listContexts());
+router.get('/', async (req, res) => {
+  res.json(await svc.listContexts(requireUserId(req)));
 });
 
 router.post('/', async (req, res) => {
-  res.status(201).json(await svc.createContext(createSchema.parse(req.body)));
+  res.status(201).json(await svc.createContext(requireUserId(req), createSchema.parse(req.body)));
 });
 
 router.patch('/:id', async (req, res) => {
-  res.json(await svc.updateContext(Number(req.params.id), updateSchema.parse(req.body)));
+  res.json(
+    await svc.updateContext(requireUserId(req), Number(req.params.id), updateSchema.parse(req.body)),
+  );
 });
 
 router.delete('/:id', async (req, res) => {
-  await svc.deleteContext(Number(req.params.id));
+  await svc.deleteContext(requireUserId(req), Number(req.params.id));
   res.status(204).end();
 });
 

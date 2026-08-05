@@ -9,6 +9,7 @@ import {
 
 const DAILY: PlanRule = {
   id: 'rule-daily',
+  userId: 'user-1',
   title: 'Молитва, читання',
   contextId: 3,
   rule: 'daily',

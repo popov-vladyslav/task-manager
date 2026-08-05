@@ -111,4 +111,25 @@ export const api = {
   getCalendar: (fromISO: string, toISO: string) =>
     request<CalendarData>(`/api/calendar${qs({ from: fromISO, to: toISO })}`),
   getMorningSummary: () => request<MorningSummary>('/api/summary/morning'),
+
+  // Identity comes from the server, not from decoding the JWT: the token says
+  // who you are to the API, it is not a source of display data.
+  getAccount: () => request<AccountInfo>('/api/account'),
+  deleteAccount: () =>
+    request<void>('/api/account', { method: 'DELETE', body: { confirm: 'DELETE' } }),
+
+  // Metadata only — the token itself is emailed and never returned here.
+  getMcpToken: () => request<McpTokenMetadata | null>('/api/mcp-token'),
+  issueMcpToken: () => request<McpTokenMetadata>('/api/mcp-token', { method: 'POST' }),
+  revokeMcpToken: () => request<void>('/api/mcp-token', { method: 'DELETE' }),
 };
+
+export interface AccountInfo {
+  email: string;
+  createdAt: string;
+}
+
+export interface McpTokenMetadata {
+  createdAt: string;
+  lastUsedAt: string | null;
+}

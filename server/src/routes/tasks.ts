@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import type { TaskStatus } from '@task-manager/shared';
 import * as svc from '../services/tasks';
+import { requireUserId } from '../middleware/auth';
 import * as commentsSvc from '../services/comments';
 import { isValidRule } from '../lib/recurrence';
 
@@ -47,7 +48,7 @@ router.get('/', async (req, res) => {
   const status =
     typeof req.query.status === 'string' ? (req.query.status as TaskStatus) : undefined;
   res.json(
-    await svc.listTasks({
+    await svc.listTasks(requireUserId(req), {
       contextId: contextId != null && Number.isFinite(contextId) ? contextId : undefined,
       status,
     }),
@@ -55,38 +56,38 @@ router.get('/', async (req, res) => {
 });
 
 router.get('/:id', async (req, res) => {
-  res.json(await svc.getTask(req.params.id));
+  res.json(await svc.getTask(requireUserId(req), req.params.id));
 });
 
 router.post('/', async (req, res) => {
-  res.status(201).json(await svc.createTask(createSchema.parse(req.body)));
+  res.status(201).json(await svc.createTask(requireUserId(req), createSchema.parse(req.body)));
 });
 
 router.patch('/:id', async (req, res) => {
-  res.json(await svc.updateTask(req.params.id, updateSchema.parse(req.body)));
+  res.json(await svc.updateTask(requireUserId(req), req.params.id, updateSchema.parse(req.body)));
 });
 
 router.delete('/:id', async (req, res) => {
-  await svc.deleteTask(req.params.id);
+  await svc.deleteTask(requireUserId(req), req.params.id);
   res.status(204).end();
 });
 
 router.post('/:id/reorder', async (req, res) => {
-  res.json(await svc.reorderTask(req.params.id, reorderSchema.parse(req.body)));
+  res.json(await svc.reorderTask(requireUserId(req), req.params.id, reorderSchema.parse(req.body)));
 });
 
 router.post('/:id/snooze', async (req, res) => {
   const { minutes } = z.object({ minutes: z.number().int().positive() }).parse(req.body);
-  res.json(await svc.snoozeTask(req.params.id, minutes));
+  res.json(await svc.snoozeTask(requireUserId(req), req.params.id, minutes));
 });
 
 router.get('/:id/comments', async (req, res) => {
-  res.json(await commentsSvc.listComments(req.params.id));
+  res.json(await commentsSvc.listComments(requireUserId(req), req.params.id));
 });
 
 router.post('/:id/comments', async (req, res) => {
   const { body } = z.object({ body: z.string().min(1) }).parse(req.body);
-  res.status(201).json(await commentsSvc.addComment(req.params.id, body));
+  res.status(201).json(await commentsSvc.addComment(requireUserId(req), req.params.id, body));
 });
 
 export default router;

@@ -29,6 +29,10 @@ export async function spawnDueRecurring(now: Date = new Date()): Promise<number>
     );
   if (rules.length === 0) return 0;
 
+  // Deliberately global, like the rules query above: this is a cron job that
+  // spawns for every account. It is safe to mix owners here because a rule id is
+  // a UUID, so `o.recurrenceId === rule.id` can only ever match occurrences of
+  // that rule — i.e. of that rule's owner. The writes below are still scoped.
   const openOccurrences: OpenOccurrence[] = (
     await db
       .select({ id: tasks.id, recurrenceId: tasks.recurrenceId })
@@ -44,9 +48,12 @@ export async function spawnDueRecurring(now: Date = new Date()): Promise<number>
     // daily-idempotency guard relies on all of them landing (a partial would let
     // the rule re-spawn, or leave two occurrences open).
     await db.transaction(async (tx) => {
+      // Top-of-list is per owner: another user's ordering must not shift this
+      // occurrence's position.
       const [{ minSort }] = await tx
         .select({ minSort: sql<number>`coalesce(min(${tasks.sortGlobal}), 1)` })
-        .from(tasks);
+        .from(tasks)
+        .where(eq(tasks.userId, plan.userId));
       const top = Number(minSort) - 1;
 
       if (plan.missedOccurrenceIds.length > 0) {
@@ -55,6 +62,11 @@ export async function spawnDueRecurring(now: Date = new Date()): Promise<number>
           .set({ status: 'missed' })
           .where(
             and(
+              // Defence in depth: these ids came from this rule's own
+              // occurrences, so the owner filter should be redundant — but a
+              // cross-account status write must be impossible, not merely
+              // unlikely.
+              eq(tasks.userId, plan.userId),
               inArray(tasks.id, plan.missedOccurrenceIds),
               // Re-check under the transaction: the occurrence may have been
               // completed between the read above and here.
@@ -64,6 +76,7 @@ export async function spawnDueRecurring(now: Date = new Date()): Promise<number>
       }
 
       await tx.insert(tasks).values({
+        userId: plan.userId,
         title: plan.title,
         contextId: plan.contextId,
         dueAt: plan.dueAt,

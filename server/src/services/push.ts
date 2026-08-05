@@ -1,7 +1,7 @@
 import { Expo, type ExpoPushMessage } from 'expo-server-sdk';
 import { and, eq, inArray, isNotNull, lte, notExists, sql } from 'drizzle-orm';
 import { db } from '../db/client';
-import { contexts, notificationLog, pushTokens, settings, tasks } from '../db/schema';
+import { contexts, notificationLog, pushTokens, settings, tasks, users } from '../db/schema';
 import { composeNotificationTitle } from '../lib/notification-title';
 import { dispatchReminders } from '../lib/reminder-dispatch';
 import { summaryPushBody } from '../lib/morning-summary';
@@ -10,18 +10,33 @@ import { invalidateReminderClocks } from './reminder-clock';
 
 const expo = new Expo();
 
-export async function registerPushToken(token: string, device?: string): Promise<void> {
+export async function registerPushToken(
+  userId: string,
+  token: string,
+  device?: string,
+): Promise<void> {
   await db
     .insert(pushTokens)
-    .values({ token, device: device ?? null })
+    .values({ token, userId, device: device ?? null })
     .onConflictDoUpdate({
       target: pushTokens.token,
-      set: { device: device ?? null, updatedAt: new Date() },
+      // A device that signs into a different account re-points to that user.
+      set: { userId, device: device ?? null, updatedAt: new Date() },
     });
 }
 
-async function sendPush(title: string, body: string, data: Record<string, unknown>): Promise<void> {
-  const rows = await db.select({ token: pushTokens.token }).from(pushTokens);
+// Targets ONE user's devices. Without the owner filter every push would fan
+// out to every registered device in the system.
+async function sendPush(
+  userId: string,
+  title: string,
+  body: string,
+  data: Record<string, unknown>,
+): Promise<void> {
+  const rows = await db
+    .select({ token: pushTokens.token })
+    .from(pushTokens)
+    .where(eq(pushTokens.userId, userId));
   const tokens = rows.map((r) => r.token).filter((t) => Expo.isExpoPushToken(t));
   if (tokens.length === 0) return;
 
@@ -78,6 +93,7 @@ export async function sendReminders(now: Date = new Date()): Promise<number> {
   const due = await db
     .select({
       id: tasks.id,
+      userId: tasks.userId,
       title: tasks.title,
       dueAt: tasks.dueAt,
       contextName: contexts.label,
@@ -103,7 +119,7 @@ export async function sendReminders(now: Date = new Date()): Promise<number> {
     claim: async (t) => {
       const claimed = await db
         .insert(notificationLog)
-        .values({ taskId: t.id, kind: 'initial' })
+        .values({ taskId: t.id, kind: 'initial', userId: t.userId })
         .onConflictDoNothing()
         .returning({ id: notificationLog.id });
       return claimed.length > 0;
@@ -114,7 +130,7 @@ export async function sendReminders(now: Date = new Date()): Promise<number> {
         'reminder',
         now,
       );
-      await sendPush(title, t.title, { taskId: t.id });
+      await sendPush(t.userId, title, t.title, { taskId: t.id });
     },
     release: async (t) => {
       await db
@@ -146,43 +162,67 @@ export async function sendReminders(now: Date = new Date()): Promise<number> {
 // repeat-reminders (every 15 min): opt-in via settings; re-notify tasks whose initial
 // push is older than repeat_after_h and that haven't been re-notified within that window.
 export async function repeatReminders(now: Date = new Date()): Promise<number> {
-  const [enabled] = await db.select().from(settings).where(eq(settings.key, 'repeat_reminders'));
-  if (!enabled || enabled.value !== true) return 0;
+  // Opt-in and the interval are BOTH per user now, so the job can no longer read
+  // one global setting and apply it to everyone: it resolves the set of users
+  // who enabled repeats, each with their own window, and queries per user.
+  const cfg = await db
+    .select()
+    .from(settings)
+    .where(inArray(settings.key, ['repeat_reminders', 'repeat_after_h']));
 
-  const [afterCfg] = await db.select().from(settings).where(eq(settings.key, 'repeat_after_h'));
-  const hours = typeof afterCfg?.value === 'number' ? afterCfg.value : 3;
-  const cutoff = new Date(now.getTime() - hours * 3_600_000);
-
-  const result = await db.execute(sql`
-    select t.id, t.title, t.due_at, c.label as context_name, c.color as context_color
-    from tasks t
-    left join contexts c on c.id = t.context_id
-    where t.status = 'active'
-      and exists (select 1 from notification_log n
-                  where n.task_id = t.id and n.kind = 'initial' and n.sent_at <= ${cutoff})
-      and not exists (select 1 from notification_log n
-                      where n.task_id = t.id and n.kind = 'repeat' and n.sent_at > ${cutoff})
-  `);
-
-  const rows = result.rows as {
-    id: string;
-    title: string;
-    due_at: Date | string | null;
-    context_name: string | null;
-    context_color: string | null;
-  }[];
-  for (const r of rows) {
-    const title = composeNotificationTitle(
-      { contextName: r.context_name, contextColor: r.context_color, dueAt: r.due_at },
-      'reminder',
-      now,
-    );
-    await sendPush(title, r.title, { taskId: r.id });
-    await db.insert(notificationLog).values({ taskId: r.id, kind: 'repeat' });
+  const enabled = new Map<string, number>();
+  for (const row of cfg) {
+    if (row.key === 'repeat_reminders' && row.value === true) {
+      enabled.set(row.userId, enabled.get(row.userId) ?? 3);
+    }
   }
+  for (const row of cfg) {
+    if (row.key === 'repeat_after_h' && typeof row.value === 'number' && enabled.has(row.userId)) {
+      enabled.set(row.userId, row.value);
+    }
+  }
+  if (enabled.size === 0) return 0;
+
+  let notified = 0;
+
+  for (const [userId, hours] of enabled) {
+    const cutoff = new Date(now.getTime() - hours * 3_600_000);
+
+    const result = await db.execute(sql`
+      select t.id, t.title, t.due_at, c.label as context_name, c.color as context_color
+      from tasks t
+      left join contexts c on c.id = t.context_id
+      where t.status = 'active'
+        and t.user_id = ${userId}
+        and exists (select 1 from notification_log n
+                    where n.task_id = t.id and n.kind = 'initial' and n.sent_at <= ${cutoff})
+        and not exists (select 1 from notification_log n
+                        where n.task_id = t.id and n.kind = 'repeat' and n.sent_at > ${cutoff})
+    `);
+
+    const rows = result.rows as {
+      id: string;
+      title: string;
+      due_at: Date | string | null;
+      context_name: string | null;
+      context_color: string | null;
+    }[];
+
+    for (const r of rows) {
+      const title = composeNotificationTitle(
+        { contextName: r.context_name, contextColor: r.context_color, dueAt: r.due_at },
+        'reminder',
+        now,
+      );
+      await sendPush(userId, title, r.title, { taskId: r.id });
+      await db.insert(notificationLog).values({ taskId: r.id, kind: 'repeat', userId });
+    }
+    notified += rows.length;
+  }
+
   // Each 'repeat' row pushes that task's next eligible repeat out by repeat_after_h.
-  if (rows.length) invalidateReminderClocks();
-  return rows.length;
+  if (notified) invalidateReminderClocks();
+  return notified;
 }
 
 // Key in `settings` holding the last date (YYYY-MM-DD, local) the morning summary
@@ -204,25 +244,38 @@ function localDateStr(d: Date): string {
 // sent.
 export async function sendMorningSummary(now: Date = new Date()): Promise<number> {
   const today = localDateStr(now);
-  const [sent] = await db.select().from(settings).where(eq(settings.key, SUMMARY_SENT_KEY));
-  if (sent?.value === today) return 0; // already notified today
 
-  const { yesterday, older } = await getMorningSummary(now);
-  const total = yesterday.length + older.length;
-  // Nothing overdue → stay silent rather than sending "0 tasks".
-  if (total === 0) return 0;
+  // Per user: each account has its own overdue pile, its own devices, and its
+  // own once-a-day marker. One user having been notified must not suppress
+  // anyone else's summary.
+  const accounts = await db.select({ id: users.id }).from(users);
+  let total = 0;
 
-  await sendPush(
-    "Yesterday's leftovers",
-    summaryPushBody({ yesterday: yesterday.length, older: older.length }),
-    {
-      kind: 'morning-summary',
-    },
-  );
+  for (const account of accounts) {
+    const [sent] = await db
+      .select()
+      .from(settings)
+      .where(and(eq(settings.userId, account.id), eq(settings.key, SUMMARY_SENT_KEY)));
+    if (sent?.value === today) continue; // already notified today
 
-  await db
-    .insert(settings)
-    .values({ key: SUMMARY_SENT_KEY, value: today })
-    .onConflictDoUpdate({ target: settings.key, set: { value: today } });
+    const { yesterday, older } = await getMorningSummary(account.id, now);
+    const count = yesterday.length + older.length;
+    // Nothing overdue → stay silent rather than sending "0 tasks".
+    if (count === 0) continue;
+
+    await sendPush(
+      account.id,
+      "Yesterday's leftovers",
+      summaryPushBody({ yesterday: yesterday.length, older: older.length }),
+      { kind: 'morning-summary' },
+    );
+
+    await db
+      .insert(settings)
+      .values({ userId: account.id, key: SUMMARY_SENT_KEY, value: today })
+      .onConflictDoUpdate({ target: [settings.userId, settings.key], set: { value: today } });
+    total += count;
+  }
+
   return total;
 }

@@ -12,6 +12,8 @@ import { computeInstanceTimes, expandTitle, ruleMatchesToday } from './recurrenc
 
 export interface PlanRule {
   id: string;
+  /** Owner of the rule — the occurrence it spawns inherits it. */
+  userId: string;
   title: string;
   contextId: number | null;
   rule: string;
@@ -29,6 +31,8 @@ export interface OpenOccurrence {
 
 export interface PlannedSpawn {
   ruleId: string;
+  /** Copied from the rule: the spawned task belongs to the rule's owner. */
+  userId: string;
   title: string;
   contextId: number | null;
   dueAt: Date | null;
@@ -72,6 +76,7 @@ export function planRecurringSpawn(
 
     plans.push({
       ruleId: rule.id,
+      userId: rule.userId,
       title: expandTitle(rule.title, now),
       contextId: rule.contextId,
       dueAt,

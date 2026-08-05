@@ -1,6 +1,7 @@
 import { and, isNotNull, lte, ne } from 'drizzle-orm';
 import { DEFAULT_DURATION_MIN, type CalendarData } from '@task-manager/shared';
 import { db } from '../db/client';
+import { ownedBy } from '../db/scope';
 import { tasks } from '../db/schema';
 import { badRequest } from '../lib/errors';
 
@@ -12,7 +13,11 @@ import { badRequest } from '../lib/errors';
 // A context's `exclude_from_all` flag does NOT suppress calendar visibility
 // (CR02 §2): every task with a due_at shows here regardless of its context.
 // Tasks without a due_at never appear (they have no block).
-export async function getCalendar(fromISO: string, toISO: string): Promise<CalendarData> {
+export async function getCalendar(
+  userId: string,
+  fromISO: string,
+  toISO: string,
+): Promise<CalendarData> {
   const from = new Date(fromISO);
   const to = new Date(toISO);
   if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) {
@@ -35,7 +40,14 @@ export async function getCalendar(fromISO: string, toISO: string): Promise<Calen
     // Completed tasks stay (flagged done). Occurrences closed out as 'missed'
     // are dropped: the block never happened, and rendering it would be
     // indistinguishable from one still pending.
-    .where(and(isNotNull(tasks.dueAt), lte(tasks.dueAt, to), ne(tasks.status, 'missed')));
+    .where(
+      and(
+        ownedBy(tasks.userId, userId),
+        isNotNull(tasks.dueAt),
+        lte(tasks.dueAt, to),
+        ne(tasks.status, 'missed'),
+      ),
+    );
 
   const blocks = rows
     .map((r) => {
