@@ -510,13 +510,6 @@ function HowToConnect() {
 
       {open ? (
         <View style={styles.howBody}>
-          <Text style={styles.howLabel}>Server URL</Text>
-          <Text selectable style={styles.howUrl}>
-            {MCP_URL}
-          </Text>
-          <Text style={styles.howLabel}>Authentication</Text>
-          <Text style={styles.howStep}>Bearer token — the one emailed to you.</Text>
-
           <Text style={styles.howLabel}>Claude (claude.ai)</Text>
           <Text style={styles.howStep}>Settings → Connectors → Add custom connector</Text>
 
@@ -1094,6 +1087,7 @@ const styles = StyleSheet.create({
   accountSignOutText: { fontSize: 15, fontWeight: '500', color: colors.accentPrimary },
   dangerCard: {
     borderRadius: 12,
+    marginBottom: 8,
     padding: 14,
     backgroundColor: 'rgba(217,102,139,0.06)',
     borderWidth: 1,
@@ -1214,15 +1208,6 @@ const styles = StyleSheet.create({
     letterSpacing: 1.2,
     color: colors.textFaint,
     marginTop: 8,
-  },
-  howUrl: {
-    fontFamily: monoFont,
-    fontSize: 12,
-    color: colors.textPrimary,
-    backgroundColor: colors.bgElevated,
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
   },
   howStep: { fontSize: 12.5, lineHeight: 18, color: colors.textMuted },
   howNote: { fontSize: 11.5, lineHeight: 16, color: colors.textFaint, marginTop: 10 },
