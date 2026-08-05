@@ -3,6 +3,20 @@ import { db } from '../db/client';
 import { loginCodes, users } from '../db/schema';
 import { notFound } from '../lib/errors';
 
+export interface AccountInfo {
+  email: string;
+  createdAt: string;
+}
+
+// The client used to read its own identity out of the JWT `sub` claim. That
+// broke when `sub` became a user id instead of an email, which is the general
+// lesson: the token says who you are to the server, not what to render.
+export async function getAccount(userId: string): Promise<AccountInfo> {
+  const [row] = await db.select().from(users).where(eq(users.id, userId));
+  if (!row) throw notFound('Account not found');
+  return { email: row.email, createdAt: row.createdAt.toISOString() };
+}
+
 // Full account deletion — an App Store / Play Store requirement, not a nicety.
 //
 // Synchronous hard delete in one transaction (Resolved Q3): when the response

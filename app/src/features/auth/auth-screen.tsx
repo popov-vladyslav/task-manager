@@ -59,7 +59,10 @@ export function AuthScreen() {
     >
       <View style={styles.card}>
         <Text style={styles.brand}>LOG</Text>
-        <Text style={styles.subtitle}>Sign in with a magic link</Text>
+        <Text style={styles.subtitle}>Sign in with your email</Text>
+        <Text style={styles.hint}>
+          New here? Entering your email creates your account — there is nothing else to fill in.
+        </Text>
 
         <TextInput
           value={email}
@@ -81,20 +84,20 @@ export function AuthScreen() {
           {busy ? (
             <ActivityIndicator color={colors.bgSurface} />
           ) : (
-            <Text style={styles.sendLabel}>Send magic link</Text>
+            <Text style={styles.sendLabel}>Email me a sign-in code</Text>
           )}
         </Pressable>
 
         {sent ? (
           <>
             <Text style={styles.sentInfo}>
-              Link sent. Open it, or paste the token below (in dev it is printed to the server
-              console).
+              Check your email. Open the link, or paste the code below (in dev it is printed to
+              the server console).
             </Text>
             <TextInput
               value={token}
               onChangeText={setToken}
-              placeholder="Paste sign-in token"
+              placeholder="Paste sign-in code"
               placeholderTextColor={colors.textMuted}
               autoCapitalize="none"
               style={[styles.input, webInputReset]}
@@ -144,6 +147,14 @@ const styles = StyleSheet.create({
     letterSpacing: 6,
     textAlign: 'center',
     color: colors.accentPrimary,
+  },
+  hint: {
+    fontSize: 12,
+    lineHeight: 17,
+    textAlign: 'center',
+    color: colors.textMuted,
+    marginTop: 6,
+    marginBottom: 4,
   },
   subtitle: {
     fontSize: 13,

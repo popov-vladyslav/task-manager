@@ -1,0 +1,18 @@
+diff --git a/node_modules/expo-observe/ios/ExpoObserve.podspec b/node_modules/expo-observe/ios/ExpoObserve.podspec
+index a4809aa..2fab12e 100644
+--- a/node_modules/expo-observe/ios/ExpoObserve.podspec
++++ b/node_modules/expo-observe/ios/ExpoObserve.podspec
+@@ -14,7 +14,12 @@ Pod::Spec.new do |s|
+     :ios => '16.4',
+     :tvos => '16.4'
+   }
+-  s.swift_version  = '6.0'
++  # Upstream ships this pod in Swift 6 language mode, where passing the
++  # non-Sendable [String: [String: Any]] integrations dictionary to emit() in
++  # ObserveModule.swift is a hard error (it is a warning in Swift 5 mode).
++  # Nothing about the library is Swift-6-only, so compile it in 5.10 until
++  # upstream makes that payload Sendable. See patches/.
++  s.swift_version  = '5.10'
+   s.source         = { git: 'https://github.com/expo/expo.git' }
+   s.static_framework = true
+ 

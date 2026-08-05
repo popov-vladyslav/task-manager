@@ -8,6 +8,11 @@ const router = Router();
 
 const confirmSchema = z.object({ confirm: z.string().optional() });
 
+// GET /api/account — who am I? Used for "Signed in as …".
+router.get('/', async (req, res) => {
+  res.json(await svc.getAccount(requireUserId(req)));
+});
+
 // DELETE /api/account { confirm: 'DELETE' } — irreversible. The literal guard
 // mirrors the existing reset endpoint (routes/data.ts) so the two destructive
 // actions in the API behave the same way; the UI asks first as well, but the
