@@ -28,6 +28,7 @@ import { useUpdates } from 'expo-updates';
 import { ChevronRight, EyeOff, Plus, RefreshCw, Trash2, X } from 'lucide-react-native';
 import type { Context } from '@task-manager/shared';
 import { api, type McpTokenMetadata } from '../../lib/api';
+import { API_URL } from '../../lib/config';
 import { colors, headerDate, monoFont, webInputReset, WIDE_BREAKPOINT } from '../../theme';
 import { useTasksStore } from '../../store/tasks';
 import { useAuthStore } from '../../store/auth';
@@ -490,6 +491,53 @@ function formatStamp(iso: string): string {
 // The MCP token is emailed and never rendered here — the app has no way to show
 // it, by design. That is why the recovery path is "regenerate" (which kills the
 // old one) rather than "reveal".
+// The endpoint this build talks to, so the panel shows the right URL per
+// environment without anyone reasoning about stage vs prod.
+const MCP_URL = `${API_URL.replace(/\/$/, '')}/mcp`;
+
+// Per-client steps live HERE rather than in the token email: client UIs get
+// renamed every few months, and an email is frozen the moment it is sent. This
+// screen ships with the app and can be corrected in an OTA update.
+function HowToConnect() {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <View style={styles.howBlock}>
+      <Pressable onPress={() => setOpen((v) => !v)} style={styles.howToggle}>
+        <ChevronRight size={14} color={colors.textFaint} />
+        <Text style={styles.howToggleText}>How to connect</Text>
+      </Pressable>
+
+      {open ? (
+        <View style={styles.howBody}>
+          <Text style={styles.howLabel}>Server URL</Text>
+          <Text selectable style={styles.howUrl}>
+            {MCP_URL}
+          </Text>
+          <Text style={styles.howLabel}>Authentication</Text>
+          <Text style={styles.howStep}>Bearer token — the one emailed to you.</Text>
+
+          <Text style={styles.howLabel}>Claude (claude.ai)</Text>
+          <Text style={styles.howStep}>Settings → Connectors → Add custom connector</Text>
+
+          <Text style={styles.howLabel}>Claude Code</Text>
+          <Text selectable style={styles.howStep}>
+            claude mcp add --transport http task-manager {MCP_URL}
+          </Text>
+
+          <Text style={styles.howLabel}>ChatGPT</Text>
+          <Text style={styles.howStep}>Settings → Connectors → Add</Text>
+
+          <Text style={styles.howNote}>
+            Any client that supports HTTP MCP with a bearer token will work. Menu names change
+            between app versions — look for “connectors” or “MCP servers”.
+          </Text>
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
 function McpTokenSection() {
   const [meta, setMeta] = useState<McpTokenMetadata | null>(null);
   const [loaded, setLoaded] = useState(false);
@@ -585,6 +633,8 @@ function McpTokenSection() {
           {meta ? (
             <Text style={styles.mcpWarn}>Regenerating stops the current token working.</Text>
           ) : null}
+
+          <HowToConnect />
         </View>
       </View>
     </View>
@@ -1154,6 +1204,28 @@ const styles = StyleSheet.create({
   },
   mcpRevokeBtnText: { fontSize: 13, fontWeight: '500', color: colors.textPrimary },
   mcpWarn: { fontSize: 11.5, color: colors.textFaint, marginTop: 2 },
+  howBlock: { marginTop: 10, borderTopWidth: 1, borderTopColor: colors.borderSubtle, paddingTop: 10 },
+  howToggle: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  howToggleText: { fontSize: 12.5, fontWeight: '500', color: colors.textSecondary },
+  howBody: { marginTop: 10, gap: 4 },
+  howLabel: {
+    fontFamily: monoFont,
+    fontSize: 10,
+    letterSpacing: 1.2,
+    color: colors.textFaint,
+    marginTop: 8,
+  },
+  howUrl: {
+    fontFamily: monoFont,
+    fontSize: 12,
+    color: colors.textPrimary,
+    backgroundColor: colors.bgElevated,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  howStep: { fontSize: 12.5, lineHeight: 18, color: colors.textMuted },
+  howNote: { fontSize: 11.5, lineHeight: 16, color: colors.textFaint, marginTop: 10 },
   sectionLabel: {
     fontFamily: monoFont,
     fontSize: 10.5,
