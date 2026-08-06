@@ -46,14 +46,18 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
 
   let res = await send();
 
-  // On 401, attempt a single refresh then retry.
+  // On 401, refresh once and retry. Only a definitive rejection signs the user
+  // out — a transient failure (offline, 5xx) surfaces as an error and leaves the
+  // session intact so the next attempt can succeed.
   if (res.status === 401) {
-    const refreshed = await useAuthStore.getState().tryRefresh();
-    if (refreshed) {
+    const result = await useAuthStore.getState().tryRefresh();
+    if (result === 'ok') {
       res = await send();
-    } else {
+    } else if (result === 'expired') {
       await useAuthStore.getState().signOut();
       throw new ApiError(401, 'Session expired');
+    } else {
+      throw new ApiError(503, 'Cannot reach the server — please try again');
     }
   }
 

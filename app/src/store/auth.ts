@@ -7,6 +7,8 @@ import { storage } from '../lib/storage';
 const JWT_KEY = 'log.jwt';
 const REFRESH_KEY = 'log.refresh';
 
+export type RefreshResult = 'ok' | 'expired' | 'transient';
+
 interface AuthState {
   jwt: string | null;
   refresh: string | null;
@@ -14,7 +16,12 @@ interface AuthState {
   load: () => Promise<void>;
   requestLink: (email: string) => Promise<void>;
   signInWithToken: (magicToken: string) => Promise<void>;
-  tryRefresh: () => Promise<boolean>;
+  /**
+   * 'ok'        — a fresh access token is in place
+   * 'expired'   — the server rejected the session; sign out
+   * 'transient' — offline / server hiccup; KEEP the session and retry later
+   */
+  tryRefresh: () => Promise<RefreshResult>;
   signOut: () => Promise<void>;
   signOutEverywhere: () => Promise<void>;
 }
@@ -36,6 +43,10 @@ async function post<T>(path: string, body: unknown): Promise<T> {
   }
   return res.json() as Promise<T>;
 }
+
+// Refresh is SINGLE-FLIGHT: concurrent callers share one request, so an expired
+// access token produces one refresh rather than one per in-flight endpoint.
+let inFlightRefresh: Promise<RefreshResult> | null = null;
 
 export const useAuthStore = create<AuthState>((set, get) => ({
   jwt: null,
@@ -62,17 +73,41 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   // The server ROTATES on refresh: the token we just sent is now dead and the
   // response carries its replacement. Persisting the new one is not optional —
   // keeping the old value would sign the device out at the next refresh.
+  // Signing out is a DECISION, never an accident: only an explicit rejection
+  // from the server ends the session. Being offline, a 5xx, or a dropped
+  // connection leaves the user signed in to try again — sessions are meant to
+  // last indefinitely for anyone who keeps using the app.
   async tryRefresh() {
+    if (inFlightRefresh) return inFlightRefresh;
+
     const current = get().refresh;
-    if (!current) return false;
-    try {
-      const { jwt, refresh } = await post<AuthTokens>('/auth/refresh', { refresh: current });
-      await Promise.all([storage.set(JWT_KEY, jwt), storage.set(REFRESH_KEY, refresh)]);
-      set({ jwt, refresh });
-      return true;
-    } catch {
-      return false;
-    }
+    if (!current) return 'expired';
+
+    inFlightRefresh = (async (): Promise<RefreshResult> => {
+      try {
+        const res = await fetch(`${API_URL}/auth/refresh`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refresh: current }),
+        });
+
+        if (res.status === 401) return 'expired'; // the server disowned this session
+        if (!res.ok) return 'transient'; // 5xx, proxy error, rate limit…
+
+        const { jwt, refresh } = (await res.json()) as AuthTokens;
+        await Promise.all([storage.set(JWT_KEY, jwt), storage.set(REFRESH_KEY, refresh)]);
+        set({ jwt, refresh });
+        return 'ok';
+      } catch {
+        return 'transient'; // network down, DNS, timeout
+      } finally {
+        // Cleared only after state is written, so a caller awaiting this promise
+        // always reads the NEW access token when it retries.
+        inFlightRefresh = null;
+      }
+    })();
+
+    return inFlightRefresh;
   },
 
   // Ends this device's session on the server too, so the refresh token row is
