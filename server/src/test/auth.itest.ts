@@ -77,19 +77,63 @@ test('a code is single-use', async () => {
   assert.equal((await post('/auth/verify', { token: code })).status, 401);
 });
 
-test('refresh rotates: the old token dies, the new one works', async () => {
+// Sessions are meant to last indefinitely for an active user, so refresh does
+// NOT rotate: the token survives use, and only inactivity or an explicit
+// sign-out ends it.
+test('refresh keeps the same token and issues a new access token', async () => {
   const code = await issueCodeFor('rotate@example.test');
   const first = (await (await post('/auth/verify', { token: code })).json()) as {
+    jwt: string;
     refresh: string;
   };
 
-  const rotated = await post('/auth/refresh', { refresh: first.refresh });
-  assert.equal(rotated.status, 200);
-  const second = (await rotated.json()) as { jwt: string; refresh: string };
-  assert.notEqual(second.refresh, first.refresh, 'refresh token should be replaced');
+  const res = await post('/auth/refresh', { refresh: first.refresh });
+  assert.equal(res.status, 200);
+  const again = (await res.json()) as { jwt: string; refresh: string };
 
-  assert.equal((await post('/auth/refresh', { refresh: first.refresh })).status, 401);
-  assert.equal((await post('/auth/refresh', { refresh: second.refresh })).status, 200);
+  assert.equal(again.refresh, first.refresh, 'the refresh token must survive use');
+  assert.ok(again.jwt, 'a fresh access token is issued');
+
+  // Reusable indefinitely — the failure mode that signed people out was the
+  // token being consumed.
+  for (let i = 0; i < 3; i++) {
+    assert.equal((await post('/auth/refresh', { refresh: first.refresh })).status, 200);
+  }
+});
+
+test('each refresh pushes the idle expiry out', async () => {
+  const code = await issueCodeFor('sliding@example.test');
+  const { refresh } = (await (await post('/auth/verify', { token: code })).json()) as {
+    refresh: string;
+  };
+  const hash = (await import('../lib/tokens')).hashToken(refresh);
+
+  const [before] = await db.select().from(sessions).where(eq(sessions.tokenHash, hash));
+  await new Promise((r) => setTimeout(r, 1100));
+  assert.equal((await post('/auth/refresh', { refresh })).status, 200);
+  const [after] = await db.select().from(sessions).where(eq(sessions.tokenHash, hash));
+
+  assert.ok(
+    after.expiresAt.getTime() > before.expiresAt.getTime(),
+    'using the session must extend it, so an active user is never signed out',
+  );
+  assert.ok(after.lastSeenAt.getTime() > before.lastSeenAt.getTime(), 'last seen advances');
+});
+
+test('an expired session is refused', async () => {
+  const code = await issueCodeFor('stale@example.test');
+  const { refresh } = (await (await post('/auth/verify', { token: code })).json()) as {
+    refresh: string;
+  };
+  const hash = (await import('../lib/tokens')).hashToken(refresh);
+
+  // Simulate two weeks of inactivity.
+  await db
+    .update(sessions)
+    .set({ expiresAt: new Date(Date.now() - 1000) })
+    .where(eq(sessions.tokenHash, hash));
+
+  assert.equal((await post('/auth/refresh', { refresh })).status, 401);
 });
 
 test('sign-out-all revokes every device for that user only', async () => {
@@ -145,4 +189,28 @@ test('sessions record the device that signed in', async () => {
   const rows = await db.select().from(sessions).where(eq(sessions.userId, account.id));
   assert.equal(rows.length, 1);
   assert.equal(rows[0].device, 'Pixel 9');
+});
+
+// The production bug this design removes: the app loads several endpoints at
+// once (tasks + contexts, timer, summary), so an expired access token made them
+// all refresh simultaneously. While refresh rotated, the first consumed the
+// token and the rest got 401 — signing the user out on nearly every expiry.
+// Parallel refreshes must now ALL succeed.
+test('concurrent refreshes all succeed', async () => {
+  const code = await issueCodeFor('concurrent@example.test');
+  const { refresh } = (await (await post('/auth/verify', { token: code })).json()) as {
+    refresh: string;
+  };
+
+  const results = await Promise.all([
+    post('/auth/refresh', { refresh }),
+    post('/auth/refresh', { refresh }),
+    post('/auth/refresh', { refresh }),
+  ]);
+
+  assert.deepEqual(
+    results.map((r) => r.status),
+    [200, 200, 200],
+    'parallel refreshes must not sign the user out',
+  );
 });
