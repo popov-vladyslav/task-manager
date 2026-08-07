@@ -20,3 +20,12 @@ export async function mutedUserIds(): Promise<Set<string>> {
     .where(eq(settings.key, NOTIFICATIONS_ENABLED_KEY));
   return new Set(rows.filter((r) => !isNotificationsEnabled(r.value)).map((r) => r.userId));
 }
+
+// Upsert on the COMPOSITE key: the live DB's primary key is (user_id, key) since
+// drizzle/0010_multi_user.sql, so one row exists per account per setting.
+export async function setNotificationsEnabled(userId: string, enabled: boolean): Promise<void> {
+  await db
+    .insert(settings)
+    .values({ userId, key: NOTIFICATIONS_ENABLED_KEY, value: enabled })
+    .onConflictDoUpdate({ target: [settings.userId, settings.key], set: { value: enabled } });
+}
