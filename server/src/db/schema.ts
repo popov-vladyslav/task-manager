@@ -172,6 +172,6 @@ export const notificationLog = pgTable('notification_log', {
     .notNull()
     .references(() => users.id, { onDelete: 'cascade' }),
   taskId: uuid('task_id').references(() => tasks.id, { onDelete: 'cascade' }),
-  kind: text('kind', { enum: ['initial', 'repeat'] }),
+  kind: text('kind', { enum: ['initial', 'repeat', 'due'] }),
   sentAt: timestamp('sent_at', { withTimezone: true }).notNull().defaultNow(),
 });

@@ -6,8 +6,9 @@ import { composeNotificationTitle } from '../lib/notification-title';
 import { dispatchReminders } from '../lib/reminder-dispatch';
 import { summaryPushBody } from '../lib/morning-summary';
 import { getMorningSummary } from './summary';
-import { invalidateReminderClocks } from './reminder-clock';
+import { invalidateDueClock, invalidateReminderClocks } from './reminder-clock';
 import { mutedUserIds } from './settings';
+import { dueCutoff } from '../lib/due-window';
 import { reminderCutoff } from '../lib/reminder-window';
 
 const expo = new Expo();
@@ -162,6 +163,71 @@ export async function sendReminders(now: Date = new Date()): Promise<number> {
   // This send consumed the remind_at values it fired on and wrote 'initial' log
   // rows, so both the next-reminder and next-repeat times have moved.
   if (sent.length) invalidateReminderClocks();
+  return sent.length;
+}
+
+// due-time pushes (every minute): a task's deadline arriving is its own event,
+// independent of remind_at — a task with both produces two pushes. Claim-then-
+// send against notification_log kind='due' (drizzle/0011), exactly as
+// sendReminders does for 'initial'.
+//
+// Unlike sendReminders this NEVER clears remind_at: consuming it here would
+// silently cancel a reminder the user also asked for.
+export async function sendDueNotifications(now: Date = new Date()): Promise<number> {
+  const due = await db
+    .select({
+      id: tasks.id,
+      userId: tasks.userId,
+      title: tasks.title,
+      dueAt: tasks.dueAt,
+      contextName: contexts.label,
+      contextColor: contexts.color,
+    })
+    .from(tasks)
+    .leftJoin(contexts, eq(tasks.contextId, contexts.id))
+    .where(
+      and(
+        eq(tasks.status, 'active'),
+        isNotNull(tasks.dueAt),
+        lte(tasks.dueAt, now),
+        gte(tasks.dueAt, dueCutoff(now)),
+        notExists(
+          db
+            .select({ one: sql`1` })
+            .from(notificationLog)
+            .where(and(eq(notificationLog.taskId, tasks.id), eq(notificationLog.kind, 'due'))),
+        ),
+      ),
+    );
+
+  const muted = await mutedUserIds();
+  const sendable = muted.size ? due.filter((t) => !muted.has(t.userId)) : due;
+
+  const sent = await dispatchReminders(sendable, {
+    claim: async (t) => {
+      const claimed = await db
+        .insert(notificationLog)
+        .values({ taskId: t.id, kind: 'due', userId: t.userId })
+        .onConflictDoNothing()
+        .returning({ id: notificationLog.id });
+      return claimed.length > 0;
+    },
+    send: async (t) => {
+      const title = composeNotificationTitle(
+        { contextName: t.contextName, contextColor: t.contextColor, dueAt: t.dueAt },
+        'reminder',
+        now,
+      );
+      await sendPush(t.userId, title, t.title, { taskId: t.id });
+    },
+    release: async (t) => {
+      await db
+        .delete(notificationLog)
+        .where(and(eq(notificationLog.taskId, t.id), eq(notificationLog.kind, 'due')));
+    },
+  });
+
+  if (sent.length) invalidateDueClock();
   return sent.length;
 }
 

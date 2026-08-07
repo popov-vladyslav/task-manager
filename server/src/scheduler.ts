@@ -2,8 +2,18 @@ import cron from 'node-cron';
 import { env } from './env';
 import { pool } from './db/client';
 import { spawnDueRecurring } from './services/recurring';
-import { repeatReminders, sendMorningSummary, sendReminders } from './services/push';
-import { invalidateReminderClocks, reminderClock, repeatClock } from './services/reminder-clock';
+import {
+  repeatReminders,
+  sendDueNotifications,
+  sendMorningSummary,
+  sendReminders,
+} from './services/push';
+import {
+  dueClock,
+  invalidateReminderClocks,
+  reminderClock,
+  repeatClock,
+} from './services/reminder-clock';
 import type { ReminderClock } from './lib/reminder-clock';
 
 // Postgres advisory-lock keys, one per job. Arbitrary but must stay stable.
@@ -12,6 +22,7 @@ const JOB_LOCKS = {
   'morning-summary': 4102,
   'send-reminders': 4103,
   'repeat-reminders': 4104,
+  'due-notifications': 4105,
 } as const;
 
 // Runs `job` only if no other process is already running it.
@@ -135,6 +146,16 @@ export function startScheduler(): void {
     gated('send-reminders', reminderClock, async () => {
       const n = await sendReminders();
       if (n) console.log(`[cron] sent ${n} reminder(s)`);
+    }),
+  );
+
+  // due-time pushes every minute, gated on its own cached clock so an idle tick
+  // costs no query (services/reminder-clock.ts).
+  cron.schedule(
+    '* * * * *',
+    gated('due-notifications', dueClock, async () => {
+      const n = await sendDueNotifications();
+      if (n) console.log(`[cron] sent ${n} due notification(s)`);
     }),
   );
 
