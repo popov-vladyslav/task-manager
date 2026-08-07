@@ -78,7 +78,7 @@ export function SettingsScreen() {
       <ContextsSection contexts={contexts} />
       <AccountSection />
       <McpTokenSection />
-      <UpdatesSection />
+      {!isWeb && <UpdatesSection />}
       <DangerSection />
     </>
   );
