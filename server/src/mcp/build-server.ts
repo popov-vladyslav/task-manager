@@ -1,6 +1,6 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import type { Task } from '@task-manager/shared';
+import type { Comment, Task } from '@task-manager/shared';
 import * as tasksSvc from '../services/tasks';
 import * as contextsSvc from '../services/contexts';
 import * as commentsSvc from '../services/comments';
@@ -49,6 +49,11 @@ function toRuleString(r: RecurrenceMcpInput): { rule: string } | { error: string
 async function contextLabels(userId: string): Promise<Map<number, string>> {
   const cs = await contextsSvc.listContexts(userId);
   return new Map(cs.map((c) => [c.id, c.label]));
+}
+
+async function commentsByTask(userId: string, list: Task[]): Promise<Map<string, Comment[]>> {
+  const ids = list.filter((t) => t.commentsCount > 0).map((t) => t.id);
+  return commentsSvc.listCommentsForTasks(userId, ids);
 }
 
 interface Resolved {
@@ -189,7 +194,7 @@ export function buildMcpServer(userId: string): McpServer {
     'list_tasks',
     {
       description:
-        'List open tasks. Filter by context slug, status, or overdue. Each task with a deadline reports duration_min — its block length in minutes; when no explicit duration was set this is the implicit default and is marked "(default)".',
+        'List open tasks. Filter by context slug, status, or overdue. Each task with a deadline reports duration_min — its block length in minutes; when no explicit duration was set this is the implicit default and is marked "(default)". The latest 2 comments are shown inline, each truncated to 200 chars — call get_comments for the full text.',
       inputSchema: {
         context: z.string().optional(),
         status: z.enum(['active', 'waiting', 'done', 'missed']).optional(),
@@ -208,11 +213,16 @@ export function buildMcpServer(userId: string): McpServer {
         status,
         dueBefore: overdue ? new Date() : undefined,
       });
-      const labels = await contextLabels(userId);
+      const [labels, byTask] = await Promise.all([
+        contextLabels(userId),
+        commentsByTask(userId, list),
+      ]);
       return text(
         list.length
           ? list
-              .map((t) => fmtTask(t, t.contextId ? labels.get(t.contextId) : undefined))
+              .map((t) =>
+                fmtTask(t, t.contextId ? labels.get(t.contextId) : undefined, byTask.get(t.id)),
+              )
               .join('\n')
           : 'No matching tasks.',
       );
@@ -223,7 +233,7 @@ export function buildMcpServer(userId: string): McpServer {
     'get_today',
     {
       description:
-        'Today\'s agenda: open tasks due today or overdue, plus any running timer. Each task reports duration_min — its block length in minutes; when no explicit duration was set this is the implicit default and is marked "(default)".',
+        'Today\'s agenda: open tasks due today or overdue, plus any running timer. Each task reports duration_min — its block length in minutes; when no explicit duration was set this is the implicit default and is marked "(default)". The latest 2 comments are shown inline, each truncated to 200 chars — call get_comments for the full text.',
       inputSchema: {},
     },
     async () => {
@@ -232,9 +242,14 @@ export function buildMcpServer(userId: string): McpServer {
         contextLabels(userId),
         timerSvc.getActiveTimer(userId),
       ]);
+      const byTask = await commentsByTask(userId, list);
       const tasksSection = list.length
         ? 'Due today / overdue:\n' +
-          list.map((t) => fmtTask(t, t.contextId ? labels.get(t.contextId) : undefined)).join('\n')
+          list
+            .map((t) =>
+              fmtTask(t, t.contextId ? labels.get(t.contextId) : undefined, byTask.get(t.id)),
+            )
+            .join('\n')
         : 'Nothing due today.';
       const timerSection = active
         ? `\n\n⏱ Timer running: ${active.taskTitle} (since ${active.startedAt.slice(11, 16)} UTC)`
@@ -410,6 +425,26 @@ export function buildMcpServer(userId: string): McpServer {
       await commentsSvc.addComment(userId, r.task.id, body);
       logWrite('add_comment', { id: r.task.id });
       return text(`Comment added to "${r.task.title}".`);
+    },
+  );
+
+  reg(
+    'get_comments',
+    {
+      description: 'Read the full comments on a task, by id or title_match. Oldest first.',
+      inputSchema: { id: z.string().optional(), title_match: z.string().optional() },
+    },
+    async ({ id, title_match }) => {
+      const r = await resolveTask(userId, id, title_match);
+      if (!r.task) return text(unresolvedText(r.candidates, title_match));
+      const list = await commentsSvc.listComments(userId, r.task.id);
+      if (list.length === 0) return text(`No comments on "${r.task.title}".`);
+      return text(
+        `Comments on "${r.task.title}":\n` +
+          list
+            .map((c) => `• ${c.createdAt.slice(0, 16).replace('T', ' ')} — ${c.body}`)
+            .join('\n'),
+      );
     },
   );
 

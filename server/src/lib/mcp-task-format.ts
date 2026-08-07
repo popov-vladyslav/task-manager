@@ -14,7 +14,24 @@ export function fmtDuration(t: Pick<Task, 'dueAt' | 'durationMin'>): string | nu
   return `duration_min=${DEFAULT_DURATION_MIN} (default)`;
 }
 
-export function fmtTask(t: Task, contextLabel?: string): string {
+// Inline comment preview for the MCP list tools. Cap is on both count and body
+// length: prod bodies average ~426 chars while no task has more than 2 comments,
+// so length is the real payload risk. Full text lives behind get_comments.
+const COMMENT_CAP = 2;
+const COMMENT_BODY_MAX = 200;
+
+export interface CommentPreview {
+  body: string;
+  createdAt: string;
+}
+
+function fmtComment(c: CommentPreview): string {
+  const body = c.body.replace(/\s+/g, ' ').trim();
+  const shown = body.length > COMMENT_BODY_MAX ? `${body.slice(0, COMMENT_BODY_MAX)}…` : body;
+  return `    ↳ ${c.createdAt.slice(0, 10)}: ${shown}`;
+}
+
+export function fmtTask(t: Task, contextLabel?: string, comments?: CommentPreview[]): string {
   const bits = [`• ${t.title}`, `[${t.id}]`];
   if (contextLabel) bits.push(`(${contextLabel})`);
   if (t.dueAt) {
@@ -32,5 +49,7 @@ export function fmtTask(t: Task, contextLabel?: string): string {
   }
   if (t.status !== 'active') bits.push(t.status);
   if (t.commentsCount) bits.push(`${t.commentsCount} comment(s)`);
-  return bits.join(' ');
+  const line = bits.join(' ');
+  if (!comments?.length) return line;
+  return [line, ...comments.slice(-COMMENT_CAP).map(fmtComment)].join('\n');
 }

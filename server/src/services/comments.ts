@@ -1,4 +1,4 @@
-import { and, asc, eq } from 'drizzle-orm';
+import { and, asc, eq, inArray } from 'drizzle-orm';
 import type { Comment } from '@task-manager/shared';
 import { db } from '../db/client';
 import { comments, tasks } from '../db/schema';
@@ -33,4 +33,24 @@ export async function deleteComment(userId: string, id: string): Promise<void> {
     .where(and(ownedBy(comments.userId, userId), eq(comments.id, id)))
     .returning({ id: comments.id });
   if (!row) throw notFound('Comment not found');
+}
+
+export async function listCommentsForTasks(
+  userId: string,
+  taskIds: string[],
+): Promise<Map<string, Comment[]>> {
+  const byTask = new Map<string, Comment[]>();
+  if (taskIds.length === 0) return byTask;
+  const rows = await db
+    .select()
+    .from(comments)
+    .where(and(ownedBy(comments.userId, userId), inArray(comments.taskId, taskIds)))
+    .orderBy(asc(comments.createdAt));
+  for (const row of rows) {
+    const c = toComment(row);
+    const list = byTask.get(c.taskId);
+    if (list) list.push(c);
+    else byTask.set(c.taskId, [c]);
+  }
+  return byTask;
 }
