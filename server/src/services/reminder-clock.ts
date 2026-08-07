@@ -1,7 +1,8 @@
-import { and, eq, isNotNull, min, notExists, sql } from 'drizzle-orm';
+import { and, eq, gte, isNotNull, min, notExists, sql } from 'drizzle-orm';
 import { db } from '../db/client';
 import { notificationLog, tasks } from '../db/schema';
 import { ReminderClock } from '../lib/reminder-clock';
+import { reminderCutoff } from '../lib/reminder-window';
 
 // The database-backed clocks the scheduler gates its two reminder jobs on.
 // Each answers "what is the earliest instant this job could have work?", so an
@@ -22,6 +23,7 @@ export const reminderClock = new ReminderClock({
         and(
           eq(tasks.status, 'active'),
           isNotNull(tasks.remindAt),
+          gte(tasks.remindAt, reminderCutoff(new Date())),
           notExists(
             db
               .select({ one: sql`1` })

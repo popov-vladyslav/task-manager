@@ -1,5 +1,5 @@
 import { Expo, type ExpoPushMessage } from 'expo-server-sdk';
-import { and, eq, inArray, isNotNull, lte, notExists, sql } from 'drizzle-orm';
+import { and, eq, gte, inArray, isNotNull, lte, notExists, sql } from 'drizzle-orm';
 import { db } from '../db/client';
 import { contexts, notificationLog, pushTokens, settings, tasks, users } from '../db/schema';
 import { composeNotificationTitle } from '../lib/notification-title';
@@ -7,6 +7,8 @@ import { dispatchReminders } from '../lib/reminder-dispatch';
 import { summaryPushBody } from '../lib/morning-summary';
 import { getMorningSummary } from './summary';
 import { invalidateReminderClocks } from './reminder-clock';
+import { mutedUserIds } from './settings';
+import { reminderCutoff } from '../lib/reminder-window';
 
 const expo = new Expo();
 
@@ -106,6 +108,7 @@ export async function sendReminders(now: Date = new Date()): Promise<number> {
         eq(tasks.status, 'active'),
         isNotNull(tasks.remindAt),
         lte(tasks.remindAt, now),
+        gte(tasks.remindAt, reminderCutoff(now)),
         notExists(
           db
             .select({ one: sql`1` })
@@ -115,7 +118,10 @@ export async function sendReminders(now: Date = new Date()): Promise<number> {
       ),
     );
 
-  const sent = await dispatchReminders(due, {
+  const muted = await mutedUserIds();
+  const sendable = muted.size ? due.filter((t) => !muted.has(t.userId)) : due;
+
+  const sent = await dispatchReminders(sendable, {
     claim: async (t) => {
       const claimed = await db
         .insert(notificationLog)
@@ -181,6 +187,8 @@ export async function repeatReminders(now: Date = new Date()): Promise<number> {
       enabled.set(row.userId, row.value);
     }
   }
+  const muted = await mutedUserIds();
+  for (const userId of muted) enabled.delete(userId);
   if (enabled.size === 0) return 0;
 
   let notified = 0;
@@ -249,9 +257,12 @@ export async function sendMorningSummary(now: Date = new Date()): Promise<number
   // own once-a-day marker. One user having been notified must not suppress
   // anyone else's summary.
   const accounts = await db.select({ id: users.id }).from(users);
+  const muted = await mutedUserIds();
   let total = 0;
 
   for (const account of accounts) {
+    if (muted.has(account.id)) continue;
+
     const [sent] = await db
       .select()
       .from(settings)

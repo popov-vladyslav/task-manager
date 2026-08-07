@@ -118,3 +118,57 @@ test('one account disabling repeats does not suppress another account’s', asyn
     'the gate must see B’s eligible work even though A opted out',
   );
 });
+
+// The master switch is per account, and muting must not consume anything: no
+// push, no claimed log row, and remind_at left where it was.
+test('a muted account gets no reminder while an unmuted one still does', async () => {
+  await db.delete(notificationLog);
+  await db.delete(tasks);
+  await db.insert(settings).values({ userId: alice, key: 'notifications_enabled', value: false });
+
+  const past = new Date(Date.now() - 60_000);
+  const [aTask] = await db
+    .insert(tasks)
+    .values({ userId: alice, title: 'muted reminder', status: 'active', remindAt: past })
+    .returning({ id: tasks.id });
+  const [bTask] = await db
+    .insert(tasks)
+    .values({ userId: bob, title: 'audible reminder', status: 'active', remindAt: past })
+    .returning({ id: tasks.id });
+
+  const sent = await sendReminders();
+  assert.equal(sent, 1, 'only the unmuted account is notified');
+
+  const aLogs = await db
+    .select()
+    .from(notificationLog)
+    .where(eq(notificationLog.taskId, aTask.id));
+  assert.equal(aLogs.length, 0, 'a muted account must not even claim a log row');
+
+  const bLogs = await db
+    .select()
+    .from(notificationLog)
+    .where(eq(notificationLog.taskId, bTask.id));
+  assert.equal(bLogs.length, 1, 'the unmuted account’s reminder still fires');
+
+  const [aAfter] = await db
+    .select({ remindAt: tasks.remindAt })
+    .from(tasks)
+    .where(eq(tasks.id, aTask.id));
+  assert.ok(aAfter.remindAt, 'a muted reminder is skipped, not consumed');
+});
+
+// What makes the switch produce no backfill: a remind_at that aged out while the
+// switch was off is skipped forever, even once the account is unmuted again.
+test('a reminder older than the send window never fires', async () => {
+  await db.delete(notificationLog);
+  await db.delete(tasks);
+  await db.delete(settings).where(eq(settings.key, 'notifications_enabled'));
+
+  const stale = new Date(Date.now() - 3 * 60 * 60 * 1000);
+  await db
+    .insert(tasks)
+    .values({ userId: bob, title: 'aged out', status: 'active', remindAt: stale });
+
+  assert.equal(await sendReminders(), 0, 'a stale remind_at is never sent');
+});
