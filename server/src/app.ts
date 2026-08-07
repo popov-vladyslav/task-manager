@@ -42,9 +42,16 @@ export function createApp(): express.Express {
     res.json({ ok: true });
   });
 
-  // OAuth authorization server for the claude.ai MCP connector (only when configured).
+  // OAuth authorization server for the claude.ai MCP connector.
   // Serves /.well-known/oauth-*, /authorize, /token, /register at the app root.
-  if (env.MCP_TOKEN) {
+  //
+  // Gated on MCP_BASE_URL, NOT on MCP_TOKEN. It used to depend on the legacy
+  // shared secret, which meant retiring that env var would silently unmount the
+  // whole OAuth server and break every PER-USER connector — the opposite of what
+  // retiring it is supposed to achieve. The approval step authenticates with a
+  // personal token now (mcp/oauth.ts#approveHandler), so the legacy secret is
+  // irrelevant here.
+  if (env.MCP_BASE_URL) {
     app.use(
       mcpAuthRouter({
         provider: oauthProvider,
