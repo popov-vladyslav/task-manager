@@ -48,8 +48,9 @@ router.post('/verify', authLimiter, async (req, res) => {
   res.json(await svc.verifyLoginCode(token, device));
 });
 
-// Rotates: the response carries a NEW refresh token and the presented one stops
-// working, so the client must persist what it gets back.
+// Does NOT rotate: the same refresh token comes back and stays valid. Each use
+// pushes its idle expiry out (services/auth.ts), so an active session never
+// ends by itself.
 router.post('/refresh', authLimiter, async (req, res) => {
   const { refresh } = z.object({ refresh: z.string().min(1) }).parse(req.body);
   res.json(await svc.refresh(refresh));

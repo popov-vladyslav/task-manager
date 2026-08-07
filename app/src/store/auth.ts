@@ -70,9 +70,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ jwt, refresh });
   },
 
-  // The server ROTATES on refresh: the token we just sent is now dead and the
-  // response carries its replacement. Persisting the new one is not optional —
-  // keeping the old value would sign the device out at the next refresh.
+  // The server does NOT rotate: the same refresh token comes back. Persisting
+  // the response is still correct (it carries the new access token), and the
+  // refresh value is simply unchanged.
   // Signing out is a DECISION, never an accident: only an explicit rejection
   // from the server ends the session. Being offline, a 5xx, or a dropped
   // connection leaves the user signed in to try again — sessions are meant to
