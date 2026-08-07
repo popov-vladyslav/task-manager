@@ -76,6 +76,7 @@ export function SettingsScreen() {
   const sections = (
     <>
       <ContextsSection contexts={contexts} />
+      <NotificationsSection />
       <AccountSection />
       <McpTokenSection />
       {!isWeb && <UpdatesSection />}
@@ -426,6 +427,57 @@ function EditorForm({
             </Text>
           )}
         </Pressable>
+      </View>
+    </View>
+  );
+}
+
+function NotificationsSection() {
+  const [enabled, setEnabled] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    void api
+      .getSettings()
+      .then((s) => {
+        if (alive) setEnabled(s.notificationsEnabled);
+      })
+      .catch(() => {
+        /* leave the switch disabled rather than showing something wrong */
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const onToggle = (next: boolean) => {
+    setEnabled(next);
+    void api.updateSettings({ notificationsEnabled: next }).catch(() => {
+      // The server is the source of truth; put the switch back rather than
+      // leaving it showing a setting that was never saved.
+      setEnabled(!next);
+    });
+  };
+
+  return (
+    <View style={styles.mt28}>
+      <SectionLabel>NOTIFICATIONS</SectionLabel>
+      <View style={styles.accountCard}>
+        <View style={styles.notifRow}>
+          <View style={styles.flex1}>
+            <Text style={styles.notifTitle}>Push notifications</Text>
+            <Text style={styles.notifSubtitle}>
+              Reminders, due times and the morning summary.
+            </Text>
+          </View>
+          <Switch
+            value={enabled ?? true}
+            onValueChange={onToggle}
+            disabled={enabled === null}
+            trackColor={{ false: colors.bgElevated, true: colors.accentPrimary }}
+            thumbColor={colors.textPrimary}
+          />
+        </View>
       </View>
     </View>
   );
@@ -1093,6 +1145,15 @@ const styles = StyleSheet.create({
     paddingVertical: 13,
   },
   accountSignOutText: { fontSize: 15, fontWeight: '500', color: colors.accentPrimary },
+  notifRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  notifTitle: { fontSize: 13, color: colors.textPrimary },
+  notifSubtitle: { fontSize: 11, color: colors.textMuted, marginTop: 2 },
   dangerCard: {
     borderRadius: 12,
     marginBottom: 12,

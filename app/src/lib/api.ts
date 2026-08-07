@@ -115,6 +115,9 @@ export const api = {
   getCalendar: (fromISO: string, toISO: string) =>
     request<CalendarData>(`/api/calendar${qs({ from: fromISO, to: toISO })}`),
   getMorningSummary: () => request<MorningSummary>('/api/summary/morning'),
+  getSettings: () => request<AppSettings>('/api/settings'),
+  updateSettings: (patch: AppSettings) =>
+    request<AppSettings>('/api/settings', { method: 'PATCH', body: patch }),
 
   // Identity comes from the server, not from decoding the JWT: the token says
   // who you are to the API, it is not a source of display data.
@@ -131,6 +134,10 @@ export const api = {
 export interface AccountInfo {
   email: string;
   createdAt: string;
+}
+
+export interface AppSettings {
+  notificationsEnabled: boolean;
 }
 
 export interface McpTokenMetadata {
