@@ -1,7 +1,7 @@
 import { env } from '../env';
 
 // Product name as it appears to the user — subject line, From name and body.
-export const PRODUCT_NAME = 'task manager';
+export const PRODUCT_NAME = 'Task Tracker';
 
 // Resend's shared sandbox sender. It only delivers to the Resend account
 // owner's own verified address, so it is a dev/stage convenience only — open

@@ -58,7 +58,7 @@ export function AuthScreen() {
       style={styles.container}
     >
       <View style={styles.card}>
-        <Text style={styles.brand}>LOG</Text>
+        <Text style={styles.brand}>TASK TRACKER</Text>
         <Text style={styles.subtitle}>Sign in with your email</Text>
         <Text style={styles.hint}>
           New here? Entering your email creates your account — there is nothing else to fill in.
@@ -144,7 +144,7 @@ const styles = StyleSheet.create({
   brand: {
     fontFamily: monoFont,
     fontSize: 16,
-    letterSpacing: 6,
+    letterSpacing: 3,
     textAlign: 'center',
     color: colors.accentPrimary,
   },

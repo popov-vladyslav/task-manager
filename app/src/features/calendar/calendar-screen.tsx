@@ -200,7 +200,7 @@ export function CalendarScreen() {
         <View style={styles.wideRoot}>
           <View style={[styles.sidebar, { paddingTop: insets.top + 16 }]}>
             <View style={styles.sidebarLogo}>
-              <Text style={styles.sidebarLogoText}>LOG</Text>
+              <Text style={styles.sidebarLogoText}>TASK TRACKER</Text>
             </View>
             <SideNavLinks />
             <View style={styles.flex1} />

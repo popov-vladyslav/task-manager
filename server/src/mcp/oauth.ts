@@ -103,7 +103,7 @@ function issueTokens(
 }
 
 function approvalPage(pendingId: string, error?: string): string {
-  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Authorize Log</title>
+  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Authorize Task Tracker</title>
 <style>
   body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#0B0E13;color:#EDEFF3;font-family:-apple-system,system-ui,sans-serif}
   .card{width:100%;max-width:360px;padding:32px;background:#14181F;border:1px solid #1C222C;border-radius:20px}
@@ -114,7 +114,7 @@ function approvalPage(pendingId: string, error?: string): string {
   .err{color:#D9668B;font-size:12px;text-align:center;margin-top:12px}
 </style></head><body>
 <form class="card" method="post" action="/oauth/approve">
-  <h1>LOG</h1>
+  <h1>TASK TRACKER</h1>
   <p>Authorize this Claude connector to access your tasks.</p>
   <input type="hidden" name="pending" value="${pendingId}">
   <input type="password" name="secret" placeholder="Enter your MCP token" autofocus autocomplete="off">

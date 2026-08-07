@@ -56,7 +56,7 @@ export function createApp(): express.Express {
       mcpAuthRouter({
         provider: oauthProvider,
         issuerUrl: new URL(env.MCP_BASE_URL),
-        resourceName: 'Log Task Manager',
+        resourceName: 'Task Tracker',
       }),
     );
     app.post('/oauth/approve', approveHandler);

@@ -89,7 +89,7 @@ export function SettingsScreen() {
       <View style={styles.wideRoot}>
         <View style={[styles.sidebar, { paddingTop: insets.top + 16 }]}>
           <View style={styles.sidebarHeader}>
-            <Text style={styles.sidebarLogo}>LOG</Text>
+            <Text style={styles.sidebarLogo}>TASK TRACKER</Text>
           </View>
           <SideNavLinks />
           <View style={styles.flex1} />
@@ -102,7 +102,13 @@ export function SettingsScreen() {
         </View>
         <View style={[styles.wideMain, { paddingTop: insets.top + 24 }]}>
           <Text style={styles.wideTitle}>Settings</Text>
-          <ScrollView contentContainerStyle={styles.wideScrollContent}>{sections}</ScrollView>
+          <ScrollView
+            nativeID="settings-scroll-wide"
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.wideScrollContent}
+          >
+            {sections}
+          </ScrollView>
         </View>
       </View>
     );
@@ -117,6 +123,8 @@ export function SettingsScreen() {
           <Text style={styles.mobileTitle}>Settings</Text>
         </View>
         <ScrollView
+          nativeID="settings-scroll-mobile"
+          showsVerticalScrollIndicator={false}
           contentContainerStyle={[
             styles.mobileScrollContent,
             { paddingBottom: insets.bottom + 40 },
@@ -515,7 +523,7 @@ function HowToConnect() {
 
           <Text style={styles.howLabel}>Claude Code</Text>
           <Text selectable style={styles.howStep}>
-            claude mcp add --transport http task-manager {MCP_URL}
+            claude mcp add --transport http task-tracker {MCP_URL}
           </Text>
 
           <Text style={styles.howLabel}>ChatGPT</Text>
@@ -1087,7 +1095,7 @@ const styles = StyleSheet.create({
   accountSignOutText: { fontSize: 15, fontWeight: '500', color: colors.accentPrimary },
   dangerCard: {
     borderRadius: 12,
-    marginBottom: 8,
+    marginBottom: 12,
     padding: 14,
     backgroundColor: 'rgba(217,102,139,0.06)',
     borderWidth: 1,
