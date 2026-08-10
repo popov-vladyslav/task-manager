@@ -199,9 +199,6 @@ export function CalendarScreen() {
       <>
         <View style={styles.wideRoot}>
           <View style={[styles.sidebar, { paddingTop: insets.top + 16 }]}>
-            <View style={styles.sidebarLogo}>
-              <Text style={styles.sidebarLogoText}>TASK TRACKER</Text>
-            </View>
             <SideNavLinks />
             <View style={styles.flex1} />
             <Pressable onPress={() => useAuthStore.getState().signOut()} style={styles.signOutBtn}>
@@ -774,13 +771,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#10141B',
     borderRightWidth: 1,
     borderRightColor: colors.bgCard,
-  },
-  sidebarLogo: { paddingHorizontal: 8, paddingBottom: 20 },
-  sidebarLogoText: {
-    fontFamily: monoFont,
-    fontSize: 10,
-    letterSpacing: 2,
-    color: colors.textMuted,
   },
   signOutBtn: { paddingHorizontal: 8, paddingVertical: 8 },
   signOutText: { fontSize: 12, color: colors.textMuted },
