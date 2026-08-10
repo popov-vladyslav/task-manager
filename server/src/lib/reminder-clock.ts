@@ -23,7 +23,10 @@ export interface ClockPorts {
 // deploy overlap, or a dev server on the same database) leaves it stale. A
 // forced resync bounds how long that can hide a due reminder — 24 wakeups a day
 // against 1440, for a worst case of one hour instead of "until restart".
-const DEFAULT_MAX_SYNC_AGE_MS = 3_600_000;
+// Exported so each send window can assert it stays wider than this: a window
+// tighter than the resync interval loses pushes outright, because a write from
+// another process would age past the window's cutoff before this one re-queried.
+export const DEFAULT_MAX_SYNC_AGE_MS = 3_600_000;
 
 export class ReminderClock {
   #nextAt: Date | null = null;

@@ -282,7 +282,6 @@ export function TasksScreen() {
       <View style={styles.wideRoot}>
         <View style={[styles.sidebar, { paddingTop: insets.top + 16 }]}>
           <View style={styles.sidebarHeader}>
-            <Text style={styles.sidebarLogLabel}>TASK TRACKER</Text>
             <Text style={styles.sidebarDate}>{headerDate()}</Text>
           </View>
 
@@ -513,12 +512,6 @@ const styles = StyleSheet.create({
     borderRightColor: colors.bgCard,
   },
   sidebarHeader: { paddingHorizontal: 8, paddingBottom: 20 },
-  sidebarLogLabel: {
-    fontFamily: monoFont,
-    fontSize: 10,
-    letterSpacing: 2,
-    color: colors.textMuted,
-  },
   sidebarDate: { fontSize: 15, fontWeight: '600', color: colors.textPrimary },
   sidebarContextsLabel: {
     fontFamily: monoFont,

@@ -434,6 +434,10 @@ function EditorForm({
 
 function NotificationsSection() {
   const [enabled, setEnabled] = useState<boolean | null>(null);
+  // Distinct from "still loading": a switch rendered after a failed read would
+  // have to show some value, and either one is a claim about the account that
+  // was never actually read. So a failure shows no switch at all.
+  const [failed, setFailed] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -443,7 +447,7 @@ function NotificationsSection() {
         if (alive) setEnabled(s.notificationsEnabled);
       })
       .catch(() => {
-        /* leave the switch disabled rather than showing something wrong */
+        if (alive) setFailed(true);
       });
     return () => {
       alive = false;
@@ -467,16 +471,20 @@ function NotificationsSection() {
           <View style={styles.flex1}>
             <Text style={styles.notifTitle}>Push notifications</Text>
             <Text style={styles.notifSubtitle}>
-              Reminders, due times and the morning summary.
+              {failed
+                ? 'Couldn’t load this setting — reopen Settings to try again.'
+                : 'Reminders, due times and the morning summary.'}
             </Text>
           </View>
-          <Switch
-            value={enabled ?? true}
-            onValueChange={onToggle}
-            disabled={enabled === null}
-            trackColor={{ false: colors.bgElevated, true: colors.accentPrimary }}
-            thumbColor={colors.textPrimary}
-          />
+          {failed ? null : (
+            <Switch
+              value={enabled ?? false}
+              onValueChange={onToggle}
+              disabled={enabled === null}
+              trackColor={{ false: colors.bgElevated, true: colors.accentPrimary }}
+              thumbColor={colors.textPrimary}
+            />
+          )}
         </View>
       </View>
     </View>
