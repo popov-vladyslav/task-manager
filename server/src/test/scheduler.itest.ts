@@ -249,3 +249,40 @@ test('a muted account gets no due notification', async () => {
 
   assert.equal(await sendDueNotifications(), 1, 'only the unmuted account is notified');
 });
+
+// What actually makes the due send idempotent under concurrency is the partial
+// unique index (drizzle/0011), not the notExists prefilter — the prefilter is a
+// cheap optimisation that two simultaneous ticks can both pass. The double-tick
+// test above never reaches the claim, so it would stay green with the index
+// dropped; this one hits the insert directly and would not.
+test('notification_log_due_uniq refuses a second due claim for the same task', async () => {
+  await db.delete(notificationLog);
+  await db.delete(tasks);
+
+  const [task] = await db
+    .insert(tasks)
+    .values({ userId: bob, title: 'contended deadline', status: 'active' })
+    .returning({ id: tasks.id });
+
+  const claim = () =>
+    db
+      .insert(notificationLog)
+      .values({ taskId: task.id, kind: 'due', userId: bob })
+      .onConflictDoNothing()
+      .returning({ id: notificationLog.id });
+
+  assert.equal((await claim()).length, 1, 'the first claim wins');
+  assert.equal((await claim()).length, 0, 'the second claim is refused by the index');
+
+  // Without onConflictDoNothing the same row must be rejected outright, which is
+  // what proves a unique constraint is enforcing this rather than the app.
+  await assert.rejects(
+    db.insert(notificationLog).values({ taskId: task.id, kind: 'due', userId: bob }),
+    'a duplicate due row must violate the unique index',
+  );
+
+  // 'repeat' rows are deliberately not covered by any unique index — repeats are
+  // meant to recur — so this must NOT be rejected.
+  await db.insert(notificationLog).values({ taskId: task.id, kind: 'repeat', userId: bob });
+  await db.insert(notificationLog).values({ taskId: task.id, kind: 'repeat', userId: bob });
+});
