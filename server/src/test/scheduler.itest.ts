@@ -10,6 +10,7 @@ import { notificationLog, recurrenceRules, settings, tasks, users } from '../db/
 import { spawnDueRecurring } from '../services/recurring';
 import { sendDueNotifications, sendReminders } from '../services/push';
 import { DUE_SEND_WINDOW_MS } from '../lib/due-window';
+import { updateTask } from '../services/tasks';
 
 let alice: string;
 let bob: string;
@@ -248,6 +249,64 @@ test('a muted account gets no due notification', async () => {
     .values({ userId: bob, title: 'audible deadline', status: 'active', dueAt: justDue });
 
   assert.equal(await sendDueNotifications(), 1, 'only the unmuted account is notified');
+});
+
+// The due claim is keyed on task_id alone, so without an explicit release the row
+// written for the OLD deadline suppresses the new one forever. Rescheduling an
+// overdue task is a first-class flow (the morning summary exists to prompt it),
+// so this is the difference between the feature working and silently never firing
+// again for any task the user has ever moved.
+test('moving a due_at to a new deadline lets it notify again', async () => {
+  await db.delete(notificationLog);
+  await db.delete(tasks);
+
+  const [task] = await db
+    .insert(tasks)
+    .values({
+      userId: bob,
+      title: 'rescheduled deadline',
+      status: 'active',
+      dueAt: new Date(Date.now() - 60_000),
+    })
+    .returning({ id: tasks.id });
+
+  assert.equal(await sendDueNotifications(), 1, 'the original deadline notifies');
+  assert.equal(await sendDueNotifications(), 0, 'and does not repeat');
+
+  // The user moves the deadline — through the service the API and MCP both use.
+  await updateTask(bob, task.id, { dueAt: new Date(Date.now() - 30_000).toISOString() });
+
+  assert.equal(await sendDueNotifications(), 1, 'the NEW deadline notifies too');
+
+  const rows = await db
+    .select()
+    .from(notificationLog)
+    .where(and(eq(notificationLog.taskId, task.id), eq(notificationLog.kind, 'due')));
+  assert.equal(rows.length, 1, 'the stale claim was released, not duplicated');
+});
+
+// Rewriting the deadline must not resurrect a deadline that has already aged out
+// — the release lifts the claim, the send window still decides.
+test('moving a due_at outside the window still does not notify', async () => {
+  await db.delete(notificationLog);
+  await db.delete(tasks);
+
+  const [task] = await db
+    .insert(tasks)
+    .values({
+      userId: bob,
+      title: 'moved into the distant past',
+      status: 'active',
+      dueAt: new Date(Date.now() - 60_000),
+    })
+    .returning({ id: tasks.id });
+
+  assert.equal(await sendDueNotifications(), 1);
+  await updateTask(bob, task.id, {
+    dueAt: new Date(Date.now() - DUE_SEND_WINDOW_MS - 60_000).toISOString(),
+  });
+
+  assert.equal(await sendDueNotifications(), 0, 'an aged-out deadline stays silent');
 });
 
 // The repeat gate must read the same kinds repeatReminders itself reads. A 'due'

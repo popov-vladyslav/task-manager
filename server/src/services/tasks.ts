@@ -300,6 +300,27 @@ export async function updateTask(
     if (Object.keys(set).length > 0) {
       await tx.update(tasks).set(set).where(and(ownedBy(tasks.userId, userId), eq(tasks.id, id)));
     }
+
+    // A new deadline is a new event, but the due claim is keyed on task_id alone
+    // (drizzle/0011), so the row written for the OLD deadline would suppress it
+    // forever. Release it. Mirrors what snoozeTask does for the reminder channel.
+    // Safe against backfill: the send still filters on dueCutoff, so a deadline
+    // moved into the past stays silent.
+    const nextDueAt = set.dueAt instanceof Date ? set.dueAt : null;
+    if (
+      patch.dueAt !== undefined &&
+      (nextDueAt?.getTime() ?? null) !== (cur.dueAt?.getTime() ?? null)
+    ) {
+      await tx
+        .delete(notificationLog)
+        .where(
+          and(
+            ownedBy(notificationLog.userId, userId),
+            eq(notificationLog.taskId, id),
+            eq(notificationLog.kind, 'due'),
+          ),
+        );
+    }
     // Delete the rule only after the task no longer references it (FK).
     if (orphanRuleId) {
       await tx
