@@ -10,7 +10,7 @@ import { notificationLog, recurrenceRules, settings, tasks, users } from '../db/
 import { spawnDueRecurring } from '../services/recurring';
 import { sendDueNotifications, sendReminders } from '../services/push';
 import { DUE_SEND_WINDOW_MS } from '../lib/due-window';
-import { updateTask } from '../services/tasks';
+import { snoozeTask, updateTask } from '../services/tasks';
 
 let alice: string;
 let bob: string;
@@ -283,6 +283,46 @@ test('moving a due_at to a new deadline lets it notify again', async () => {
     .from(notificationLog)
     .where(and(eq(notificationLog.taskId, task.id), eq(notificationLog.kind, 'due')));
   assert.equal(rows.length, 1, 'the stale claim was released, not duplicated');
+});
+
+// The due push carries the same snooze actions as a reminder (sendPush sets
+// categoryId 'reminder' for both), so snoozing a deadline notification is a
+// first-class flow. Snooze does not move due_at, so it must not release the due
+// claim — otherwise the every-minute cron re-sends the identical push, once per
+// snooze, until the deadline ages out of the window.
+test('snoozing does not re-arm the due notification', async () => {
+  await db.delete(notificationLog);
+  await db.delete(tasks);
+
+  const [task] = await db
+    .insert(tasks)
+    .values({
+      userId: bob,
+      title: 'deadline then snoozed',
+      status: 'active',
+      dueAt: new Date(Date.now() - 60_000),
+      remindAt: new Date(Date.now() - 60_000),
+    })
+    .returning({ id: tasks.id });
+
+  assert.equal(await sendReminders(), 1, 'the reminder fires');
+  assert.equal(await sendDueNotifications(), 1, 'the deadline fires too');
+
+  await snoozeTask(bob, task.id, 10);
+
+  assert.equal(await sendDueNotifications(), 0, 'the deadline must not fire a second time');
+
+  // ...but the snooze must still work: the reminder claim IS released, so the
+  // freshly-set remind_at can fire when it comes due.
+  const kinds = await db
+    .select({ kind: notificationLog.kind })
+    .from(notificationLog)
+    .where(eq(notificationLog.taskId, task.id));
+  assert.deepEqual(
+    kinds.map((k) => k.kind),
+    ['due'],
+    'the due claim survives, the reminder claim is cleared',
+  );
 });
 
 // Rewriting the deadline must not resurrect a deadline that has already aged out

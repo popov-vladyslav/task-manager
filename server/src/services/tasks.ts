@@ -1,4 +1,4 @@
-import { and, asc, eq, ilike, isNotNull, lte, notInArray, sql } from 'drizzle-orm';
+import { and, asc, eq, ilike, inArray, isNotNull, lte, notInArray, sql } from 'drizzle-orm';
 import { DEFAULT_DURATION_MIN, TERMINAL_STATUSES } from '@task-manager/shared';
 import type {
   CreateTaskInput,
@@ -355,9 +355,19 @@ export async function snoozeTask(userId: string, id: string, minutes: number): P
       .where(and(ownedBy(tasks.userId, userId), eq(tasks.id, id)))
       .returning({ id: tasks.id });
     if (!row) throw notFound('Task not found');
+    // Reminder channel only. The 'due' claim belongs to the deadline, which a
+    // snooze does not move — wiping it would let the every-minute cron re-send
+    // the same due push while due_at is still inside the send window, once per
+    // snooze. Unscoped, this delete was harmless until drizzle/0011 added 'due'.
     await tx
       .delete(notificationLog)
-      .where(and(ownedBy(notificationLog.userId, userId), eq(notificationLog.taskId, id)));
+      .where(
+        and(
+          ownedBy(notificationLog.userId, userId),
+          eq(notificationLog.taskId, id),
+          inArray(notificationLog.kind, ['initial', 'repeat']),
+        ),
+      );
   });
   invalidateReminderClocks();
   return getTask(userId, id);
