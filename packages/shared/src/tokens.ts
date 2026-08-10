@@ -31,11 +31,8 @@ export const fonts = {
   mono: 'JetBrainsMono',
 } as const;
 
-// The five work contexts seeded into the DB. Colors are used consistently everywhere.
+// The two work contexts seeded into a new account. Colors are used consistently everywhere.
 export const seedContexts = [
-  { slug: 'zt', label: 'ZT', color: '#5B8DEF' },
-  { slug: 'da', label: 'DA', color: '#4FB6A9' },
-  { slug: 'cairn', label: 'Cairn', color: '#E8A33D' },
-  { slug: 'zalando', label: 'Zalando', color: '#D9668B' },
-  { slug: 'home', label: 'Home', color: '#9B7EDE' },
+  { slug: 'routine', label: 'Routine', color: '#C77DD6', excludeFromAll: true },
+  { slug: 'meetings', label: 'Meetings', color: '#4FB6A9', excludeFromAll: false },
 ] as const;

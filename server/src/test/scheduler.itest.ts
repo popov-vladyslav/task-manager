@@ -8,7 +8,8 @@ import { closePool, resetDb } from './harness';
 import { db } from '../db/client';
 import { notificationLog, recurrenceRules, settings, tasks, users } from '../db/schema';
 import { spawnDueRecurring } from '../services/recurring';
-import { sendReminders } from '../services/push';
+import { sendDueNotifications, sendReminders } from '../services/push';
+import { DUE_SEND_WINDOW_MS } from '../lib/due-window';
 
 let alice: string;
 let bob: string;
@@ -117,4 +118,171 @@ test('one account disabling repeats does not suppress another account’s', asyn
     peeked instanceof Date,
     'the gate must see B’s eligible work even though A opted out',
   );
+});
+
+// The master switch is per account, and muting must not consume anything: no
+// push, no claimed log row, and remind_at left where it was.
+test('a muted account gets no reminder while an unmuted one still does', async () => {
+  await db.delete(notificationLog);
+  await db.delete(tasks);
+  await db.insert(settings).values({ userId: alice, key: 'notifications_enabled', value: false });
+
+  const past = new Date(Date.now() - 60_000);
+  const [aTask] = await db
+    .insert(tasks)
+    .values({ userId: alice, title: 'muted reminder', status: 'active', remindAt: past })
+    .returning({ id: tasks.id });
+  const [bTask] = await db
+    .insert(tasks)
+    .values({ userId: bob, title: 'audible reminder', status: 'active', remindAt: past })
+    .returning({ id: tasks.id });
+
+  const sent = await sendReminders();
+  assert.equal(sent, 1, 'only the unmuted account is notified');
+
+  const aLogs = await db
+    .select()
+    .from(notificationLog)
+    .where(eq(notificationLog.taskId, aTask.id));
+  assert.equal(aLogs.length, 0, 'a muted account must not even claim a log row');
+
+  const bLogs = await db
+    .select()
+    .from(notificationLog)
+    .where(eq(notificationLog.taskId, bTask.id));
+  assert.equal(bLogs.length, 1, 'the unmuted account’s reminder still fires');
+
+  const [aAfter] = await db
+    .select({ remindAt: tasks.remindAt })
+    .from(tasks)
+    .where(eq(tasks.id, aTask.id));
+  assert.ok(aAfter.remindAt, 'a muted reminder is skipped, not consumed');
+});
+
+// What makes the switch produce no backfill: a remind_at that aged out while the
+// switch was off is skipped forever, even once the account is unmuted again.
+test('a reminder older than the send window never fires', async () => {
+  await db.delete(notificationLog);
+  await db.delete(tasks);
+  await db.delete(settings).where(eq(settings.key, 'notifications_enabled'));
+
+  const stale = new Date(Date.now() - 3 * 60 * 60 * 1000);
+  await db
+    .insert(tasks)
+    .values({ userId: bob, title: 'aged out', status: 'active', remindAt: stale });
+
+  assert.equal(await sendReminders(), 0, 'a stale remind_at is never sent');
+});
+
+// A deadline arriving is its own event: it must notify without consuming the
+// reminder the user also set, and it must not re-notify on the next tick.
+test('a due_at inside the window fires once and leaves remind_at alone', async () => {
+  await db.delete(notificationLog);
+  await db.delete(tasks);
+
+  const justDue = new Date(Date.now() - 60_000);
+  const laterReminder = new Date(Date.now() + 60 * 60 * 1000);
+  const [task] = await db
+    .insert(tasks)
+    .values({
+      userId: bob,
+      title: 'deadline reached',
+      status: 'active',
+      dueAt: justDue,
+      remindAt: laterReminder,
+    })
+    .returning({ id: tasks.id });
+
+  assert.equal(await sendDueNotifications(), 1, 'a task due inside the window notifies');
+
+  const logs = await db
+    .select()
+    .from(notificationLog)
+    .where(and(eq(notificationLog.taskId, task.id), eq(notificationLog.kind, 'due')));
+  assert.equal(logs.length, 1, "exactly one 'due' log row");
+  assert.equal(logs[0].userId, bob, 'the log row is attributed to the owner');
+
+  // Idempotency: a second tick must claim nothing, and the partial unique index
+  // is what guarantees that even under concurrency.
+  assert.equal(await sendDueNotifications(), 0, 'a second tick does not re-notify');
+
+  const [after] = await db
+    .select({ remindAt: tasks.remindAt })
+    .from(tasks)
+    .where(eq(tasks.id, task.id));
+  assert.equal(
+    after.remindAt?.getTime(),
+    laterReminder.getTime(),
+    'the due send must not consume remind_at',
+  );
+});
+
+// The window is what stops the master switch from backfilling: a deadline that
+// passed while notifications were off is never delivered late.
+test('a due_at older than the window never fires', async () => {
+  await db.delete(notificationLog);
+  await db.delete(tasks);
+
+  const stale = new Date(Date.now() - DUE_SEND_WINDOW_MS - 60_000);
+  await db
+    .insert(tasks)
+    .values({ userId: bob, title: 'missed deadline', status: 'active', dueAt: stale });
+
+  assert.equal(await sendDueNotifications(), 0, 'a due_at past the window is skipped forever');
+});
+
+test('a muted account gets no due notification', async () => {
+  await db.delete(notificationLog);
+  await db.delete(tasks);
+  await db
+    .insert(settings)
+    .values({ userId: alice, key: 'notifications_enabled', value: false })
+    .onConflictDoUpdate({ target: [settings.userId, settings.key], set: { value: false } });
+
+  const justDue = new Date(Date.now() - 60_000);
+  await db
+    .insert(tasks)
+    .values({ userId: alice, title: 'muted deadline', status: 'active', dueAt: justDue });
+  await db
+    .insert(tasks)
+    .values({ userId: bob, title: 'audible deadline', status: 'active', dueAt: justDue });
+
+  assert.equal(await sendDueNotifications(), 1, 'only the unmuted account is notified');
+});
+
+// What actually makes the due send idempotent under concurrency is the partial
+// unique index (drizzle/0011), not the notExists prefilter — the prefilter is a
+// cheap optimisation that two simultaneous ticks can both pass. The double-tick
+// test above never reaches the claim, so it would stay green with the index
+// dropped; this one hits the insert directly and would not.
+test('notification_log_due_uniq refuses a second due claim for the same task', async () => {
+  await db.delete(notificationLog);
+  await db.delete(tasks);
+
+  const [task] = await db
+    .insert(tasks)
+    .values({ userId: bob, title: 'contended deadline', status: 'active' })
+    .returning({ id: tasks.id });
+
+  const claim = () =>
+    db
+      .insert(notificationLog)
+      .values({ taskId: task.id, kind: 'due', userId: bob })
+      .onConflictDoNothing()
+      .returning({ id: notificationLog.id });
+
+  assert.equal((await claim()).length, 1, 'the first claim wins');
+  assert.equal((await claim()).length, 0, 'the second claim is refused by the index');
+
+  // Without onConflictDoNothing the same row must be rejected outright, which is
+  // what proves a unique constraint is enforcing this rather than the app.
+  await assert.rejects(
+    db.insert(notificationLog).values({ taskId: task.id, kind: 'due', userId: bob }),
+    'a duplicate due row must violate the unique index',
+  );
+
+  // 'repeat' rows are deliberately not covered by any unique index — repeats are
+  // meant to recur — so this must NOT be rejected.
+  await db.insert(notificationLog).values({ taskId: task.id, kind: 'repeat', userId: bob });
+  await db.insert(notificationLog).values({ taskId: task.id, kind: 'repeat', userId: bob });
 });

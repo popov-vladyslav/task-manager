@@ -15,6 +15,7 @@ import { mcpAuthRouter } from '@modelcontextprotocol/sdk/server/auth/router.js';
 import { oauthProvider, approveHandler } from './mcp/oauth';
 import dataRouter from './routes/data';
 import summaryRouter from './routes/summary';
+import settingsRouter from './routes/settings';
 import { requireAuth } from './middleware/auth';
 import { errorHandler } from './middleware/error';
 
@@ -56,7 +57,7 @@ export function createApp(): express.Express {
       mcpAuthRouter({
         provider: oauthProvider,
         issuerUrl: new URL(env.MCP_BASE_URL),
-        resourceName: 'Log Task Manager',
+        resourceName: 'Task Tracker',
       }),
     );
     app.post('/oauth/approve', approveHandler);
@@ -74,6 +75,7 @@ export function createApp(): express.Express {
   app.use('/api/push', requireAuth, pushRouter);
   app.use('/api/data', requireAuth, dataRouter);
   app.use('/api/summary', requireAuth, summaryRouter);
+  app.use('/api/settings', requireAuth, settingsRouter);
   app.use('/api/mcp-token', requireAuth, mcpTokensRouter);
   app.use('/api/account', requireAuth, accountRouter);
 

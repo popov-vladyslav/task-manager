@@ -5,13 +5,13 @@ import { buildMagicLinkEmail, buildMcpTokenEmail, MAGIC_LINK_SUBJECT, PRODUCT_NA
 const LINK = 'https://task-tracker.net/auth?token=abc123';
 const TOKEN = 'abc123';
 
-test('the product name is "task manager", never "Log"', () => {
-  assert.equal(PRODUCT_NAME, 'task manager');
-  assert.match(MAGIC_LINK_SUBJECT, /task manager/);
+test('the product name is "Task Tracker", never "Log"', () => {
+  assert.equal(PRODUCT_NAME, 'Task Tracker');
+  assert.match(MAGIC_LINK_SUBJECT, /Task Tracker/);
 
   const { html, text } = buildMagicLinkEmail(LINK, TOKEN);
   for (const body of [MAGIC_LINK_SUBJECT, html, text]) {
-    assert.match(body, /task manager/);
+    assert.match(body, /Task Tracker/);
     assert.doesNotMatch(body, /\bLog\b/);
   }
 });

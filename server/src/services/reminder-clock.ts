@@ -1,7 +1,9 @@
-import { and, eq, isNotNull, min, notExists, sql } from 'drizzle-orm';
+import { and, eq, gte, isNotNull, min, notExists, sql } from 'drizzle-orm';
 import { db } from '../db/client';
 import { notificationLog, tasks } from '../db/schema';
 import { ReminderClock } from '../lib/reminder-clock';
+import { DUE_CLOCK_MAX_SYNC_AGE_MS, dueCutoff } from '../lib/due-window';
+import { reminderCutoff } from '../lib/reminder-window';
 
 // The database-backed clocks the scheduler gates its two reminder jobs on.
 // Each answers "what is the earliest instant this job could have work?", so an
@@ -22,6 +24,7 @@ export const reminderClock = new ReminderClock({
         and(
           eq(tasks.status, 'active'),
           isNotNull(tasks.remindAt),
+          gte(tasks.remindAt, reminderCutoff(new Date())),
           notExists(
             db
               .select({ one: sql`1` })
@@ -80,10 +83,42 @@ export const repeatClock = new ReminderClock({
   },
 });
 
+// Earliest due_at that the due-time send could act on. Mirrors its predicate in
+// services/push.ts — same divergence rule as reminderClock above.
+export const dueClock = new ReminderClock(
+  {
+    nextAt: async () => {
+      const [row] = await db
+        .select({ next: min(tasks.dueAt) })
+        .from(tasks)
+        .where(
+          and(
+            eq(tasks.status, 'active'),
+            isNotNull(tasks.dueAt),
+            gte(tasks.dueAt, dueCutoff(new Date())),
+            notExists(
+              db
+                .select({ one: sql`1` })
+                .from(notificationLog)
+                .where(and(eq(notificationLog.taskId, tasks.id), eq(notificationLog.kind, 'due'))),
+            ),
+          ),
+        );
+      return row?.next ? new Date(row.next) : null;
+    },
+  },
+  DUE_CLOCK_MAX_SYNC_AGE_MS,
+);
+
 // Call after any write that can move either clock. Both are invalidated
 // together: the cost is one query on the next tick, and reasoning about which
 // writes affect which clock is not worth the risk of a missed push.
 export function invalidateReminderClocks(): void {
   reminderClock.invalidate();
   repeatClock.invalidate();
+  dueClock.invalidate();
+}
+
+export function invalidateDueClock(): void {
+  dueClock.invalidate();
 }

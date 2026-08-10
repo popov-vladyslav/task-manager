@@ -76,9 +76,10 @@ export function SettingsScreen() {
   const sections = (
     <>
       <ContextsSection contexts={contexts} />
+      <NotificationsSection />
       <AccountSection />
       <McpTokenSection />
-      <UpdatesSection />
+      {!isWeb && <UpdatesSection />}
       <DangerSection />
     </>
   );
@@ -89,7 +90,7 @@ export function SettingsScreen() {
       <View style={styles.wideRoot}>
         <View style={[styles.sidebar, { paddingTop: insets.top + 16 }]}>
           <View style={styles.sidebarHeader}>
-            <Text style={styles.sidebarLogo}>LOG</Text>
+            <Text style={styles.sidebarLogo}>TASK TRACKER</Text>
           </View>
           <SideNavLinks />
           <View style={styles.flex1} />
@@ -102,7 +103,13 @@ export function SettingsScreen() {
         </View>
         <View style={[styles.wideMain, { paddingTop: insets.top + 24 }]}>
           <Text style={styles.wideTitle}>Settings</Text>
-          <ScrollView contentContainerStyle={styles.wideScrollContent}>{sections}</ScrollView>
+          <ScrollView
+            nativeID="settings-scroll-wide"
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.wideScrollContent}
+          >
+            {sections}
+          </ScrollView>
         </View>
       </View>
     );
@@ -117,6 +124,8 @@ export function SettingsScreen() {
           <Text style={styles.mobileTitle}>Settings</Text>
         </View>
         <ScrollView
+          nativeID="settings-scroll-mobile"
+          showsVerticalScrollIndicator={false}
           contentContainerStyle={[
             styles.mobileScrollContent,
             { paddingBottom: insets.bottom + 40 },
@@ -423,6 +432,57 @@ function EditorForm({
   );
 }
 
+function NotificationsSection() {
+  const [enabled, setEnabled] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    void api
+      .getSettings()
+      .then((s) => {
+        if (alive) setEnabled(s.notificationsEnabled);
+      })
+      .catch(() => {
+        /* leave the switch disabled rather than showing something wrong */
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const onToggle = (next: boolean) => {
+    setEnabled(next);
+    void api.updateSettings({ notificationsEnabled: next }).catch(() => {
+      // The server is the source of truth; put the switch back rather than
+      // leaving it showing a setting that was never saved.
+      setEnabled(!next);
+    });
+  };
+
+  return (
+    <View style={styles.mt28}>
+      <SectionLabel>NOTIFICATIONS</SectionLabel>
+      <View style={styles.accountCard}>
+        <View style={styles.notifRow}>
+          <View style={styles.flex1}>
+            <Text style={styles.notifTitle}>Push notifications</Text>
+            <Text style={styles.notifSubtitle}>
+              Reminders, due times and the morning summary.
+            </Text>
+          </View>
+          <Switch
+            value={enabled ?? true}
+            onValueChange={onToggle}
+            disabled={enabled === null}
+            trackColor={{ false: colors.bgElevated, true: colors.accentPrimary }}
+            thumbColor={colors.textPrimary}
+          />
+        </View>
+      </View>
+    </View>
+  );
+}
+
 function AccountSection() {
   const router = useRouter();
   const [email, setEmail] = useState<string | null>(null);
@@ -515,7 +575,7 @@ function HowToConnect() {
 
           <Text style={styles.howLabel}>Claude Code</Text>
           <Text selectable style={styles.howStep}>
-            claude mcp add --transport http task-manager {MCP_URL}
+            claude mcp add --transport http task-tracker {MCP_URL}
           </Text>
 
           <Text style={styles.howLabel}>ChatGPT</Text>
@@ -1085,9 +1145,18 @@ const styles = StyleSheet.create({
     paddingVertical: 13,
   },
   accountSignOutText: { fontSize: 15, fontWeight: '500', color: colors.accentPrimary },
+  notifRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  notifTitle: { fontSize: 13, color: colors.textPrimary },
+  notifSubtitle: { fontSize: 11, color: colors.textMuted, marginTop: 2 },
   dangerCard: {
     borderRadius: 12,
-    marginBottom: 8,
+    marginBottom: 12,
     padding: 14,
     backgroundColor: 'rgba(217,102,139,0.06)',
     borderWidth: 1,

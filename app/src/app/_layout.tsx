@@ -24,6 +24,20 @@ import { OtaUpdater } from '../features/updates/ota-updater';
 SplashScreen.preventAutoHideAsync().catch(() => {});
 SystemUI.setBackgroundColorAsync(colors.bgBase).catch(() => {});
 
+// react-native-web turns showsVerticalScrollIndicator={false} into `scrollbar-width`
+// only, which Safari and Chrome <121 ignore — they need a ::-webkit-scrollbar rule,
+// and RN style objects cannot express pseudo-elements.
+if (process.env.EXPO_OS === 'web' && typeof document !== 'undefined') {
+  const id = 'hide-scrollbar-style';
+  if (!document.getElementById(id)) {
+    const el = document.createElement('style');
+    el.id = id;
+    el.textContent =
+      '#settings-scroll-wide::-webkit-scrollbar,#settings-scroll-mobile::-webkit-scrollbar{display:none}';
+    document.head.appendChild(el);
+  }
+}
+
 function RootLayout() {
   // Cold-start boot: restore the session and prefetch the task list *under the
   // splash overlay*, then reveal — so there's no post-launch spinner. `booted`

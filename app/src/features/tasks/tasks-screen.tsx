@@ -282,8 +282,8 @@ export function TasksScreen() {
       <View style={styles.wideRoot}>
         <View style={[styles.sidebar, { paddingTop: insets.top + 16 }]}>
           <View style={styles.sidebarHeader}>
-            <Text style={styles.sidebarLogLabel}>LOG</Text>
-            <Text style={styles.sidebarDate}>{headerDate().replace('LOG — ', '')}</Text>
+            <Text style={styles.sidebarLogLabel}>TASK TRACKER</Text>
+            <Text style={styles.sidebarDate}>{headerDate()}</Text>
           </View>
 
           <SideNavLinks />

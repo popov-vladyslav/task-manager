@@ -20,9 +20,9 @@ export const monoFont =
       : 'ui-monospace, SFMono-Regular, Menlo, monospace';
 
 export function headerDate(d: Date = new Date()): string {
-  // e.g. "LOG — TUE, JUL 15"
+  // e.g. "TUE, JUL 15"
   const s = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-  return `LOG — ${s}`.toUpperCase();
+  return s.toUpperCase();
 }
 
 export function shortDate(iso: string | null): string | null {

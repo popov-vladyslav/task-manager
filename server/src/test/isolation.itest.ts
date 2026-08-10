@@ -405,6 +405,7 @@ test('every /api route requires authentication', async () => {
     ['GET', '/api/timer'], ['POST', '/api/timer/start'], ['POST', '/api/timer/stop'],
     ['GET', '/api/calendar'], ['GET', '/api/summary/morning'],
     ['POST', '/api/push/register'], ['DELETE', '/api/data'],
+    ['GET', '/api/settings'], ['PATCH', '/api/settings'],
   ];
 
   for (const [method, path] of routes) {
@@ -415,4 +416,39 @@ test('every /api route requires authentication', async () => {
     });
     assert.equal(res.status, 401, `${method} ${path} must require auth`);
   }
+});
+
+// The notifications master switch is stored per account on a composite
+// (user_id, key) primary key — one account muting itself must never mute another.
+test('the notifications switch round-trips and is per account', async () => {
+  const read = async (a: Account): Promise<boolean> => {
+    const res = await fetch(`${server.baseUrl}/api/settings`, { headers: a.headers });
+    assert.equal(res.status, 200);
+    return ((await res.json()) as { notificationsEnabled: boolean }).notificationsEnabled;
+  };
+  const write = async (a: Account, notificationsEnabled: boolean) =>
+    fetch(`${server.baseUrl}/api/settings`, {
+      method: 'PATCH',
+      headers: a.headers,
+      body: JSON.stringify({ notificationsEnabled }),
+    });
+
+  assert.equal(await read(alice), true, 'an account with no settings row defaults to enabled');
+
+  assert.equal((await write(alice, false)).status, 200);
+  assert.equal(await read(alice), false, 'the switch round-trips');
+  assert.equal(await read(bob), true, 'A muting itself must not mute B');
+
+  // Toggling back exercises the upsert's update branch, not just its insert.
+  assert.equal((await write(alice, true)).status, 200);
+  assert.equal(await read(alice), true, 'the switch toggles back');
+});
+
+test('the notifications switch rejects a non-boolean', async () => {
+  const res = await fetch(`${server.baseUrl}/api/settings`, {
+    method: 'PATCH',
+    headers: alice.headers,
+    body: JSON.stringify({ notificationsEnabled: 'nope' }),
+  });
+  assert.equal(res.status, 400, 'a non-boolean must not reach the database');
 });

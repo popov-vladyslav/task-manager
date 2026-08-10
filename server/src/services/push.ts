@@ -1,12 +1,15 @@
 import { Expo, type ExpoPushMessage } from 'expo-server-sdk';
-import { and, eq, inArray, isNotNull, lte, notExists, sql } from 'drizzle-orm';
+import { and, eq, gte, inArray, isNotNull, lte, notExists, sql } from 'drizzle-orm';
 import { db } from '../db/client';
 import { contexts, notificationLog, pushTokens, settings, tasks, users } from '../db/schema';
 import { composeNotificationTitle } from '../lib/notification-title';
 import { dispatchReminders } from '../lib/reminder-dispatch';
 import { summaryPushBody } from '../lib/morning-summary';
 import { getMorningSummary } from './summary';
-import { invalidateReminderClocks } from './reminder-clock';
+import { invalidateDueClock, invalidateReminderClocks } from './reminder-clock';
+import { mutedUserIds } from './settings';
+import { dueCutoff } from '../lib/due-window';
+import { reminderCutoff } from '../lib/reminder-window';
 
 const expo = new Expo();
 
@@ -106,6 +109,7 @@ export async function sendReminders(now: Date = new Date()): Promise<number> {
         eq(tasks.status, 'active'),
         isNotNull(tasks.remindAt),
         lte(tasks.remindAt, now),
+        gte(tasks.remindAt, reminderCutoff(now)),
         notExists(
           db
             .select({ one: sql`1` })
@@ -115,7 +119,10 @@ export async function sendReminders(now: Date = new Date()): Promise<number> {
       ),
     );
 
-  const sent = await dispatchReminders(due, {
+  const muted = await mutedUserIds();
+  const sendable = muted.size ? due.filter((t) => !muted.has(t.userId)) : due;
+
+  const sent = await dispatchReminders(sendable, {
     claim: async (t) => {
       const claimed = await db
         .insert(notificationLog)
@@ -159,6 +166,71 @@ export async function sendReminders(now: Date = new Date()): Promise<number> {
   return sent.length;
 }
 
+// due-time pushes (every minute): a task's deadline arriving is its own event,
+// independent of remind_at — a task with both produces two pushes. Claim-then-
+// send against notification_log kind='due' (drizzle/0011), exactly as
+// sendReminders does for 'initial'.
+//
+// Unlike sendReminders this NEVER clears remind_at: consuming it here would
+// silently cancel a reminder the user also asked for.
+export async function sendDueNotifications(now: Date = new Date()): Promise<number> {
+  const due = await db
+    .select({
+      id: tasks.id,
+      userId: tasks.userId,
+      title: tasks.title,
+      dueAt: tasks.dueAt,
+      contextName: contexts.label,
+      contextColor: contexts.color,
+    })
+    .from(tasks)
+    .leftJoin(contexts, eq(tasks.contextId, contexts.id))
+    .where(
+      and(
+        eq(tasks.status, 'active'),
+        isNotNull(tasks.dueAt),
+        lte(tasks.dueAt, now),
+        gte(tasks.dueAt, dueCutoff(now)),
+        notExists(
+          db
+            .select({ one: sql`1` })
+            .from(notificationLog)
+            .where(and(eq(notificationLog.taskId, tasks.id), eq(notificationLog.kind, 'due'))),
+        ),
+      ),
+    );
+
+  const muted = await mutedUserIds();
+  const sendable = muted.size ? due.filter((t) => !muted.has(t.userId)) : due;
+
+  const sent = await dispatchReminders(sendable, {
+    claim: async (t) => {
+      const claimed = await db
+        .insert(notificationLog)
+        .values({ taskId: t.id, kind: 'due', userId: t.userId })
+        .onConflictDoNothing()
+        .returning({ id: notificationLog.id });
+      return claimed.length > 0;
+    },
+    send: async (t) => {
+      const title = composeNotificationTitle(
+        { contextName: t.contextName, contextColor: t.contextColor, dueAt: t.dueAt },
+        'reminder',
+        now,
+      );
+      await sendPush(t.userId, title, t.title, { taskId: t.id });
+    },
+    release: async (t) => {
+      await db
+        .delete(notificationLog)
+        .where(and(eq(notificationLog.taskId, t.id), eq(notificationLog.kind, 'due')));
+    },
+  });
+
+  if (sent.length) invalidateDueClock();
+  return sent.length;
+}
+
 // repeat-reminders (every 15 min): opt-in via settings; re-notify tasks whose initial
 // push is older than repeat_after_h and that haven't been re-notified within that window.
 export async function repeatReminders(now: Date = new Date()): Promise<number> {
@@ -181,6 +253,8 @@ export async function repeatReminders(now: Date = new Date()): Promise<number> {
       enabled.set(row.userId, row.value);
     }
   }
+  const muted = await mutedUserIds();
+  for (const userId of muted) enabled.delete(userId);
   if (enabled.size === 0) return 0;
 
   let notified = 0;
@@ -249,9 +323,12 @@ export async function sendMorningSummary(now: Date = new Date()): Promise<number
   // own once-a-day marker. One user having been notified must not suppress
   // anyone else's summary.
   const accounts = await db.select({ id: users.id }).from(users);
+  const muted = await mutedUserIds();
   let total = 0;
 
   for (const account of accounts) {
+    if (muted.has(account.id)) continue;
+
     const [sent] = await db
       .select()
       .from(settings)

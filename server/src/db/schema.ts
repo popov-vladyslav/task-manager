@@ -10,6 +10,7 @@ import {
   time,
   date,
   jsonb,
+  primaryKey,
 } from 'drizzle-orm/pg-core';
 
 // Drizzle schema for type-safe queries. The authoritative DDL lives in
@@ -143,13 +144,17 @@ export const authTokens = pgTable('auth_tokens', {
   expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
 });
 
-export const settings = pgTable('settings', {
-  key: text('key').primaryKey(),
-  userId: uuid('user_id')
-    .notNull()
-    .references(() => users.id, { onDelete: 'cascade' }),
-  value: jsonb('value').notNull(),
-});
+export const settings = pgTable(
+  'settings',
+  {
+    key: text('key').notNull(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    value: jsonb('value').notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.key] })],
+);
 
 export const oauthClients = pgTable('oauth_clients', {
   clientId: text('client_id').primaryKey(),
@@ -172,6 +177,6 @@ export const notificationLog = pgTable('notification_log', {
     .notNull()
     .references(() => users.id, { onDelete: 'cascade' }),
   taskId: uuid('task_id').references(() => tasks.id, { onDelete: 'cascade' }),
-  kind: text('kind', { enum: ['initial', 'repeat'] }),
+  kind: text('kind', { enum: ['initial', 'repeat', 'due'] }),
   sentAt: timestamp('sent_at', { withTimezone: true }).notNull().defaultNow(),
 });

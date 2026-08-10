@@ -81,6 +81,7 @@ export async function createStarterContexts(userId: string, executor: Executor =
       slug: c.slug,
       label: c.label,
       color: c.color,
+      excludeFromAll: c.excludeFromAll,
       sortOrder: i,
     })),
   );
