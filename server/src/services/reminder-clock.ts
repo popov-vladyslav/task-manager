@@ -67,10 +67,15 @@ export const repeatClock = new ReminderClock({
          where s.key = 'repeat_reminders' and s.value = 'true'::jsonb
       ),
       latest as (
+        -- Only the kinds repeatReminders itself reads. A 'due' row is a
+        -- different delivery channel and is invisible to that job, so counting
+        -- it here would push this gate past the real eligibility instant and
+        -- delay the repeat by the due_at - remind_at gap.
         select t.user_id, max(n.sent_at) as latest
           from notification_log n
           join tasks t on t.id = n.task_id
          where t.status = 'active'
+           and n.kind in ('initial', 'repeat')
          group by t.user_id, n.task_id
         having bool_or(n.kind = 'initial')
       )

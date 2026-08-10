@@ -250,6 +250,41 @@ test('a muted account gets no due notification', async () => {
   assert.equal(await sendDueNotifications(), 1, 'only the unmuted account is notified');
 });
 
+// The repeat gate must read the same kinds repeatReminders itself reads. A 'due'
+// row is a different delivery channel that job ignores, so counting it here would
+// push the gate past the real eligibility instant and delay the repeat by the
+// whole due_at - remind_at gap.
+test('a due notification does not push back the repeat gate', async () => {
+  await db.delete(notificationLog);
+  await db.delete(tasks);
+  await db.delete(settings).where(eq(settings.key, 'notifications_enabled'));
+
+  const [task] = await db
+    .insert(tasks)
+    .values({ userId: bob, title: 'reminded then due', status: 'active' })
+    .returning({ id: tasks.id });
+
+  // Reminded two hours ago with a one-hour repeat interval (bob is configured
+  // for repeats by the test above), so the repeat is already eligible...
+  const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
+  await db
+    .insert(notificationLog)
+    .values({ taskId: task.id, kind: 'initial', userId: bob, sentAt: twoHoursAgo });
+
+  const { repeatClock } = await import('../services/reminder-clock');
+  repeatClock.invalidate();
+  assert.equal(await repeatClock.due(new Date()), true, 'the repeat is eligible before the due row');
+
+  // ...and its deadline passing just now must not move that.
+  await db.insert(notificationLog).values({ taskId: task.id, kind: 'due', userId: bob });
+  repeatClock.invalidate();
+  assert.equal(
+    await repeatClock.due(new Date()),
+    true,
+    'a due row must not delay an already-eligible repeat',
+  );
+});
+
 // What actually makes the due send idempotent under concurrency is the partial
 // unique index (drizzle/0011), not the notExists prefilter — the prefilter is a
 // cheap optimisation that two simultaneous ticks can both pass. The double-tick

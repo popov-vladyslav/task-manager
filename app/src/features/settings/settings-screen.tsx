@@ -29,6 +29,7 @@ import { ChevronRight, EyeOff, Plus, RefreshCw, Trash2, X } from 'lucide-react-n
 import type { Context } from '@task-manager/shared';
 import { api, type McpTokenMetadata } from '../../lib/api';
 import { API_URL } from '../../lib/config';
+import { useRefreshOnFocus } from '../../lib/use-refresh-on-focus';
 import { colors, headerDate, monoFont, webInputReset, WIDE_BREAKPOINT } from '../../theme';
 import { useTasksStore } from '../../store/tasks';
 import { useAuthStore } from '../../store/auth';
@@ -89,9 +90,6 @@ export function SettingsScreen() {
     return (
       <View style={styles.wideRoot}>
         <View style={[styles.sidebar, { paddingTop: insets.top + 16 }]}>
-          <View style={styles.sidebarHeader}>
-            <Text style={styles.sidebarLogo}>TASK TRACKER</Text>
-          </View>
           <SideNavLinks />
           <View style={styles.flex1} />
           <Pressable
@@ -433,22 +431,42 @@ function EditorForm({
 }
 
 function NotificationsSection() {
+  // null until the server answers. No switch is rendered before then: any value
+  // it could show — on or off — would be a claim about the account that was
+  // never read, and the account default is ON, so an "off" placeholder is the
+  // worst of the two.
   const [enabled, setEnabled] = useState<boolean | null>(null);
+  const [failed, setFailed] = useState(false);
 
-  useEffect(() => {
-    let alive = true;
+  const alive = useRef(true);
+  useEffect(
+    () => () => {
+      alive.current = false;
+    },
+    [],
+  );
+
+  const load = useCallback(() => {
     void api
       .getSettings()
       .then((s) => {
-        if (alive) setEnabled(s.notificationsEnabled);
+        if (!alive.current) return;
+        setEnabled(s.notificationsEnabled);
+        setFailed(false);
       })
       .catch(() => {
-        /* leave the switch disabled rather than showing something wrong */
+        if (alive.current) setFailed(true);
       });
-    return () => {
-      alive = false;
-    };
   }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  // The tab keeps this screen mounted, so the mount effect never runs again.
+  // Without this a single transient failure would strand the row — no switch,
+  // no way back — until the whole app was reloaded.
+  useRefreshOnFocus(load);
 
   const onToggle = (next: boolean) => {
     setEnabled(next);
@@ -467,16 +485,19 @@ function NotificationsSection() {
           <View style={styles.flex1}>
             <Text style={styles.notifTitle}>Push notifications</Text>
             <Text style={styles.notifSubtitle}>
-              Reminders, due times and the morning summary.
+              {failed
+                ? 'Couldn’t load this setting. It retries when you reopen Settings.'
+                : 'Reminders, due times and the morning summary.'}
             </Text>
           </View>
-          <Switch
-            value={enabled ?? true}
-            onValueChange={onToggle}
-            disabled={enabled === null}
-            trackColor={{ false: colors.bgElevated, true: colors.accentPrimary }}
-            thumbColor={colors.textPrimary}
-          />
+          {enabled === null ? null : (
+            <Switch
+              value={enabled}
+              onValueChange={onToggle}
+              trackColor={{ false: colors.bgElevated, true: colors.accentPrimary }}
+              thumbColor={colors.textPrimary}
+            />
+          )}
         </View>
       </View>
     </View>
@@ -978,13 +999,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#10141B',
     borderRightWidth: 1,
     borderRightColor: colors.bgCard,
-  },
-  sidebarHeader: { paddingHorizontal: 8, paddingBottom: 20 },
-  sidebarLogo: {
-    fontFamily: monoFont,
-    fontSize: 10,
-    letterSpacing: 2,
-    color: colors.textMuted,
   },
   flex1: { flex: 1 },
   sidebarSignOut: { paddingHorizontal: 8, paddingVertical: 8 },
