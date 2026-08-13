@@ -439,12 +439,17 @@ function NotificationsSection() {
   const [failed, setFailed] = useState(false);
 
   const alive = useRef(true);
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    // Re-armed on every mount, not just initialised once: React can run
+    // mount → cleanup → mount on the same fiber (StrictMode, Fast Refresh),
+    // and a ref survives that. Setting it only at declaration would leave it
+    // false after the second mount, so every load would bail and no switch
+    // would ever render.
+    alive.current = true;
+    return () => {
       alive.current = false;
-    },
-    [],
-  );
+    };
+  }, []);
 
   const load = useCallback(() => {
     void api
@@ -485,7 +490,11 @@ function NotificationsSection() {
           <View style={styles.flex1}>
             <Text style={styles.notifTitle}>Push notifications</Text>
             <Text style={styles.notifSubtitle}>
-              {failed
+              {/* Only when there is no switch to look at. A failed *refresh*
+                  after a good load leaves the last known value on screen and
+                  still operable, so an error line there would contradict a
+                  control that works. */}
+              {failed && enabled === null
                 ? 'Couldn’t load this setting. It retries when you reopen Settings.'
                 : 'Reminders, due times and the morning summary.'}
             </Text>

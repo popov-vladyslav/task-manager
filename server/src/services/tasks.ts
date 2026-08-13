@@ -303,9 +303,16 @@ export async function updateTask(
 
     // A new deadline is a new event, but the due claim is keyed on task_id alone
     // (drizzle/0011), so the row written for the OLD deadline would suppress it
-    // forever. Release it. Mirrors what snoozeTask does for the reminder channel.
+    // forever. Release it. Mirrors what snoozeTask does for the reminder channel
+    // — which is scoped to 'initial'/'repeat' for the mirror-image reason.
     // Safe against backfill: the send still filters on dueCutoff, so a deadline
     // moved into the past stays silent.
+    //
+    // Known race, deliberately not locked against: this runs in a transaction,
+    // the cron send does not. A reschedule landing between a tick's SELECT and
+    // its claim() lets that tick write a claim for the OLD deadline just after
+    // the release, suppressing the new one. Sub-second window, and the next edit
+    // to the task clears it — not worth serialising the send path for.
     const nextDueAt = set.dueAt instanceof Date ? set.dueAt : null;
     if (
       patch.dueAt !== undefined &&
