@@ -20,5 +20,11 @@ jobs:
         run: npm --workspace server run typecheck
       - name: Web export builds (also generates typed routes)
         run: npm --workspace app run build:web
+        env:
+          # Compile check only — this bundle is never deployed, so the URL is
+          # deliberately unreachable. config.ts refuses to build without the
+          # variable rather than silently baking in localhost; the real values
+          # come from the Render web service and the EAS build environments.
+          EXPO_PUBLIC_API_URL: https://example.invalid
       - name: Typecheck app
         run: npm --workspace app run typecheck
