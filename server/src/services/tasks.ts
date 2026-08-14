@@ -1,4 +1,4 @@
-import { and, asc, eq, ilike, isNotNull, lte, notInArray, sql } from 'drizzle-orm';
+import { and, asc, eq, ilike, inArray, isNotNull, lte, notInArray, sql } from 'drizzle-orm';
 import { DEFAULT_DURATION_MIN, TERMINAL_STATUSES } from '@task-manager/shared';
 import type {
   CreateTaskInput,
@@ -303,9 +303,16 @@ export async function updateTask(
 
     // A new deadline is a new event, but the due claim is keyed on task_id alone
     // (drizzle/0011), so the row written for the OLD deadline would suppress it
-    // forever. Release it. Mirrors what snoozeTask does for the reminder channel.
+    // forever. Release it. Mirrors what snoozeTask does for the reminder channel
+    // — which is scoped to 'initial'/'repeat' for the mirror-image reason.
     // Safe against backfill: the send still filters on dueCutoff, so a deadline
     // moved into the past stays silent.
+    //
+    // Known race, deliberately not locked against: this runs in a transaction,
+    // the cron send does not. A reschedule landing between a tick's SELECT and
+    // its claim() lets that tick write a claim for the OLD deadline just after
+    // the release, suppressing the new one. Sub-second window, and the next edit
+    // to the task clears it — not worth serialising the send path for.
     const nextDueAt = set.dueAt instanceof Date ? set.dueAt : null;
     if (
       patch.dueAt !== undefined &&
@@ -355,9 +362,19 @@ export async function snoozeTask(userId: string, id: string, minutes: number): P
       .where(and(ownedBy(tasks.userId, userId), eq(tasks.id, id)))
       .returning({ id: tasks.id });
     if (!row) throw notFound('Task not found');
+    // Reminder channel only. The 'due' claim belongs to the deadline, which a
+    // snooze does not move — wiping it would let the every-minute cron re-send
+    // the same due push while due_at is still inside the send window, once per
+    // snooze. Unscoped, this delete was harmless until drizzle/0011 added 'due'.
     await tx
       .delete(notificationLog)
-      .where(and(ownedBy(notificationLog.userId, userId), eq(notificationLog.taskId, id)));
+      .where(
+        and(
+          ownedBy(notificationLog.userId, userId),
+          eq(notificationLog.taskId, id),
+          inArray(notificationLog.kind, ['initial', 'repeat']),
+        ),
+      );
   });
   invalidateReminderClocks();
   return getTask(userId, id);
