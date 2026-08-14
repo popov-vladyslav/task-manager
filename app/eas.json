@@ -4,21 +4,24 @@
     "appVersionSource": "remote"
   },
   "build": {
-    "preview": {
+    "production": {
       "distribution": "internal",
-      "channel": "preview",
-      "environment": "preview",
+      "channel": "production",
+      "environment": "production",
       "ios": {
         "simulator": false
       }
     },
-    "production": {
-      "autoIncrement": true,
-      "channel": "production",
-      "environment": "production"
+    // NOTE: reads the "preview" EAS environment, not a "stage" one. Custom
+    // environment names require a Production/Enterprise plan; only production,
+    // preview and development exist. "preview" holds the stage API URL.
+    "stage": {
+      "distribution": "internal",
+      "channel": "stage",
+      "environment": "preview",
+      "ios": {
+        "simulator": false
+      }
     }
-  },
-  "submit": {
-    "production": {}
   }
 }
