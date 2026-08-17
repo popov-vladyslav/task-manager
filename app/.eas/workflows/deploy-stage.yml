@@ -1,0 +1,58 @@
+name: Deploy on merge to dev
+
+# The stage twin of deploy.yml. On every push to dev: compute the native
+# fingerprint, look for a build that already matches it. If one exists → the
+# change is JS-only → ship it OTA on the stage channel. If not → native changed
+# → make a fresh stage (ad-hoc/internal) iOS build.
+#
+# NOTE ON `environment: preview` — it is not a typo, and it must not be
+# "corrected" to `stage`. The stage build profile reads the EAS environment named
+# `preview` (which holds the stage API URL), because custom environment names
+# require a Production/Enterprise plan; see the comment in eas.json. Every job
+# here must name that same environment: a job-level `environment` OVERRIDES the
+# profile's, and the fingerprint job must resolve the same variables as the build
+# or the hashes stop matching and every push rebuilds instead of shipping an OTA.
+
+on:
+  push:
+    branches: ['dev']
+    paths:
+      - 'app/**'
+      - 'packages/shared/**'
+      - 'patches/**'
+      - 'package-lock.json'
+
+jobs:
+  fingerprint:
+    name: Fingerprint (iOS)
+    type: fingerprint
+    environment: preview
+
+  get_ios_build:
+    name: Find matching iOS build
+    needs: [fingerprint]
+    type: get-build
+    params:
+      platform: ios
+      profile: stage
+      fingerprint_hash: ${{ needs.fingerprint.outputs.ios_fingerprint_hash }}
+
+  build_ios:
+    name: Build iOS (native changed)
+    needs: [get_ios_build]
+    if: ${{ !needs.get_ios_build.outputs.build_id }}
+    type: build
+    environment: preview
+    params:
+      platform: ios
+      profile: stage
+
+  publish_update:
+    name: Publish OTA update (native unchanged)
+    needs: [get_ios_build]
+    if: ${{ needs.get_ios_build.outputs.build_id }}
+    type: update
+    environment: preview
+    params:
+      channel: stage
+      platform: ios
