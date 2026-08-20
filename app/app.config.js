@@ -21,7 +21,7 @@ const VARIANTS = {
 };
 
 module.exports = ({ config }) => {
-  const variant = process.env.EAS_BUILD_PROFILE === 'stage' ? VARIANTS.stage : VARIANTS.production;
+  const variant = process.env.APP_VARIANT === 'stage' ? VARIANTS.stage : VARIANTS.production;
   return {
     ...config,
     name: variant.name,

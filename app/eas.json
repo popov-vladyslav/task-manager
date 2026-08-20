@@ -8,6 +8,7 @@
       "distribution": "internal",
       "channel": "production",
       "environment": "production",
+      "env": { "APP_VARIANT": "production" },
       "ios": {
         "simulator": false
       }
@@ -19,6 +20,7 @@
       "distribution": "internal",
       "channel": "stage",
       "environment": "preview",
+      "env": { "APP_VARIANT": "stage" },
       "ios": {
         "simulator": false
       }
