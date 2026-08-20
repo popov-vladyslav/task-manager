@@ -24,6 +24,17 @@ const schema = z.object({
   MCP_TOKEN: z.string().min(16).optional(),
   // Public base URL of the Expo web app, used to build the magic-link target.
   APP_URL: z.string().default('http://localhost:8081'),
+  // Native deep-link scheme this deployment's magic links point at. Per
+  // deployment, because stage and production are separate apps: two installs
+  // both claiming one scheme means the OS routes a stage sign-in link to
+  // whichever it picks, possibly the production app.
+  //
+  // Derived from the bundle id, which is globally unique, so no other app can
+  // register it. The previous generic `app://` was squattable and in practice a
+  // magic link opened an unrelated application. Must stay in lockstep with
+  // app.config.js, which sets the app's `scheme` to the same strings; stage
+  // overrides this with `com.vladyslavpopovpl.app.stage`.
+  APP_SCHEME: z.string().default('com.vladyslavpopovpl.app'),
   // Public base URL of THIS API (legacy). Kept only as a fallback for MCP_BASE_URL.
   PUBLIC_URL: z.string().default(process.env.RENDER_EXTERNAL_URL ?? 'http://localhost:4000'),
   // Public base URL the MCP server advertises — the OAuth issuer and the
