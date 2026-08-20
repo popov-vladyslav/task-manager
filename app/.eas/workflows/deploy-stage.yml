@@ -27,6 +27,8 @@ jobs:
     name: Fingerprint (iOS)
     type: fingerprint
     environment: preview
+    env:
+      APP_VARIANT: stage
 
   get_ios_build:
     name: Find matching iOS build
@@ -43,6 +45,8 @@ jobs:
     if: ${{ !needs.get_ios_build.outputs.build_id }}
     type: build
     environment: preview
+    env:
+      APP_VARIANT: stage
     params:
       platform: ios
       profile: stage
@@ -53,6 +57,8 @@ jobs:
     if: ${{ needs.get_ios_build.outputs.build_id }}
     type: update
     environment: preview
+    env:
+      APP_VARIANT: stage
     params:
       channel: stage
       platform: ios
