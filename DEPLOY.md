@@ -45,6 +45,29 @@ Steps:
 3. On **log-web**, set `EXPO_PUBLIC_API_URL` to the **log-api** URL (inlined at build time).
 4. Deploy. `log-api`'s pre-deploy step runs migrations + the idempotent seed automatically.
 
+## Stage vs production (deep links, EAS environments, channels)
+
+**`APP_SCHEME` on the API.** The **stage** `log-api` service must set
+`APP_SCHEME=com.vladyslavpopovpl.app.stage`. Production needs no value — the zod default in
+`server/src/env.ts` supplies `com.vladyslavpopovpl.app`. If stage's value is missing, stage
+sign-in links open the **production** app.
+
+**`EXPO_PUBLIC_API_URL` on every buildable EAS profile.** It is inlined at build time, so each
+profile's EAS environment must carry it:
+
+| eas.json profile | EAS environment | `EXPO_PUBLIC_API_URL` |
+|------------------|-----------------|-----------------------|
+| `production` | `production` | `https://api.task-tracker.net` |
+| `stage` | `preview` | `https://stage-api.task-tracker.net` |
+
+The names are mismatched on purpose: custom EAS environment names require a paid EAS plan, so
+the `stage` profile reuses the built-in `preview` environment.
+
+**Channel rename.** The EAS channels were renamed from `preview` to `production` / `stage`. Any
+build installed before that rename polls the now-dead `preview` channel and will receive no
+further OTA updates — it must be reinstalled once from a fresh build. Internal-distribution
+builds do not self-update.
+
 ## MCP connector (claude.ai)
 
 The API exposes an MCP server at `POST /mcp` (Streamable HTTP) with 8 thick tools:

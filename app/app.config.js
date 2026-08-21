@@ -31,6 +31,16 @@ const VARIANTS = {
 
 module.exports = ({ config }) => {
   const variant = process.env.APP_VARIANT === 'stage' ? VARIANTS.stage : VARIANTS.production;
+  // APP_VARIANT is only ever set by a build or OTA publish, which resolves this
+  // config with the profile's EAS environment already loaded — so an unset URL
+  // here means that environment lost the variable. Fail now: the guard in
+  // src/lib/config.ts throws at launch, which ships a crash instead of failing.
+  if (process.env.APP_VARIANT && !process.env.EXPO_PUBLIC_API_URL) {
+    throw new Error(
+      `EXPO_PUBLIC_API_URL is unset for APP_VARIANT=${process.env.APP_VARIANT}. ` +
+        `Set it on the EAS environment this profile reads.`,
+    );
+  }
   return {
     ...config,
     name: variant.name,

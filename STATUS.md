@@ -42,8 +42,10 @@ deploy details in `DEPLOY.md`. Last updated: 2026-07-20.
 6. **DEVICE PASS still pending** — the B6 native behaviors (see below): @gorhom sheet gestures, swipe-vs-reorder, quick-add keyboard-accessory → panel → refocus. Latest EAS preview build: `9c89141e-…` (targets onrender; next build will target api.task-tracker.net).
 
 ### EAS / builds
-- `preview` iOS ad-hoc build: `cd app && npx eas build --profile preview --platform ios --non-interactive --no-wait` (creds ready; iPhone UDID provisioned). Uses committed git HEAD.
-- No OTA (no `expo-updates`) — a new version = a new build.
+- `production` iOS ad-hoc build: `cd app && npx eas build --profile production --platform ios --non-interactive --no-wait` (creds ready; iPhone UDID provisioned). Uses committed git HEAD.
+- `stage` iOS ad-hoc build: same with `--profile stage`. Installs side by side with production — own bundle id, name `Task Tracker (stage)`, STAGE-badged icon.
+- OTA: merging to `main` publishes production and to `dev` publishes stage (`app/.eas/workflows/deploy.yml`, `deploy-stage.yml`). Each merge ships an OTA when the native fingerprint is unchanged, and a full build when it isn't.
+- Channels were renamed `preview` → `production`/`stage`: a build installed before that rename polls the dead `preview` channel and needs one manual reinstall. See DEPLOY.md.
 
 ## Live infra
 | Thing | URL / value |
