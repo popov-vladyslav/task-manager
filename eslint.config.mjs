@@ -22,7 +22,6 @@ export default tseslint.config(
       'server/drizzle/**',
       'patches/**',
       // Reference/vendored bundles and generated output — not our source.
-      'design/**',
       'design-export/**',
       'docs/**',
       'secrets/**',

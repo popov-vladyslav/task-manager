@@ -1,6 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import type { Comment, Task } from '@task-manager/shared';
+import { contextEmoji } from '@task-manager/shared';
+import type { Comment, Context, Task, UpdateContextInput } from '@task-manager/shared';
 import * as tasksSvc from '../services/tasks';
 import * as contextsSvc from '../services/contexts';
 import * as commentsSvc from '../services/comments';
@@ -112,14 +113,16 @@ export function buildMcpServer(userId: string): McpServer {
     rawRegister(name, config, handler);
   };
 
+  const hexColor = z.string().regex(/^#[0-9a-fA-F]{6}$/, 'Color must be a #RRGGBB hex string');
+  const fmtContext = (c: Context) =>
+    `${contextEmoji(c) ?? ''} ${c.slug} — ${c.label} (${c.color})`.trim();
+
   reg(
     'list_contexts',
-    { description: 'List the work contexts (slug, label, color).', inputSchema: {} },
+    { description: 'List the work contexts (emoji, slug, label, color).', inputSchema: {} },
     async () => {
       const cs = await contextsSvc.listContexts(userId);
-      return text(
-        cs.map((c) => `${c.slug} — ${c.label} (${c.color})`).join('\n') || 'No contexts.',
-      );
+      return text(cs.map(fmtContext).join('\n') || 'No contexts.');
     },
   );
 
@@ -127,21 +130,23 @@ export function buildMcpServer(userId: string): McpServer {
     'create_context',
     {
       description:
-        'Create a work context. Provide a label and a hex color (e.g. #4FB6A9). Slug is auto-generated. Set exclude_from_all to hide its tasks from the All view and Calendar (reachable via its own chip) — good for routines / repeated payments.',
+        'Create a work context. Provide a label and a #RRGGBB hex color (e.g. #4FB6A9). Slug is auto-generated. Optional emoji (one character) shown next to the name; without it one is derived from the color. Set exclude_from_all to hide its tasks from the All view (reachable via its own chip) — good for routines / repeated payments.',
       inputSchema: {
         label: z.string().min(1),
-        color: z.string().min(1),
+        color: hexColor,
+        emoji: z.string().trim().min(1).max(8).optional(),
         exclude_from_all: z.boolean().optional(),
       },
     },
-    async ({ label, color, exclude_from_all }) => {
+    async ({ label, color, emoji, exclude_from_all }) => {
       const c = await contextsSvc.createContext(userId, {
         label,
         color,
+        emoji,
         excludeFromAll: exclude_from_all,
       });
       logWrite('create_context', { id: c.id, slug: c.slug });
-      return text(`Created context: ${c.slug} — ${c.label} (${c.color})`);
+      return text(`Created context: ${fmtContext(c)}`);
     },
   );
 
@@ -149,24 +154,26 @@ export function buildMcpServer(userId: string): McpServer {
     'update_context',
     {
       description:
-        'Rename, recolor, or toggle exclude_from_all on a context, identified by its slug.',
+        'Rename, recolor (#RRGGBB), set or clear the emoji (pass null to clear), or toggle exclude_from_all on a context, identified by its slug.',
       inputSchema: {
         slug: z.string().min(1),
         label: z.string().min(1).optional(),
-        color: z.string().min(1).optional(),
+        color: hexColor.optional(),
+        emoji: z.string().trim().min(1).max(8).nullable().optional(),
         exclude_from_all: z.boolean().optional(),
       },
     },
-    async ({ slug, label, color, exclude_from_all }) => {
+    async ({ slug, label, color, emoji, exclude_from_all }) => {
       const c = await contextsSvc.findContextBySlug(userId, slug);
       if (!c) return text(`Unknown context '${slug}'.`);
-      const patch: { label?: string; color?: string; excludeFromAll?: boolean } = {};
+      const patch: UpdateContextInput = {};
       if (label !== undefined) patch.label = label;
       if (color !== undefined) patch.color = color;
+      if (emoji !== undefined) patch.emoji = emoji;
       if (exclude_from_all !== undefined) patch.excludeFromAll = exclude_from_all;
       const updated = await contextsSvc.updateContext(userId, c.id, patch);
       logWrite('update_context', { id: updated.id, slug: updated.slug });
-      return text(`Updated context: ${updated.slug} — ${updated.label} (${updated.color})`);
+      return text(`Updated context: ${fmtContext(updated)}`);
     },
   );
 
@@ -441,9 +448,7 @@ export function buildMcpServer(userId: string): McpServer {
       if (list.length === 0) return text(`No comments on "${r.task.title}".`);
       return text(
         `Comments on "${r.task.title}":\n` +
-          list
-            .map((c) => `• ${c.createdAt.slice(0, 16).replace('T', ' ')} — ${c.body}`)
-            .join('\n'),
+          list.map((c) => `• ${c.createdAt.slice(0, 16).replace('T', ' ')} — ${c.body}`).join('\n'),
       );
     },
   );

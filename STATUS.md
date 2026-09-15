@@ -64,7 +64,6 @@ Adding a custom connector is **web/desktop only** (mobile app has no "add connec
 - `server/` — Express API + Drizzle/Neon + MCP server + OAuth + scheduler.
 - `app/` — Expo Router (iOS + web from one codebase). EAS project `@vladyslavpopovpl/task-manager`.
 - `packages/shared/` — TS types + design tokens.
-- `design/` — imported Claude Design bundles (reference).
 
 ## Done
 ### Phase 1

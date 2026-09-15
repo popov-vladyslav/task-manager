@@ -13,6 +13,7 @@ export function toContext(r: InferSelectModel<typeof contexts>): Context {
     sortOrder: r.sortOrder,
     archived: r.archived,
     excludeFromAll: r.excludeFromAll,
+    emoji: r.emoji,
   };
 }
 

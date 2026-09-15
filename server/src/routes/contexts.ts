@@ -14,6 +14,7 @@ const createSchema = z.object({
   color: hexColor,
   slug: z.string().optional(),
   excludeFromAll: z.boolean().optional(),
+  emoji: z.string().trim().min(1).max(8).optional(),
 });
 
 const updateSchema = z.object({
@@ -21,6 +22,12 @@ const updateSchema = z.object({
   color: hexColor.optional(),
   archived: z.boolean().optional(),
   excludeFromAll: z.boolean().optional(),
+  emoji: z.string().trim().min(1).max(8).nullable().optional(),
+  sortOrder: z.number().int().min(0).optional(),
+});
+
+const reorderSchema = z.object({
+  ids: z.array(z.number().int()).min(1),
 });
 
 router.get('/', async (req, res) => {
@@ -31,9 +38,17 @@ router.post('/', async (req, res) => {
   res.status(201).json(await svc.createContext(requireUserId(req), createSchema.parse(req.body)));
 });
 
+router.post('/reorder', async (req, res) => {
+  res.json(await svc.reorderContexts(requireUserId(req), reorderSchema.parse(req.body).ids));
+});
+
 router.patch('/:id', async (req, res) => {
   res.json(
-    await svc.updateContext(requireUserId(req), Number(req.params.id), updateSchema.parse(req.body)),
+    await svc.updateContext(
+      requireUserId(req),
+      Number(req.params.id),
+      updateSchema.parse(req.body),
+    ),
   );
 });
 

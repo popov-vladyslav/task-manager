@@ -7,6 +7,9 @@ import { useAuthStore } from '../../store/auth';
 import { registerForPush } from '../../lib/push';
 import { useTimerStore } from '../../store/timer';
 import { MobileTabBar } from '../../features/nav/nav-chrome';
+import { Drawer } from '../../features/nav/drawer';
+import { ContextEditorSheet } from '../../features/contexts/context-editor';
+import { ContextMenuSheet } from '../../features/contexts/context-menu-sheet';
 import { TimerScreen } from '../../features/timer/timer-screen';
 import { colors, WIDE_BREAKPOINT } from '../../theme';
 
@@ -57,8 +60,14 @@ export default function TabsLayout() {
       <TabList style={styles.hidden}>
         <TabTrigger name="index" href="/" />
         <TabTrigger name="calendar" href="/calendar" />
+        <TabTrigger name="countdown" href="/countdown" />
         <TabTrigger name="settings" href="/settings" />
+        <TabTrigger name="demo" href="/demo" />
       </TabList>
+
+      <Drawer />
+      <ContextEditorSheet />
+      <ContextMenuSheet />
 
       {/* Full-screen focus timer — overlays everything when a session is open. */}
       <TimerScreen />

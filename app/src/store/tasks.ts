@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Context, ReorderScope, Task } from '@task-manager/shared';
+import type { Context, ReorderScope, Task, UpdateContextInput } from '@task-manager/shared';
 import { api } from '../lib/api';
 import { TOAST_DURATION_MS, useToastStore } from './toast';
 
@@ -35,11 +35,14 @@ interface TasksState {
   loadCompleted: () => Promise<void>;
   uncomplete: (task: Task) => Promise<void>;
   setActiveContext: (id: number | null) => void;
-  createContext: (label: string, color: string, excludeFromAll?: boolean) => Promise<void>;
-  updateContext: (
-    id: number,
-    patch: { label?: string; color?: string; excludeFromAll?: boolean },
+  createContext: (
+    label: string,
+    color: string,
+    excludeFromAll?: boolean,
+    emoji?: string | null,
   ) => Promise<void>;
+  updateContext: (id: number, patch: UpdateContextInput) => Promise<void>;
+  reorderContexts: (ids: number[]) => Promise<void>;
   deleteContext: (id: number) => Promise<void>; // throws (409 message) if still referenced
   resetData: () => Promise<void>; // wipes tasks/recurrence/timers; keeps contexts
   addTask: (
@@ -130,14 +133,29 @@ export const useTasksStore = create<TasksState>((set, get) => ({
     set({ activeContextId: id });
   },
 
-  async createContext(label, color, excludeFromAll) {
-    const created = await api.createContext({ label, color, excludeFromAll });
+  async createContext(label, color, excludeFromAll, emoji) {
+    const created = await api.createContext({ label, color, excludeFromAll, emoji });
     set({ contexts: [...get().contexts, created].sort((a, b) => a.sortOrder - b.sortOrder) });
   },
 
   async updateContext(id, patch) {
     const updated = await api.updateContext(id, patch);
     set({ contexts: get().contexts.map((c) => (c.id === id ? updated : c)) });
+  },
+
+  async reorderContexts(ids) {
+    const current = get().contexts;
+    const position = new Map(ids.map((id, i) => [id, i]));
+    set({
+      contexts: current
+        .map((c) => ({ ...c, sortOrder: position.get(c.id) ?? c.sortOrder }))
+        .sort((a, b) => a.sortOrder - b.sortOrder || a.id - b.id),
+    });
+    try {
+      set({ contexts: await api.reorderContexts(ids) });
+    } catch {
+      get().load();
+    }
   },
 
   async deleteContext(id) {

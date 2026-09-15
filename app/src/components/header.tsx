@@ -1,4 +1,4 @@
-import { useMemo, type ReactNode } from 'react';
+import { useMemo, type ReactNode, type Ref } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { ChevronLeft, ChevronsUpDown, Menu, MoreHorizontal } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -8,11 +8,13 @@ import { useTheme, type Theme } from '../theme';
 interface HeaderProps {
   title: string;
   emoji?: string | null;
-  left?: 'menu' | 'back' | ReactNode;
+  left?: 'menu' | 'back';
+  leftNode?: ReactNode;
   onLeftPress?: () => void;
   right?: ReactNode;
   onMorePress?: () => void;
   onTitlePress?: () => void;
+  titleRef?: Ref<View>;
   align?: 'center' | 'start';
 }
 
@@ -20,10 +22,12 @@ export function Header({
   title,
   emoji,
   left = 'menu',
+  leftNode: leftOverride,
   onLeftPress,
   right,
   onMorePress,
   onTitlePress,
+  titleRef,
   align = 'center',
 }: HeaderProps) {
   const t = useTheme();
@@ -35,17 +39,17 @@ export function Header({
   );
 
   const leftNode =
-    left === 'menu' ? (
+    leftOverride !== undefined ? (
+      leftOverride
+    ) : left === 'menu' ? (
       <IconButton icon={Menu} onPress={onLeftPress} accessibilityLabel="Open menu" />
-    ) : left === 'back' ? (
+    ) : (
       <IconButton
         icon={ChevronLeft}
         onPress={onLeftPress}
         accessibilityLabel="Back"
         iconSize={20}
       />
-    ) : (
-      left
     );
 
   const rightNode =
@@ -64,6 +68,8 @@ export function Header({
     <View style={[styles.row, inset.row]}>
       {leftNode}
       <Pressable
+        ref={titleRef}
+        collapsable={false}
         onPress={onTitlePress}
         disabled={!onTitlePress}
         accessibilityRole={onTitlePress ? 'button' : 'header'}

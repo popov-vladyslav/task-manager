@@ -70,6 +70,7 @@ export const contexts = pgTable('contexts', {
   sortOrder: integer('sort_order').notNull().default(0),
   archived: boolean('archived').notNull().default(false),
   excludeFromAll: boolean('exclude_from_all').notNull().default(false),
+  emoji: text('emoji'),
 });
 
 export const recurrenceRules = pgTable('recurrence_rules', {

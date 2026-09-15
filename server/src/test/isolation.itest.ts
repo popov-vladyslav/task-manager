@@ -112,6 +112,47 @@ test('A cannot delete B’s context', async () => {
   assert.equal(rows.length, 1, "B's context must still exist");
 });
 
+test('A cannot reorder B’s context', async () => {
+  const bobId = await bobsContextId();
+  const [before] = await db.select().from(contexts).where(eq(contexts.id, bobId));
+  const res = await fetch(`${server.baseUrl}/api/contexts/reorder`, {
+    method: 'POST',
+    headers: alice.headers,
+    body: JSON.stringify({ ids: [bobId] }),
+  });
+  assert.equal(res.status, 200, 'foreign ids are skipped, not rejected');
+
+  const [after] = await db.select().from(contexts).where(eq(contexts.id, bobId));
+  assert.equal(after.sortOrder, before.sortOrder, "B's sort_order must be unchanged");
+});
+
+test('B can reorder own contexts and set an emoji', async () => {
+  const first = await bobsContextId();
+  const second = await bobsContextId();
+  const reordered = (await (
+    await fetch(`${server.baseUrl}/api/contexts/reorder`, {
+      method: 'POST',
+      headers: bob.headers,
+      body: JSON.stringify({ ids: [second, first] }),
+    })
+  ).json()) as { id: number; sortOrder: number }[];
+  const pos = (id: number) => reordered.find((c) => c.id === id)?.sortOrder;
+  assert.equal(pos(second), 0);
+  assert.equal(pos(first), 1);
+  assert.ok(
+    reordered.findIndex((c) => c.id === second) < reordered.findIndex((c) => c.id === first),
+  );
+
+  const patched = (await (
+    await fetch(`${server.baseUrl}/api/contexts/${first}`, {
+      method: 'PATCH',
+      headers: bob.headers,
+      body: JSON.stringify({ emoji: '💼' }),
+    })
+  ).json()) as { emoji: string | null };
+  assert.equal(patched.emoji, '💼');
+});
+
 // ---------------------------------------------------------------- tasks --
 
 async function bobsTaskId(): Promise<string> {
@@ -143,10 +184,7 @@ test('A cannot update, complete, delete, snooze or reorder B’s task', async ()
     [`/api/tasks/${taskId}`, { method: 'PATCH', body: JSON.stringify({ completed: true }) }],
     [`/api/tasks/${taskId}`, { method: 'DELETE' }],
     [`/api/tasks/${taskId}/snooze`, { method: 'POST', body: JSON.stringify({ minutes: 10 }) }],
-    [
-      `/api/tasks/${taskId}/reorder`,
-      { method: 'POST', body: JSON.stringify({ scope: 'global' }) },
-    ],
+    [`/api/tasks/${taskId}/reorder`, { method: 'POST', body: JSON.stringify({ scope: 'global' }) }],
   ];
 
   for (const [path, init] of attempts) {
@@ -395,17 +433,30 @@ test('A cannot reach B’s recurrence rule through the task API', async () => {
 
 test('every /api route requires authentication', async () => {
   const routes: [string, string][] = [
-    ['GET', '/api/contexts'], ['POST', '/api/contexts'],
-    ['PATCH', '/api/contexts/1'], ['DELETE', '/api/contexts/1'],
-    ['GET', '/api/tasks'], ['POST', '/api/tasks'],
-    ['GET', '/api/tasks/x'], ['PATCH', '/api/tasks/x'], ['DELETE', '/api/tasks/x'],
-    ['POST', '/api/tasks/x/reorder'], ['POST', '/api/tasks/x/snooze'],
-    ['GET', '/api/tasks/x/comments'], ['POST', '/api/tasks/x/comments'],
+    ['GET', '/api/contexts'],
+    ['POST', '/api/contexts'],
+    ['PATCH', '/api/contexts/1'],
+    ['DELETE', '/api/contexts/1'],
+    ['POST', '/api/contexts/reorder'],
+    ['GET', '/api/tasks'],
+    ['POST', '/api/tasks'],
+    ['GET', '/api/tasks/x'],
+    ['PATCH', '/api/tasks/x'],
+    ['DELETE', '/api/tasks/x'],
+    ['POST', '/api/tasks/x/reorder'],
+    ['POST', '/api/tasks/x/snooze'],
+    ['GET', '/api/tasks/x/comments'],
+    ['POST', '/api/tasks/x/comments'],
     ['DELETE', '/api/comments/x'],
-    ['GET', '/api/timer'], ['POST', '/api/timer/start'], ['POST', '/api/timer/stop'],
-    ['GET', '/api/calendar'], ['GET', '/api/summary/morning'],
-    ['POST', '/api/push/register'], ['DELETE', '/api/data'],
-    ['GET', '/api/settings'], ['PATCH', '/api/settings'],
+    ['GET', '/api/timer'],
+    ['POST', '/api/timer/start'],
+    ['POST', '/api/timer/stop'],
+    ['GET', '/api/calendar'],
+    ['GET', '/api/summary/morning'],
+    ['POST', '/api/push/register'],
+    ['DELETE', '/api/data'],
+    ['GET', '/api/settings'],
+    ['PATCH', '/api/settings'],
   ];
 
   for (const [method, path] of routes) {

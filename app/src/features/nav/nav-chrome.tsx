@@ -1,13 +1,19 @@
 import { type ComponentType, type Ref } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { CalendarDays, ListTodo, Settings as SettingsIcon, type LucideProps } from 'lucide-react-native';
+import {
+  CalendarDays,
+  Hourglass,
+  ListTodo,
+  Settings as SettingsIcon,
+  type LucideProps,
+} from 'lucide-react-native';
 import { TabTrigger, type TabTriggerSlotProps } from 'expo-router/ui';
 import { colors } from '../../theme';
 
 // Shared navigation chrome for the custom tab layout. Screen switching runs
 // through Expo Router's headless <Tabs> — the mobile bar lives in the layout,
 // the web sidebar links live inside each screen (which keep their own sidebar
-// so Tasks can show its contexts). Tabs: Tasks · Calendar · Settings.
+// so Tasks can show its contexts). Tabs: Tasks · Calendar · Countdown · Settings.
 
 type IconType = ComponentType<LucideProps>;
 
@@ -20,6 +26,9 @@ export function MobileTabBar({ bottomInset }: { bottomInset: number }) {
       </TabTrigger>
       <TabTrigger name="calendar" asChild>
         <BottomTabButton label="Calendar" icon={CalendarDays} />
+      </TabTrigger>
+      <TabTrigger name="countdown" asChild>
+        <BottomTabButton label="Countdown" icon={Hourglass} />
       </TabTrigger>
       <TabTrigger name="settings" asChild>
         <BottomTabButton label="Settings" icon={SettingsIcon} />
@@ -37,6 +46,9 @@ export function SideNavLinks() {
       </TabTrigger>
       <TabTrigger name="calendar" asChild>
         <SideNavButton label="Calendar" icon={CalendarDays} />
+      </TabTrigger>
+      <TabTrigger name="countdown" asChild>
+        <SideNavButton label="Countdown" icon={Hourglass} />
       </TabTrigger>
       <TabTrigger name="settings" asChild>
         <SideNavButton label="Settings" icon={SettingsIcon} />
@@ -70,7 +82,12 @@ function SideNavButton({ label, icon: Icon, isFocused, ref, ...rest }: NavButton
       style={[styles.sideNav, isFocused && { backgroundColor: colors.bgCard }]}
     >
       <Icon size={16} color={isFocused ? colors.accentPrimary : colors.textMuted} />
-      <Text style={[styles.sideNavLabel, { color: isFocused ? colors.textPrimary : colors.textSecondary }]}>
+      <Text
+        style={[
+          styles.sideNavLabel,
+          { color: isFocused ? colors.textPrimary : colors.textSecondary },
+        ]}
+      >
         {label}
       </Text>
     </Pressable>

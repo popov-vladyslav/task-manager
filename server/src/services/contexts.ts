@@ -66,6 +66,7 @@ export async function createContext(userId: string, input: CreateContextInput): 
       color: input.color,
       sortOrder: Number(max) + 1,
       excludeFromAll: input.excludeFromAll ?? false,
+      emoji: input.emoji ?? null,
     })
     .returning();
   return toContext(row);
@@ -74,7 +75,10 @@ export async function createContext(userId: string, input: CreateContextInput): 
 // Starter contexts for a brand-new account. Called once, by sign-up, inside the
 // same transaction that creates the user — hence the executor argument. Calling
 // it twice for one account violates contexts_user_slug_uniq, by design.
-export async function createStarterContexts(userId: string, executor: Executor = db): Promise<void> {
+export async function createStarterContexts(
+  userId: string,
+  executor: Executor = db,
+): Promise<void> {
   await executor.insert(contexts).values(
     seedContexts.map((c, i) => ({
       userId,
@@ -102,6 +106,19 @@ export async function updateContext(
     .returning();
   if (!row) throw notFound('Context not found');
   return toContext(row);
+}
+
+// Ids that are not the caller's own match no row and are skipped, never written.
+export async function reorderContexts(userId: string, ids: number[]): Promise<Context[]> {
+  await db.transaction(async (tx) => {
+    for (const [index, id] of ids.entries()) {
+      await tx
+        .update(contexts)
+        .set({ sortOrder: index })
+        .where(and(ownedBy(contexts.userId, userId), eq(contexts.id, id)));
+    }
+  });
+  return listContexts(userId);
 }
 
 // Delete a context. Block ONLY on OPEN tasks (status != 'done') — those are

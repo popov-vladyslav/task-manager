@@ -33,11 +33,13 @@ REST і MCP — тонкі шари над спільним service layer (`serv
 -- Контексти редаговані з Settings, не enum
 CREATE TABLE contexts (
   id          serial PRIMARY KEY,
-  slug        text UNIQUE NOT NULL,          -- 'zt', 'da', 'cairn', 'zalando', 'home'
+  slug        text UNIQUE NOT NULL,          -- 'work', 'home'
   label       text NOT NULL,
   color       text NOT NULL,                 -- '#5B8DEF'
   sort_order  int  NOT NULL DEFAULT 0,
-  archived    boolean NOT NULL DEFAULT false
+  archived    boolean NOT NULL DEFAULT false,
+  exclude_from_all boolean NOT NULL DEFAULT false, -- 0004: hidden from "All"
+  emoji       text                              -- 0013: nullable; fallback derived from color
 );
 
 CREATE TABLE tasks (
@@ -149,8 +151,9 @@ POST   /auth/pin               { pin }   → { jwt }        (PIN задаєть�
 POST   /auth/refresh           { refresh } → { jwt }
 
 GET    /api/contexts
-POST   /api/contexts           { label, color }
-PATCH  /api/contexts/:id       { label?, color?, archived? }
+POST   /api/contexts           { label, color, slug?, excludeFromAll?, emoji? }
+PATCH  /api/contexts/:id       { label?, color?, archived?, excludeFromAll?, emoji? (nullable), sortOrder? }
+POST   /api/contexts/reorder   { ids: number[] } → повний список; чужі id пропускаються
 
 GET    /api/tasks?context=&status=          (сортовано по sort_*)
 POST   /api/tasks              { title, context_id?, priority?, due_at?, remind_at?, recurrence? }
@@ -198,7 +201,10 @@ add_comment     { task: id|title_match, body }
 add_routine     { title, time_hint? }
 start_timer     { task: id|title_match }
 stop_timer      {}
-list_contexts   {}
+list_contexts   {}                                → emoji slug — label (color)
+create_context  { label, color (#RRGGBB), emoji?, exclude_from_all? }
+update_context  { slug, label?, color?, emoji? (null очищає), exclude_from_all? }
+delete_context  { slug }
 ```
 
 `title_match`: fuzzy-пошук по відкритих задачах; якщо збігів > 1 — tool повертає кандидатів, я перепитаю тебе в чаті.

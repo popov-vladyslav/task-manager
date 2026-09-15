@@ -5,7 +5,6 @@ npm-workspaces monorepo:
 - `server/` — Express REST API (thin routes over a shared service layer), Drizzle + Neon Postgres.
 - `app/` — Expo app (iOS + web from one codebase), Expo Router.
 - `packages/shared/` — TypeScript types + design tokens shared by both.
-- `design/` — imported Claude Design bundles (reference/source of truth for UI).
 
 ## Local development
 

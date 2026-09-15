@@ -23,6 +23,7 @@ export interface Context {
   // When true, this context's tasks are hidden from the "All" view and the
   // Calendar; reachable only by selecting the context's own chip.
   excludeFromAll: boolean;
+  emoji: string | null;
 }
 
 export interface Task {
@@ -92,6 +93,7 @@ export interface CreateContextInput {
   color: string;
   slug?: string;
   excludeFromAll?: boolean;
+  emoji?: string | null;
 }
 
 export interface UpdateContextInput {
@@ -99,6 +101,8 @@ export interface UpdateContextInput {
   color?: string;
   archived?: boolean;
   excludeFromAll?: boolean;
+  emoji?: string | null;
+  sortOrder?: number;
 }
 
 export interface Comment {

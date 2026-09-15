@@ -89,6 +89,8 @@ export const api = {
   updateContext: (id: number, patch: UpdateContextInput) =>
     request<Context>(`/api/contexts/${id}`, { method: 'PATCH', body: patch }),
   deleteContext: (id: number) => request<void>(`/api/contexts/${id}`, { method: 'DELETE' }),
+  reorderContexts: (ids: number[]) =>
+    request<Context[]>('/api/contexts/reorder', { method: 'POST', body: { ids } }),
   resetData: () => request<void>('/api/data', { method: 'DELETE', body: { confirm: 'RESET' } }),
   listTasks: (params?: { context?: number; status?: string }) =>
     request<Task[]>(`/api/tasks${qs(params)}`),

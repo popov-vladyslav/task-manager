@@ -28,12 +28,25 @@ export const colors = {
 export type Palette = Record<keyof typeof colors, string>;
 
 export const radius = {
-  card: 12, // rounded-xl
+  card: 14,
   sheet: 20, // sheet/modal top radius
   popover: 16,
 } as const;
 
 export const contextStripWidth = 3; // border-left px on each card
+
+export const contextPalette = [
+  '#5B8DEF',
+  '#4FB6A9',
+  '#E8A33D',
+  '#D9668B',
+  '#9B7EDE',
+  '#E0574B',
+  '#6BBF59',
+  '#4AA3D9',
+  '#C77DD6',
+  '#8B93A3',
+] as const;
 
 // The two work contexts seeded into a new account. Colors are used consistently everywhere.
 export const seedContexts = [
