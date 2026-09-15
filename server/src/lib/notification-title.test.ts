@@ -6,8 +6,8 @@ const NOW = new Date(2026, 6, 21, 12, 0, 0);
 const inMin = (m: number) => new Date(NOW.getTime() + m * 60_000);
 
 // App context colors → expected emoji (matches CR02 examples).
-const BLUE = '#5B8DEF'; // Zoolatech
-const AMBER = '#E8A33D'; // Zalando
+const BLUE = '#5B8DEF'; // Work
+const AMBER = '#E8A33D'; // Payments
 const GREEN = '#6BBF59'; // Home
 
 test('nearest emoji maps the app palette intuitively', () => {
@@ -34,49 +34,88 @@ test('relative-time buckets', () => {
 
 test('reminder · context yes · due yes', () => {
   assert.equal(
-    composeNotificationTitle({ contextName: 'Zoolatech', contextColor: BLUE, dueAt: inMin(30) }, 'reminder', NOW),
-    '🔵 Zoolatech · in 30 min',
+    composeNotificationTitle(
+      { contextName: 'Work', contextColor: BLUE, dueAt: inMin(30) },
+      'reminder',
+      NOW,
+    ),
+    '🔵 Work · in 30 min',
+  );
+});
+
+test('reminder · a stored context emoji beats the derived one', () => {
+  assert.equal(
+    composeNotificationTitle(
+      { contextName: 'Work', contextColor: BLUE, contextEmoji: '💼', dueAt: inMin(30) },
+      'reminder',
+      NOW,
+    ),
+    '💼 Work · in 30 min',
   );
 });
 
 test('reminder · context yes · due no', () => {
   assert.equal(
-    composeNotificationTitle({ contextName: 'Zalando', contextColor: AMBER, dueAt: null }, 'reminder', NOW),
-    '🟠 Zalando',
+    composeNotificationTitle(
+      { contextName: 'Payments', contextColor: AMBER, dueAt: null },
+      'reminder',
+      NOW,
+    ),
+    '🟠 Payments',
   );
 });
 
 test('reminder · context no · due yes', () => {
   assert.equal(
-    composeNotificationTitle({ contextName: null, contextColor: null, dueAt: inMin(15) }, 'reminder', NOW),
+    composeNotificationTitle(
+      { contextName: null, contextColor: null, dueAt: inMin(15) },
+      'reminder',
+      NOW,
+    ),
     'in 15 min',
   );
 });
 
 test('reminder · context no · due no → Task', () => {
   assert.equal(
-    composeNotificationTitle({ contextName: null, contextColor: null, dueAt: null }, 'reminder', NOW),
+    composeNotificationTitle(
+      { contextName: null, contextColor: null, dueAt: null },
+      'reminder',
+      NOW,
+    ),
     'Task',
   );
 });
 
 test('spawn · context yes · due yes → · new', () => {
   assert.equal(
-    composeNotificationTitle({ contextName: 'Zalando', contextColor: AMBER, dueAt: inMin(30) }, 'spawn', NOW),
-    '🟠 Zalando · new',
+    composeNotificationTitle(
+      { contextName: 'Payments', contextColor: AMBER, dueAt: inMin(30) },
+      'spawn',
+      NOW,
+    ),
+    '🟠 Payments · new',
   );
 });
 
 test('spawn · context yes · due no → · new', () => {
   assert.equal(
-    composeNotificationTitle({ contextName: 'Zalando', contextColor: AMBER, dueAt: null }, 'spawn', NOW),
-    '🟠 Zalando · new',
+    composeNotificationTitle(
+      { contextName: 'Payments', contextColor: AMBER, dueAt: null },
+      'spawn',
+      NOW,
+    ),
+    '🟠 Payments · new',
   );
 });
 
 test('spawn · context no · due yes → new', () => {
   assert.equal(
-    composeNotificationTitle({ contextName: null, contextColor: null, dueAt: inMin(30) }, 'spawn', NOW),
+    composeNotificationTitle(
+      { contextName: null, contextColor: null, dueAt: inMin(30) },
+      'spawn',
+      NOW,
+    ),
     'new',
   );
 });
@@ -90,7 +129,11 @@ test('spawn · context no · due no → new', () => {
 
 test('reminder · overdue', () => {
   assert.equal(
-    composeNotificationTitle({ contextName: 'Home', contextColor: GREEN, dueAt: inMin(-60) }, 'reminder', NOW),
+    composeNotificationTitle(
+      { contextName: 'Home', contextColor: GREEN, dueAt: inMin(-60) },
+      'reminder',
+      NOW,
+    ),
     '🟢 Home · overdue',
   );
 });

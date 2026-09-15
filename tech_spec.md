@@ -30,14 +30,16 @@ REST і MCP — тонкі шари над спільним service layer (`serv
 ## 2. Схема БД (Neon Postgres)
 
 ```sql
--- Контексти редаговані з Settings, не enum
+-- Контексти редаговані з drawer / меню контексту, не enum
 CREATE TABLE contexts (
   id          serial PRIMARY KEY,
-  slug        text UNIQUE NOT NULL,          -- 'zt', 'da', 'cairn', 'zalando', 'home'
+  slug        text UNIQUE NOT NULL,          -- 'work', 'home'
   label       text NOT NULL,
   color       text NOT NULL,                 -- '#5B8DEF'
   sort_order  int  NOT NULL DEFAULT 0,
-  archived    boolean NOT NULL DEFAULT false
+  archived    boolean NOT NULL DEFAULT false,
+  exclude_from_all boolean NOT NULL DEFAULT false, -- 0004: hidden from "All"
+  emoji       text                              -- 0013: nullable; fallback derived from color
 );
 
 CREATE TABLE tasks (
@@ -53,7 +55,8 @@ CREATE TABLE tasks (
   recurrence_id uuid REFERENCES recurrence_rules(id),  -- інстанс якого правила
   completed_at  timestamptz,
   created_at    timestamptz NOT NULL DEFAULT now(),
-  created_via   text CHECK (created_via IN ('app','mcp')) DEFAULT 'app'
+  created_via   text CHECK (created_via IN ('app','mcp')) DEFAULT 'app',
+  note          text                         -- 0014: nullable; replaces comments (ADR 0006)
 );
 CREATE INDEX idx_tasks_open ON tasks (status, context_id) WHERE status != 'done';
 
@@ -69,12 +72,7 @@ CREATE TABLE recurrence_rules (
   last_spawned  date                         -- захист від дублів
 );
 
-CREATE TABLE comments (
-  id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  task_id    uuid REFERENCES tasks(id) ON DELETE CASCADE,
-  body       text NOT NULL,
-  created_at timestamptz NOT NULL DEFAULT now()
-);
+-- comments: dropped in 0015 (ADR 0006); replaced by tasks.note
 
 -- DESCOPED (see STATUS.md): photos were never implemented; the table was dropped
 -- in migration 0008 and `photosCount` removed from the Task contract.
@@ -149,17 +147,16 @@ POST   /auth/pin               { pin }   → { jwt }        (PIN задаєть�
 POST   /auth/refresh           { refresh } → { jwt }
 
 GET    /api/contexts
-POST   /api/contexts           { label, color }
-PATCH  /api/contexts/:id       { label?, color?, archived? }
+POST   /api/contexts           { label, color, slug?, excludeFromAll?, emoji? }
+PATCH  /api/contexts/:id       { label?, color?, archived?, excludeFromAll?, emoji? (nullable, один графем) }
+POST   /api/contexts/reorder   { ids: number[] } → повний список; чужі id пропускаються
 
 GET    /api/tasks?context=&status=          (сортовано по sort_*)
-POST   /api/tasks              { title, context_id?, priority?, due_at?, remind_at?, recurrence? }
-PATCH  /api/tasks/:id          (будь-які поля; { completed: true } → complete-логіка)
+POST   /api/tasks              { title, contextId?, dueAt?, remindAt?, durationMin?, recurrence?, note? }
+PATCH  /api/tasks/:id          (будь-які поля вкл. note (nullable); { completed: true } → complete-логіка)
 DELETE /api/tasks/:id
 POST   /api/tasks/:id/reorder  { after_id?, before_id?, scope: 'global'|'context' }
 
-POST   /api/tasks/:id/comments { body }
-DELETE /api/comments/:id
 POST   /api/tasks/:id/photos   → DESCOPED, never implemented (see STATUS.md)
 DELETE /api/photos/:id         → DESCOPED, never implemented
 
@@ -183,22 +180,31 @@ DELETE /api/data               { confirm: 'RESET' } → wipe всіх табли
 
 Endpoint: `POST /mcp` (Streamable HTTP), auth: `Authorization: Bearer <довгий статичний токен>` (env `MCP_TOKEN`, 32+ байти). Rate limit 60 req/min. Усі write-операції логуються.
 
+Час у MCP: `due_at` / `remind_at` — ISO 8601; значення без зсуву трактується як локальний час
+Europe/Warsaw (`2026-09-15T18:00`), зі зсувом або `Z` — як вказано. У відповідях усі часи
+друкуються у Warsaw (`due 2026-09-15 18:00`). Реалізація: `server/src/lib/when.ts`.
+
 Tools ("товсті", один виклик = повна дія):
 
 ```
-create_task     { title, context?, priority?, due_at?, remind_at?,
-                  recurrence? { rule, remind_time }, comment? }
-                → створює задачу + правило (якщо recurrence) + одразу коментар
-update_task     { id | title_match, patch }     -- title_match: пошук по назві, щоб
+create_task     { title, context?, due_at?, remind_at?, duration_min?,
+                  recurrence? { freq, days?, day_of_month?, remind_time? }, note? }
+                → створює задачу + правило (якщо recurrence) + нотатку
+update_task     { id | title_match, title?, context?, due_at?, remind_at?,
+                  duration_min?, status?, recurrence?, note? (null очищає) }
+append_note     { id | title_match, text }       → дописує до note через порожній рядок
+                                                -- title_match: пошук по назві, щоб
 complete_task   { id | title_match }               я міг "закрий задачу про іпотеку"
 delete_task     { id | title_match }
 list_tasks      { context?, status?, due_before?, overdue? }
 get_today       {} → задачі на сьогодні + рутина + активний таймер
-add_comment     { task: id|title_match, body }
 add_routine     { title, time_hint? }
 start_timer     { task: id|title_match }
 stop_timer      {}
-list_contexts   {}
+list_contexts   {}                                → рядок на контекст: `<emoji> <slug> — <label> (<color>)`
+create_context  { label, color (#RRGGBB), emoji?, exclude_from_all? }
+update_context  { slug, label?, color?, emoji? (null очищає), exclude_from_all? }
+delete_context  { slug }
 ```
 
 `title_match`: fuzzy-пошук по відкритих задачах; якщо збігів > 1 — tool повертає кандидатів, я перепитаю тебе в чаті.

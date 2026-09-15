@@ -1,35 +1,52 @@
-// Design tokens transcribed from design/uploads/claude_design_brief.md.
-// Source of truth for any conflict: the .dc.html bundles. Dark theme only.
+// Design tokens from the redesign canvas (13 artboards). Dark theme only.
 
 export const colors = {
   bgBase: '#0B0E13', // page
-  bgSurface: '#14181F', // phone frame / main
-  bgCard: '#1C222C', // task cards, inputs (mobile)
+  bgSurface: '#12171E', // phone frame / main
+  bgCard: '#161B22', // task cards, inputs (mobile)
   bgCardWeb: '#171C24', // task cards (web)
   bgElevated: '#262D39', // badges, secondary buttons
-  borderSubtle: '#262D39',
-  borderStrong: '#3A4150',
-  textPrimary: '#EDEFF3',
-  textSecondary: '#8B93A3',
-  textMuted: '#5A6272',
+  bgControl: '#151B23', // icon buttons, chips
+  bgPopover: '#171E27',
+  borderSubtle: '#1F2630',
+  borderStrong: '#242B35',
+  borderControl: '#222934', // icon buttons, chips
+  borderPopover: '#2C3644',
+  handle: '#2B333F', // sheet grab handle
+  scrim: 'rgba(4,6,10,0.7)',
+  textPrimary: '#E9EEF4',
+  textSecondary: '#7A8492',
+  textControl: '#8B95A2', // chip labels, secondary icons
+  textMuted: '#4E5865',
   textFaint: '#3A4150',
-  accentPrimary: '#E8A33D', // amber — CTA, active tab, "today"
-  accentTimer: '#4FB6A9', // teal — active timer, done
+  accentPrimary: '#E9A23B', // amber — CTA, active tab, "today"
+  accentTimer: '#3FC9A8', // teal — active timer, done
   accentReminder: '#9B7EDE', // violet — reminders
-  accentNow: '#D9668B', // rose — "now" line
+  accentNow: '#E8608C', // rose — "now" line, overdue
 } as const;
 
+export type Palette = Record<keyof typeof colors, string>;
+
 export const radius = {
-  card: 12, // rounded-xl
-  sheet: 24, // sheet/modal top radius
+  card: 14,
+  sheet: 20, // sheet/modal top radius
+  popover: 16,
 } as const;
 
 export const contextStripWidth = 3; // border-left px on each card
 
-export const fonts = {
-  ui: 'Inter',
-  mono: 'JetBrainsMono',
-} as const;
+export const contextPalette = [
+  '#5B8DEF',
+  '#4FB6A9',
+  '#E8A33D',
+  '#D9668B',
+  '#9B7EDE',
+  '#E0574B',
+  '#6BBF59',
+  '#4AA3D9',
+  '#C77DD6',
+  '#8B93A3',
+] as const;
 
 // The two work contexts seeded into a new account. Colors are used consistently everywhere.
 export const seedContexts = [

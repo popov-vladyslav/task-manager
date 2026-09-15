@@ -3,7 +3,6 @@ import { z } from 'zod';
 import type { TaskStatus } from '@task-manager/shared';
 import * as svc from '../services/tasks';
 import { requireUserId } from '../middleware/auth';
-import * as commentsSvc from '../services/comments';
 import { isValidRule } from '../lib/recurrence';
 
 const router = Router();
@@ -23,6 +22,7 @@ const createSchema = z.object({
   remindAt: z.string().nullish(),
   durationMin: z.number().int().positive().nullish(),
   recurrence: recurrenceSchema.nullish(),
+  note: z.string().nullish(),
 });
 
 const updateSchema = z.object({
@@ -34,6 +34,7 @@ const updateSchema = z.object({
   durationMin: z.number().int().positive().nullable().optional(),
   completed: z.boolean().optional(),
   recurrence: recurrenceSchema.nullish(),
+  note: z.string().nullable().optional(),
 });
 
 const reorderSchema = z.object({
@@ -79,15 +80,6 @@ router.post('/:id/reorder', async (req, res) => {
 router.post('/:id/snooze', async (req, res) => {
   const { minutes } = z.object({ minutes: z.number().int().positive() }).parse(req.body);
   res.json(await svc.snoozeTask(requireUserId(req), req.params.id, minutes));
-});
-
-router.get('/:id/comments', async (req, res) => {
-  res.json(await commentsSvc.listComments(requireUserId(req), req.params.id));
-});
-
-router.post('/:id/comments', async (req, res) => {
-  const { body } = z.object({ body: z.string().min(1) }).parse(req.body);
-  res.status(201).json(await commentsSvc.addComment(requireUserId(req), req.params.id, body));
 });
 
 export default router;

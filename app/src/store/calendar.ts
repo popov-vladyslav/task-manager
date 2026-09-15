@@ -35,7 +35,6 @@ interface CalendarState {
   goToDay: (d: Date) => void; // tap a month cell → day view
   goToToday: () => void;
   moveBlock: (id: string, newStartISO: string) => Promise<void>;
-  createAt: (title: string, startISO: string, durationMin: number) => Promise<void>;
 }
 
 export const useCalendarStore = create<CalendarState>((set, get) => ({
@@ -124,13 +123,5 @@ export const useCalendarStore = create<CalendarState>((set, get) => ({
     } catch {
       set({ data: prev }); // rollback
     }
-  },
-
-  async createAt(title, startISO, durationMin) {
-    const t = title.trim();
-    if (!t) return;
-    await api.createTask({ title: t, dueAt: startISO, durationMin });
-    await get().load();
-    useTasksStore.getState().load();
   },
 }));

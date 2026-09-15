@@ -12,16 +12,14 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { ChevronLeft, ChevronRight } from 'lucide-react-native';
-import { DEFAULT_DURATION_MIN, type CalendarBlock, type Task } from '@task-manager/shared';
+import { DEFAULT_DURATION_MIN, type CalendarBlock } from '@task-manager/shared';
 import { colors, monoFont, WIDE_BREAKPOINT } from '../../theme';
 import { haptics } from '../../lib/haptics';
 import { useCalendarStore } from '../../store/calendar';
 import { useTasksStore } from '../../store/tasks';
 import { useRefreshOnFocus } from '../../lib/use-refresh-on-focus';
-import { SideNavLinks } from '../nav/nav-chrome';
-import { useAuthStore } from '../../store/auth';
-import { api } from '../../lib/api';
-import { TaskDetail } from '../tasks/task-detail';
+import { WideSidebar } from '../nav/wide-sidebar';
+import { useTaskCard } from '../tasks/task-card-host';
 import {
   HOUR_END,
   HOUR_H,
@@ -39,7 +37,7 @@ import {
 import { DragPreview, overlayHeightForMin } from './calendar-overlay';
 import { resolveDrop } from './use-calendar-gestures';
 import { layoutDayBlocks } from './calendar-layout';
-import { NewTaskSheet } from '../tasks/new-task-sheet';
+import { QuickCreateSheet } from '../tasks/quick-create-sheet';
 
 const LABEL_W = 44;
 const HOURS = Array.from({ length: HOUR_END - HOUR_START }, (_, i) => HOUR_START + i);
@@ -74,15 +72,17 @@ export function CalendarScreen() {
   } = useCalendarStore();
   const contexts = useTasksStore((s) => s.contexts);
 
-  const [detailTask, setDetailTask] = useState<Task | null>(null);
-  // Stable so the timeline's per-block tap gesture can be memoized against it.
-  const openBlock = useCallback(async (taskId: string) => {
-    try {
-      setDetailTask(await api.getTask(taskId));
-    } catch {
-      /* ignore — task may have been deleted */
+  const { openTask, taskCardNode } = useTaskCard();
+  const openBlock = useCallback((taskId: string) => openTask(taskId), [openTask]);
+  const storeTasks = useTasksStore((s) => s.tasks);
+  const firstTasks = useRef(true);
+  useEffect(() => {
+    if (firstTasks.current) {
+      firstTasks.current = false;
+      return;
     }
-  }, []);
+    load({ silent: true });
+  }, [storeTasks, load]);
 
   useEffect(() => {
     hydrateMode(); // restore last-selected mode (defaults to Day), then load
@@ -174,43 +174,18 @@ export function CalendarScreen() {
       />
     );
 
-  const detailModal = detailTask ? (
-    <TaskDetail
-      task={detailTask}
-      contexts={contexts}
-      onClose={() => setDetailTask(null)}
-      onPatch={async (id, patch) => {
-        await useTasksStore.getState().patchTask(id, patch);
-        const fresh = await api.getTask(id).catch(() => null);
-        if (fresh) setDetailTask(fresh);
-        load();
-      }}
-      onDelete={async (id) => {
-        await useTasksStore.getState().removeTask(id);
-        setDetailTask(null);
-        load();
-      }}
-    />
-  ) : null;
-
   // ---- WEB / WIDE: sidebar + main ----
   if (wide) {
     return (
       <>
         <View style={styles.wideRoot}>
-          <View style={[styles.sidebar, { paddingTop: insets.top + 16 }]}>
-            <SideNavLinks />
-            <View style={styles.flex1} />
-            <Pressable onPress={() => useAuthStore.getState().signOut()} style={styles.signOutBtn}>
-              <Text style={styles.signOutText}>Sign out</Text>
-            </Pressable>
-          </View>
+          <WideSidebar />
           <View style={[styles.wideMain, { paddingTop: insets.top + 24 }]}>
             {header}
             <View style={styles.flex1}>{body}</View>
           </View>
         </View>
-        {detailModal}
+        {taskCardNode}
       </>
     );
   }
@@ -224,7 +199,7 @@ export function CalendarScreen() {
           <View style={styles.flex1}>{body}</View>
         </View>
       </View>
-      {detailModal}
+      {taskCardNode}
     </>
   );
 }
@@ -256,7 +231,6 @@ function Timeline({
   const scrollRef = useRef<ScrollView>(null);
 
   const moveBlock = useCalendarStore((s) => s.moveBlock);
-  const createAt = useCalendarStore((s) => s.createAt);
   const [gridW, setGridW] = useState(0);
   const [drag, setDrag] = useState<null | {
     id: string;
@@ -272,6 +246,10 @@ function Timeline({
     top: number;
     day: Date;
   }>(null);
+  const draftInitial = useMemo(
+    () => (draft ? { dueAt: draft.startISO, durationMin: DEFAULT_DURATION_MIN } : undefined),
+    [draft],
+  );
   const colW = gridW > 0 ? (gridW - LABEL_W) / days.length : 0;
 
   // Pinch-to-zoom the timeline: hour height is state, scaled by a two-finger
@@ -528,14 +506,12 @@ function Timeline({
           </GestureDetector>
         </ScrollView>
       </View>
-      {draft ? (
-        <NewTaskSheet
-          startISO={draft.startISO}
-          durationMin={DEFAULT_DURATION_MIN}
-          onCreate={createAt}
-          onClose={() => setDraft(null)}
-        />
-      ) : null}
+      <QuickCreateSheet
+        open={draft !== null}
+        initial={draftInitial}
+        onClose={() => setDraft(null)}
+        onCreated={() => load()}
+      />
     </View>
   );
 }
@@ -764,16 +740,6 @@ const styles = StyleSheet.create({
   modeBtnText: { fontSize: 12.5 },
   // CalendarScreen — wide/mobile layout
   wideRoot: { flex: 1, flexDirection: 'row', backgroundColor: colors.bgBase },
-  sidebar: {
-    width: 240,
-    paddingHorizontal: 16,
-    paddingBottom: 16,
-    backgroundColor: '#10141B',
-    borderRightWidth: 1,
-    borderRightColor: colors.bgCard,
-  },
-  signOutBtn: { paddingHorizontal: 8, paddingVertical: 8 },
-  signOutText: { fontSize: 12, color: colors.textMuted },
   wideMain: { flex: 1, paddingHorizontal: 24 },
   mobileRoot: { flex: 1, backgroundColor: colors.bgSurface },
   mobileInner: { paddingHorizontal: 16, flex: 1 },

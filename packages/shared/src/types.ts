@@ -23,6 +23,7 @@ export interface Context {
   // When true, this context's tasks are hidden from the "All" view and the
   // Calendar; reachable only by selecting the context's own chip.
   excludeFromAll: boolean;
+  emoji: string | null;
 }
 
 export interface Task {
@@ -46,8 +47,8 @@ export interface Task {
   completedAt: string | null;
   createdAt: string;
   createdVia: CreatedVia;
+  note: string | null;
   // Derived fields for the list/detail UI (populated by the service layer):
-  commentsCount: number;
   nextInstance: string | null; // computed from the recurrence rule, when recurring
 }
 
@@ -64,6 +65,7 @@ export interface CreateTaskInput {
   remindAt?: string | null;
   durationMin?: number | null;
   recurrence?: RecurrenceInput | null;
+  note?: string | null;
 }
 
 export interface UpdateTaskInput {
@@ -75,10 +77,7 @@ export interface UpdateTaskInput {
   durationMin?: number | null;
   completed?: boolean; // true => run complete-logic
   recurrence?: RecurrenceInput | null; // set/change a rule, or null to remove
-}
-
-export interface CreateCommentInput {
-  body: string;
+  note?: string | null;
 }
 
 export interface ReorderInput {
@@ -92,6 +91,7 @@ export interface CreateContextInput {
   color: string;
   slug?: string;
   excludeFromAll?: boolean;
+  emoji?: string | null;
 }
 
 export interface UpdateContextInput {
@@ -99,13 +99,7 @@ export interface UpdateContextInput {
   color?: string;
   archived?: boolean;
   excludeFromAll?: boolean;
-}
-
-export interface Comment {
-  id: string;
-  taskId: string;
-  body: string;
-  createdAt: string;
+  emoji?: string | null;
 }
 
 // Timer — at most one running entry at a time (one_running_timer unique index).

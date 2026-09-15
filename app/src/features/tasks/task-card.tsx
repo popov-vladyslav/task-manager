@@ -1,14 +1,7 @@
-import { memo, useEffect, useRef, useState, type ReactNode } from 'react';
-import {
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-  type GestureResponderEvent,
-} from 'react-native';
+import { memo, useRef, type ReactNode } from 'react';
+import { Pressable, StyleSheet, Text, View, type GestureResponderEvent } from 'react-native';
 import Swipeable, { type SwipeableMethods } from 'react-native-gesture-handler/ReanimatedSwipeable';
-import { Bell, Clock, Info, MessageSquare, Play, Repeat, Timer, Trash2 } from 'lucide-react-native';
+import { AlignLeft, Bell, Clock, Play, Repeat, Timer, Trash2 } from 'lucide-react-native';
 import { formatTrackedShort, type Context, type Task } from '@task-manager/shared';
 import {
   colors,
@@ -18,7 +11,6 @@ import {
   radius,
   shortDate,
   shortTime,
-  webInputReset,
 } from '../../theme';
 import { useTimerStore } from '../../store/timer';
 
@@ -30,8 +22,7 @@ interface Props {
   // Handlers take the task/id so the parent can pass stable (useCallback) refs and
   // keep the memo effective — closing over `task` per row would defeat it.
   onToggle: (task: Task) => void;
-  onOpenDetail: (task: Task) => void; // swipe-right → full detail sheet
-  onPatchTitle: (id: string, title: string) => void; // commit the inline title edit
+  onOpenDetail: (task: Task) => void;
   onDelete: (id: string) => void; // swipe-left → delete
   onDrag?: () => void; // long-press the card to start a reorder drag
 }
@@ -45,31 +36,20 @@ function Badge({ icon, text, color }: { icon: ReactNode; text: string; color: st
   );
 }
 
-function TaskCardBase({
-  task,
-  context,
-  onToggle,
-  onOpenDetail,
-  onPatchTitle,
-  onDelete,
-  onDrag,
-}: Props) {
+function TaskCardBase({ task, context, onToggle, onOpenDetail, onDelete, onDrag }: Props) {
   const color = context?.color ?? colors.textMuted;
   const due = shortDate(task.dueAt);
+  const overdue =
+    !!task.dueAt && task.status !== 'done' && new Date(task.dueAt).getTime() < Date.now();
+  const dueColor = overdue ? colors.accentNow : colors.textSecondary;
   const remind = shortTime(task.remindAt);
   const next = task.recurrenceId ? nextInstanceLabel(task.nextInstance) : null;
   // Accumulated timer time — compact, and absent entirely when nothing was tracked.
   const tracked = formatTrackedShort(task.trackedSec);
 
   const openTimer = useTimerStore((s) => s.open);
-  const inputRef = useRef<TextInput>(null);
   const swipeRef = useRef<SwipeableMethods>(null);
-  const [title, setTitle] = useState(task.title);
-  // Auto-grow height so the always-rendered input is exactly content-height
-  // (no swap, so focused and blurred are identical — no jump).
-  const [titleHeight, setTitleHeight] = useState<number>();
-
-  useEffect(() => setTitle(task.title), [task.id, task.title]);
+  const title = task.title;
 
   const toggle = (e: GestureResponderEvent) => {
     e.stopPropagation?.();
@@ -81,27 +61,10 @@ function TaskCardBase({
     openTimer(task.id, task.title);
   };
 
-  const commit = () => {
-    const t = title.trim();
-    if (t && t !== task.title) onPatchTitle(task.id, t);
-    else if (!t) setTitle(task.title); // don't allow an empty title
-  };
+  const hasMeta = !!(context || due || remind || next || tracked || task.note);
 
-  const hasMeta = !!(context || due || remind || next || tracked || task.commentsCount);
-
-  // Swipe left → reveal two actions: Details (open the sheet) and Delete.
   const renderRightActions = () => (
     <View style={styles.actions}>
-      <Pressable
-        onPress={() => {
-          swipeRef.current?.close();
-          onOpenDetail(task);
-        }}
-        style={[styles.actionBtn, { backgroundColor: colors.bgElevated }]}
-      >
-        <Info size={16} color={colors.accentPrimary} />
-        <Text style={[styles.actionText, { color: colors.accentPrimary }]}>Details</Text>
-      </Pressable>
       <Pressable
         onPress={() => {
           swipeRef.current?.close();
@@ -115,6 +78,78 @@ function TaskCardBase({
     </View>
   );
 
+  const inner = (
+    <Pressable
+      onPress={() => onOpenDetail(task)}
+      onLongPress={onDrag}
+      delayLongPress={220}
+      style={[styles.card, { borderLeftColor: color }]}
+    >
+      <Pressable
+        onPress={toggle}
+        hitSlop={8}
+        accessibilityRole="checkbox"
+        accessibilityLabel={`Complete ${task.title}`}
+        style={styles.checkbox}
+      />
+
+      <View style={styles.body}>
+        <Text style={styles.titleText}>{title}</Text>
+        {hasMeta ? (
+          <View style={styles.metaRow}>
+            {context ? (
+              <Text style={[styles.contextTag, { color, backgroundColor: `${color}1A` }]}>
+                {context.label}
+              </Text>
+            ) : null}
+            {due ? (
+              <Badge icon={<Clock size={9} color={dueColor} />} text={due} color={dueColor} />
+            ) : null}
+            {remind ? (
+              <Badge
+                icon={<Bell size={9} color={colors.accentReminder} />}
+                text={remind}
+                color={colors.accentReminder}
+              />
+            ) : null}
+            {next ? (
+              <Badge
+                icon={<Repeat size={9} color={colors.textMuted} />}
+                text={next}
+                color={colors.textMuted}
+              />
+            ) : null}
+            {tracked ? (
+              <Badge
+                icon={<Timer size={9} color={colors.accentTimer} />}
+                text={tracked}
+                color={colors.accentTimer}
+              />
+            ) : null}
+            {task.note ? <AlignLeft size={11} color={colors.textMuted} strokeWidth={1.8} /> : null}
+          </View>
+        ) : null}
+      </View>
+
+      {/* Play → full-screen focus timer for this task. */}
+      <Pressable
+        onPress={onPlay}
+        hitSlop={6}
+        accessibilityLabel={`Start timer for ${task.title}`}
+        style={styles.playBtn}
+      >
+        <Play
+          size={11}
+          color={colors.textSecondary}
+          fill={colors.textSecondary}
+          style={styles.playIcon}
+        />
+      </Pressable>
+    </Pressable>
+  );
+
+  if (isWeb) return <View style={styles.swipeContainer}>{inner}</View>;
+
   return (
     <Swipeable
       ref={swipeRef}
@@ -123,101 +158,7 @@ function TaskCardBase({
       overshootFriction={8}
       containerStyle={styles.swipeContainer}
     >
-      <Pressable
-        onPress={() => inputRef.current?.focus()}
-        onLongPress={onDrag}
-        delayLongPress={220}
-        style={[styles.card, { borderLeftColor: color }]}
-      >
-        <Pressable
-          onPress={toggle}
-          hitSlop={8}
-          accessibilityRole="checkbox"
-          accessibilityLabel={`Complete ${task.title}`}
-          style={styles.checkbox}
-        />
-
-        <View style={styles.body}>
-          {/* One always-rendered input, auto-grown to content height. No Text↔input
-              swap, so focus/blur have identical size (no jump); wraps long titles;
-              blurAndSubmit → Enter commits instead of inserting a newline. */}
-          <TextInput
-            ref={inputRef}
-            value={title}
-            onChangeText={setTitle}
-            onBlur={commit}
-            onSubmitEditing={commit}
-            submitBehavior="blurAndSubmit"
-            multiline
-            // Web only: the RN-web <textarea> has a 2-row min-height (dead space);
-            // rows=1 collapses it and onContentSizeChange still grows it to wrap.
-            // On native, numberOfLines truncates a multiline input — so omit it.
-            numberOfLines={isWeb ? 1 : undefined}
-            scrollEnabled={false}
-            onContentSizeChange={(e) => setTitleHeight(e.nativeEvent.contentSize.height)}
-            style={[styles.titleInput, { height: titleHeight }, webInputReset]}
-          />
-          {hasMeta ? (
-            <View style={styles.metaRow}>
-              {context ? (
-                <Text style={[styles.contextTag, { color, backgroundColor: `${color}1A` }]}>
-                  {context.label}
-                </Text>
-              ) : null}
-              {due ? (
-                <Badge
-                  icon={<Clock size={9} color={colors.textSecondary} />}
-                  text={due}
-                  color={colors.textSecondary}
-                />
-              ) : null}
-              {remind ? (
-                <Badge
-                  icon={<Bell size={9} color={colors.accentReminder} />}
-                  text={remind}
-                  color={colors.accentReminder}
-                />
-              ) : null}
-              {next ? (
-                <Badge
-                  icon={<Repeat size={9} color={colors.textMuted} />}
-                  text={next}
-                  color={colors.textMuted}
-                />
-              ) : null}
-              {tracked ? (
-                <Badge
-                  icon={<Timer size={9} color={colors.accentTimer} />}
-                  text={tracked}
-                  color={colors.accentTimer}
-                />
-              ) : null}
-              {task.commentsCount > 0 ? (
-                <Badge
-                  icon={<MessageSquare size={9} color={colors.textMuted} />}
-                  text={String(task.commentsCount)}
-                  color={colors.textMuted}
-                />
-              ) : null}
-            </View>
-          ) : null}
-        </View>
-
-        {/* Play → full-screen focus timer for this task. */}
-        <Pressable
-          onPress={onPlay}
-          hitSlop={6}
-          accessibilityLabel={`Start timer for ${task.title}`}
-          style={styles.playBtn}
-        >
-          <Play
-            size={11}
-            color={colors.textSecondary}
-            fill={colors.textSecondary}
-            style={styles.playIcon}
-          />
-        </Pressable>
-      </Pressable>
+      {inner}
     </Swipeable>
   );
 }
@@ -254,12 +195,7 @@ const styles = StyleSheet.create({
     borderColor: colors.borderStrong,
   },
   body: { flex: 1, minWidth: 0 },
-  titleInput: {
-    fontSize: 14,
-    lineHeight: 19,
-    color: colors.textPrimary,
-    padding: 0,
-  },
+  titleText: { fontSize: 14, lineHeight: 19, color: colors.textPrimary },
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6, flexWrap: 'wrap' },
   contextTag: {
     fontFamily: monoFont,

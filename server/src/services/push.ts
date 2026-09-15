@@ -101,6 +101,7 @@ export async function sendReminders(now: Date = new Date()): Promise<number> {
       dueAt: tasks.dueAt,
       contextName: contexts.label,
       contextColor: contexts.color,
+      contextEmoji: contexts.emoji,
     })
     .from(tasks)
     .leftJoin(contexts, eq(tasks.contextId, contexts.id))
@@ -133,7 +134,12 @@ export async function sendReminders(now: Date = new Date()): Promise<number> {
     },
     send: async (t) => {
       const title = composeNotificationTitle(
-        { contextName: t.contextName, contextColor: t.contextColor, dueAt: t.dueAt },
+        {
+          contextName: t.contextName,
+          contextColor: t.contextColor,
+          contextEmoji: t.contextEmoji,
+          dueAt: t.dueAt,
+        },
         'reminder',
         now,
       );
@@ -182,6 +188,7 @@ export async function sendDueNotifications(now: Date = new Date()): Promise<numb
       dueAt: tasks.dueAt,
       contextName: contexts.label,
       contextColor: contexts.color,
+      contextEmoji: contexts.emoji,
     })
     .from(tasks)
     .leftJoin(contexts, eq(tasks.contextId, contexts.id))
@@ -214,7 +221,12 @@ export async function sendDueNotifications(now: Date = new Date()): Promise<numb
     },
     send: async (t) => {
       const title = composeNotificationTitle(
-        { contextName: t.contextName, contextColor: t.contextColor, dueAt: t.dueAt },
+        {
+          contextName: t.contextName,
+          contextColor: t.contextColor,
+          contextEmoji: t.contextEmoji,
+          dueAt: t.dueAt,
+        },
         'reminder',
         now,
       );
@@ -263,7 +275,8 @@ export async function repeatReminders(now: Date = new Date()): Promise<number> {
     const cutoff = new Date(now.getTime() - hours * 3_600_000);
 
     const result = await db.execute(sql`
-      select t.id, t.title, t.due_at, c.label as context_name, c.color as context_color
+      select t.id, t.title, t.due_at, c.label as context_name, c.color as context_color,
+             c.emoji as context_emoji
       from tasks t
       left join contexts c on c.id = t.context_id
       where t.status = 'active'
@@ -280,11 +293,17 @@ export async function repeatReminders(now: Date = new Date()): Promise<number> {
       due_at: Date | string | null;
       context_name: string | null;
       context_color: string | null;
+      context_emoji: string | null;
     }[];
 
     for (const r of rows) {
       const title = composeNotificationTitle(
-        { contextName: r.context_name, contextColor: r.context_color, dueAt: r.due_at },
+        {
+          contextName: r.context_name,
+          contextColor: r.context_color,
+          contextEmoji: r.context_emoji,
+          dueAt: r.due_at,
+        },
         'reminder',
         now,
       );

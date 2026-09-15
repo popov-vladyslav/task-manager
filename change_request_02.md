@@ -55,7 +55,7 @@ Body is always the task title (plain, no time or metadata appended).
 
 **Special cases:**
 - If the notification is a "new recurring instance spawned" (not a reminder), replace `{relative_time}` with the literal word `new`:
-  - `🟠 Zalando · new`
+  - `🟠 Payments · new`
   - Applies whether or not `due_date` is set.
 - If `due_date` is in the past, `{relative_time}` becomes `overdue` (no "by X hours" — keep it short).
 
@@ -72,10 +72,10 @@ Body is always the task title (plain, no time or metadata appended).
 Nearest-color mapping should be done once at composition time (simple RGB distance is fine).
 
 **Examples:**
-- `🔵 Zoolatech · in 30 min` / `Standup with team`
-- `🟠 Zalando · now` / `Write 360 review for Paul`
+- `🔵 Work · in 30 min` / `Standup with team`
+- `🟠 Payments · now` / `Write 360 review for Paul`
 - `🟢 Home · overdue` / `Buy milk`
-- `🟠 Zalando · new` / `Weekly PDP review` (recurring spawn, has context, no due date)
+- `🟠 Payments · new` / `Weekly PDP review` (recurring spawn, has context, no due date)
 - `in 15 min` / `Call Illia` (no context)
 - `Task` / `Reminder` (no context, no due date — extreme fallback, rare)
 

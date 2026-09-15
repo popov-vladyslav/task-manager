@@ -6,7 +6,6 @@ import { eq, sql } from 'drizzle-orm';
 import { closePool, mcpCall, resetDb, startTestServer, type TestServer } from './harness';
 import { db } from '../db/client';
 import {
-  comments,
   contexts,
   loginCodes,
   mcpTokens,
@@ -84,11 +83,6 @@ async function populate(account: Account): Promise<void> {
   });
   const { id: taskId } = (await created.json()) as { id: string };
 
-  await fetch(`${server.baseUrl}/api/tasks/${taskId}/comments`, {
-    method: 'POST',
-    headers: account.headers,
-    body: JSON.stringify({ body: 'doomed comment' }),
-  });
   await fetch(`${server.baseUrl}/api/timer/start`, {
     method: 'POST',
     headers: account.headers,
@@ -158,7 +152,6 @@ test('deleting wipes every table the account owned', async () => {
       'recurrence_rules',
       await db.select().from(recurrenceRules).where(eq(recurrenceRules.userId, doomed.id)),
     ],
-    ['comments', await db.select().from(comments).where(eq(comments.userId, doomed.id))],
     ['time_entries', await db.select().from(timeEntries).where(eq(timeEntries.userId, doomed.id))],
     [
       'notification_log',

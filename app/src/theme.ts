@@ -1,6 +1,7 @@
-import { colors, radius, contextStripWidth } from '@task-manager/shared';
+import { colors, radius, contextStripWidth, type Palette } from '@task-manager/shared';
 
 export { colors, radius, contextStripWidth };
+export type { Palette };
 
 // Width (px) at/above which the app switches from the mobile layout (bottom tab
 // bar) to the wide/web layout (sidebar). Shared by every responsive screen.
@@ -18,6 +19,24 @@ export const monoFont =
     : process.env.EXPO_OS === 'android'
       ? 'monospace'
       : 'ui-monospace, SFMono-Regular, Menlo, monospace';
+
+export interface Theme {
+  colors: Palette;
+  radius: typeof radius;
+  fonts: { mono: string };
+  sizes: { contextStripWidth: number; wideBreakpoint: number };
+}
+
+const theme: Theme = {
+  colors,
+  radius,
+  fonts: { mono: monoFont },
+  sizes: { contextStripWidth, wideBreakpoint: WIDE_BREAKPOINT },
+};
+
+export function useTheme(): Theme {
+  return theme;
+}
 
 export function headerDate(d: Date = new Date()): string {
   // e.g. "TUE, JUL 15"

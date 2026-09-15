@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type ComponentType } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Modal,
@@ -10,73 +10,30 @@ import {
   TextInput,
   useWindowDimensions,
   View,
-  type TextInputProps,
 } from 'react-native';
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Swipeable, { type SwipeableMethods } from 'react-native-gesture-handler/ReanimatedSwipeable';
-import {
-  BottomSheetModal,
-  BottomSheetScrollView,
-  BottomSheetBackdrop,
-  BottomSheetTextInput,
-  type BottomSheetBackdropProps,
-} from '@gorhom/bottom-sheet';
 import { useRouter } from 'expo-router';
 import * as Updates from 'expo-updates';
 import { useUpdates } from 'expo-updates';
-import { ChevronRight, EyeOff, Plus, RefreshCw, Trash2, X } from 'lucide-react-native';
-import type { Context } from '@task-manager/shared';
+import { ChevronRight, RefreshCw, Trash2 } from 'lucide-react-native';
 import { api, type McpTokenMetadata } from '../../lib/api';
 import { API_URL } from '../../lib/config';
 import { useRefreshOnFocus } from '../../lib/use-refresh-on-focus';
 import { colors, headerDate, monoFont, webInputReset, WIDE_BREAKPOINT } from '../../theme';
 import { useTasksStore } from '../../store/tasks';
 import { useAuthStore } from '../../store/auth';
-import { SideNavLinks } from '../nav/nav-chrome';
+import { WideSidebar } from '../nav/wide-sidebar';
 
 const isWeb = process.env.EXPO_OS === 'web';
 const isIOS = process.env.EXPO_OS === 'ios';
-
-// Curated context palette — the five seeded colors plus a few extra accents.
-// Free-form color entry isn't worth a picker dependency for a single-user app.
-const PALETTE = [
-  '#5B8DEF',
-  '#4FB6A9',
-  '#E8A33D',
-  '#D9668B',
-  '#9B7EDE',
-  '#E0574B',
-  '#6BBF59',
-  '#4AA3D9',
-  '#C77DD6',
-  '#8B93A3',
-];
-
-type InputComponent = ComponentType<TextInputProps>;
-
-// BottomSheetTextInput coordinates the keyboard with the sheet on native, but on
-// web it calls TextInput.State.currentlyFocusedInput (missing in react-native-web)
-// and crashes — so use a plain TextInput inside the sheet on web.
-const SheetInput: InputComponent = isWeb ? TextInput : BottomSheetTextInput;
 
 export function SettingsScreen() {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const wide = width >= WIDE_BREAKPOINT;
-  const contexts = useTasksStore((s) => s.contexts);
-
-  // Robust on a direct deep-link / web refresh onto /settings: the tasks store
-  // loads lazily on the Tasks screen, so ensure contexts exist here too.
-  useEffect(() => {
-    if (useTasksStore.getState().contexts.length === 0) {
-      void useTasksStore.getState().load();
-    }
-  }, []);
-
   const sections = (
     <>
-      <ContextsSection contexts={contexts} />
       <NotificationsSection />
       <AccountSection />
       <McpTokenSection />
@@ -89,16 +46,7 @@ export function SettingsScreen() {
   if (wide) {
     return (
       <View style={styles.wideRoot}>
-        <View style={[styles.sidebar, { paddingTop: insets.top + 16 }]}>
-          <SideNavLinks />
-          <View style={styles.flex1} />
-          <Pressable
-            onPress={() => useAuthStore.getState().signOut()}
-            style={styles.sidebarSignOut}
-          >
-            <Text style={styles.sidebarSignOutText}>Sign out</Text>
-          </Pressable>
-        </View>
+        <WideSidebar />
         <View style={[styles.wideMain, { paddingTop: insets.top + 24 }]}>
           <Text style={styles.wideTitle}>Settings</Text>
           <ScrollView
@@ -133,300 +81,6 @@ export function SettingsScreen() {
         </ScrollView>
       </View>
     </KeyboardAvoidingView>
-  );
-}
-
-function ContextsSection({ contexts }: { contexts: Context[] }) {
-  // A context being edited, 'new' for the add form, or null.
-  const [editing, setEditing] = useState<Context | 'new' | null>(null);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
-
-  const remove = async (id: number) => {
-    setDeleteError(null);
-    try {
-      await useTasksStore.getState().deleteContext(id);
-    } catch (e) {
-      // 409 when tasks still reference it — surface the server's count message.
-      setDeleteError(e instanceof Error ? e.message : 'Could not delete context');
-    }
-  };
-
-  return (
-    <View style={styles.sectionTop}>
-      <SectionLabel>CONTEXTS</SectionLabel>
-      <View style={styles.contextList}>
-        {contexts.map((c) => (
-          <ContextRow
-            key={c.id}
-            context={c}
-            onPress={() => setEditing(c)}
-            onDelete={() => remove(c.id)}
-          />
-        ))}
-
-        <Pressable onPress={() => setEditing('new')} style={styles.addContextBtn}>
-          <Plus size={15} color={colors.accentPrimary} />
-          <Text style={styles.addContextText}>Add context</Text>
-        </Pressable>
-      </View>
-
-      {deleteError ? <Text style={styles.deleteErrorText}>{deleteError}</Text> : null}
-      <Text style={styles.hintText}>
-        {isWeb ? 'Tap a context to edit.' : 'Swipe a row left to delete. Tap to edit.'}
-      </Text>
-
-      {editing ? (
-        <ContextEditor
-          context={editing === 'new' ? undefined : editing}
-          onClose={() => setEditing(null)}
-        />
-      ) : null}
-    </View>
-  );
-}
-
-function ContextRow({
-  context,
-  onPress,
-  onDelete,
-}: {
-  context: Context;
-  onPress: () => void;
-  onDelete: () => void;
-}) {
-  const swipeRef = useRef<SwipeableMethods>(null);
-
-  const inner = (
-    <Pressable onPress={onPress} style={styles.contextRow}>
-      <View style={[styles.contextDot, { backgroundColor: context.color }]} />
-      <Text style={styles.contextLabel} numberOfLines={1}>
-        {context.label}
-      </Text>
-      {context.excludeFromAll ? (
-        <View style={styles.hiddenBadge}>
-          <EyeOff size={11} color={colors.textMuted} />
-          <Text style={styles.hiddenText}>hidden</Text>
-        </View>
-      ) : null}
-      <Text style={styles.contextSlug}>{context.slug}</Text>
-    </Pressable>
-  );
-
-  // Web keeps tap-to-edit only (swipe is a touch gesture); mobile adds swipe-left → Delete.
-  if (isWeb) return inner;
-
-  return (
-    <Swipeable
-      ref={swipeRef}
-      renderRightActions={() => (
-        <Pressable
-          onPress={() => {
-            swipeRef.current?.close();
-            onDelete();
-          }}
-          style={styles.swipeDelete}
-        >
-          <Trash2 size={16} color={colors.bgSurface} />
-          <Text style={styles.swipeDeleteText}>Delete</Text>
-        </Pressable>
-      )}
-      rightThreshold={40}
-      overshootFriction={8}
-    >
-      {inner}
-    </Swipeable>
-  );
-}
-
-// Bottom sheet on mobile, centered modal on web/wide — mirrors TaskDetail.
-function ContextEditor({ context, onClose }: { context?: Context; onClose: () => void }) {
-  const { width } = useWindowDimensions();
-  const wide = width >= WIDE_BREAKPOINT;
-  return wide ? (
-    <WebEditorModal context={context} onClose={onClose} />
-  ) : (
-    <SheetEditor context={context} onClose={onClose} />
-  );
-}
-
-function WebEditorModal({ context, onClose }: { context?: Context; onClose: () => void }) {
-  return (
-    <Modal transparent visible animationType="fade" statusBarTranslucent onRequestClose={onClose}>
-      <Pressable onPress={onClose} style={styles.modalOverlay}>
-        <Pressable onPress={(e) => e.stopPropagation?.()} style={styles.webModalCard}>
-          <EditorForm context={context} onClose={onClose} Input={TextInput} />
-        </Pressable>
-      </Pressable>
-    </Modal>
-  );
-}
-
-function SheetEditor({ context, onClose }: { context?: Context; onClose: () => void }) {
-  const ref = useRef<BottomSheetModal>(null);
-
-  useEffect(() => {
-    ref.current?.present();
-  }, []);
-
-  const close = useCallback(() => ref.current?.dismiss(), []);
-  const renderBackdrop = useCallback(
-    (p: BottomSheetBackdropProps) => (
-      <BottomSheetBackdrop {...p} appearsOnIndex={0} disappearsOnIndex={-1} pressBehavior="close" />
-    ),
-    [],
-  );
-
-  return (
-    <BottomSheetModal
-      ref={ref}
-      enableDynamicSizing
-      enablePanDownToClose
-      onDismiss={onClose}
-      backdropComponent={renderBackdrop}
-      keyboardBehavior="interactive"
-      keyboardBlurBehavior="restore"
-      android_keyboardInputMode="adjustResize"
-      handleIndicatorStyle={styles.sheetHandle}
-      backgroundStyle={styles.sheetBackground}
-    >
-      <BottomSheetScrollView
-        contentContainerStyle={styles.sheetContent}
-        keyboardShouldPersistTaps="handled"
-      >
-        <EditorForm context={context} onClose={close} Input={SheetInput} />
-      </BottomSheetScrollView>
-    </BottomSheetModal>
-  );
-}
-
-// The editor form — shared by the mobile sheet and the web modal. `context`
-// present = edit; absent = create.
-function EditorForm({
-  context,
-  onClose,
-  Input,
-}: {
-  context?: Context;
-  onClose: () => void;
-  Input: InputComponent;
-}) {
-  const { createContext, updateContext, deleteContext } = useTasksStore();
-  const [label, setLabel] = useState(context?.label ?? '');
-  const [color, setColor] = useState(context?.color ?? PALETTE[0]);
-  const [excludeFromAll, setExcludeFromAll] = useState(context?.excludeFromAll ?? false);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const save = async () => {
-    const trimmed = label.trim();
-    if (!trimmed || busy) return;
-    setBusy(true);
-    setError(null);
-    try {
-      if (context) await updateContext(context.id, { label: trimmed, color, excludeFromAll });
-      else await createContext(trimmed, color, excludeFromAll);
-      onClose();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not save');
-      setBusy(false);
-    }
-  };
-
-  const remove = async () => {
-    if (!context || busy) return;
-    setBusy(true);
-    setError(null);
-    try {
-      await deleteContext(context.id);
-      onClose();
-    } catch (e) {
-      // 409 when tasks still reference it — show the server's count message.
-      setError(e instanceof Error ? e.message : 'Could not delete');
-      setBusy(false);
-    }
-  };
-
-  return (
-    <View style={styles.editorForm}>
-      <View style={styles.editorRow}>
-        <View style={[styles.editorColorDot, { backgroundColor: color }]} />
-        <Input
-          value={label}
-          onChangeText={setLabel}
-          placeholder="Context name"
-          placeholderTextColor={colors.textMuted}
-          autoFocus
-          returnKeyType="done"
-          onSubmitEditing={save}
-          style={[styles.editorInput, webInputReset]}
-        />
-        <Pressable onPress={onClose} hitSlop={8} style={styles.editorClose}>
-          <X size={16} color={colors.textSecondary} />
-        </Pressable>
-      </View>
-
-      <View style={styles.hideRow}>
-        <View style={styles.flex1}>
-          <Text style={styles.hideRowTitle}>Hide from All view</Text>
-          <Text style={styles.hideRowSubtitle}>Show in calendar if they have a due date.</Text>
-        </View>
-        <Switch
-          value={excludeFromAll}
-          onValueChange={setExcludeFromAll}
-          trackColor={{ false: colors.bgElevated, true: colors.accentPrimary }}
-          thumbColor={colors.textPrimary}
-        />
-      </View>
-
-      <View>
-        <Text style={styles.colorLabel}>Color</Text>
-        <View style={styles.colorGrid}>
-          {PALETTE.map((c) => {
-            const borderWidth = color === c ? 2 : 0;
-            return (
-              <Pressable
-                key={c}
-                onPress={() => setColor(c)}
-                style={[styles.colorSwatch, { backgroundColor: c, borderWidth }]}
-              />
-            );
-          })}
-        </View>
-      </View>
-
-      {error ? <Text style={styles.errorText}>{error}</Text> : null}
-
-      <View style={styles.editorRow}>
-        {context ? (
-          <Pressable onPress={remove} disabled={busy} style={styles.editorRemove}>
-            <Trash2 size={15} color={colors.accentNow} />
-            <Text style={styles.editorRemoveText}>Delete</Text>
-          </Pressable>
-        ) : null}
-        <View style={styles.flex1} />
-        <Pressable
-          onPress={save}
-          disabled={busy || !label.trim()}
-          style={[
-            styles.editorSave,
-            { backgroundColor: label.trim() ? colors.accentPrimary : colors.bgElevated },
-          ]}
-        >
-          {busy ? (
-            <ActivityIndicator size="small" color={colors.bgSurface} />
-          ) : (
-            <Text
-              style={[
-                styles.editorSaveText,
-                { color: label.trim() ? colors.bgSurface : colors.textMuted },
-              ]}
-            >
-              Save
-            </Text>
-          )}
-        </Pressable>
-      </View>
-    </View>
   );
 }
 
@@ -745,8 +399,8 @@ function DangerSection() {
         <Text style={styles.dangerTitle}>Delete account</Text>
         <Text style={styles.dangerText}>
           Permanently deletes your account and everything in it — tasks, contexts, recurring rules,
-          tracked time, comments and any MCP token. You are signed out on every device. This cannot
-          be undone.
+          tracked time, notes and any MCP token. You are signed out on every device. This cannot be
+          undone.
         </Text>
         <Pressable onPress={() => setDeleteModal(true)} style={styles.dangerBtn}>
           <Trash2 size={13} color={colors.accentNow} />
@@ -1001,17 +655,7 @@ function SectionLabel({ children }: { children: string }) {
 
 const styles = StyleSheet.create({
   wideRoot: { flex: 1, flexDirection: 'row', backgroundColor: colors.bgBase },
-  sidebar: {
-    width: 240,
-    paddingHorizontal: 16,
-    paddingBottom: 16,
-    backgroundColor: '#10141B',
-    borderRightWidth: 1,
-    borderRightColor: colors.bgCard,
-  },
   flex1: { flex: 1 },
-  sidebarSignOut: { paddingHorizontal: 8, paddingVertical: 8 },
-  sidebarSignOutText: { fontSize: 12, color: colors.textMuted },
   wideMain: { flex: 1, paddingHorizontal: 24 },
   wideTitle: {
     fontSize: 22,
@@ -1036,124 +680,6 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
   },
   mobileScrollContent: { paddingHorizontal: 20 },
-  sectionTop: { marginTop: 8 },
-  contextList: { gap: 8 },
-  addContextBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 9,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.borderStrong,
-    borderStyle: 'dashed',
-  },
-  addContextText: { fontSize: 13.5, fontWeight: '500', color: colors.accentPrimary },
-  deleteErrorText: { fontSize: 12, color: colors.accentNow, marginTop: 8, marginHorizontal: 4 },
-  hintText: { fontSize: 11, color: colors.textFaint, marginTop: 8, marginHorizontal: 4 },
-  contextRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 11,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    borderRadius: 12,
-    backgroundColor: colors.bgCard,
-  },
-  contextDot: { width: 12, height: 12, borderRadius: 6 },
-  contextLabel: { flex: 1, fontSize: 14.5, color: colors.textPrimary },
-  hiddenBadge: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  hiddenText: { fontSize: 10.5, color: colors.textMuted },
-  contextSlug: { fontFamily: monoFont, fontSize: 10, color: colors.textFaint },
-  swipeDelete: {
-    width: 72,
-    marginLeft: 6,
-    borderRadius: 12,
-    borderCurve: 'continuous',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
-    backgroundColor: colors.accentNow,
-  },
-  swipeDeleteText: { fontSize: 11, fontWeight: '600', color: colors.bgSurface },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(5,6,10,0.6)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  webModalCard: {
-    width: 460,
-    maxWidth: '100%',
-    borderRadius: 20,
-    borderCurve: 'continuous',
-    backgroundColor: colors.bgCardWeb,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    padding: 20,
-  },
-  sheetHandle: { backgroundColor: colors.borderStrong },
-  sheetBackground: { backgroundColor: colors.bgCardWeb },
-  sheetContent: { padding: 20, paddingBottom: 32 },
-  editorForm: { gap: 16 },
-  editorRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  editorColorDot: { width: 14, height: 14, borderRadius: 7 },
-  editorInput: {
-    flex: 1,
-    fontSize: 17,
-    fontWeight: '600',
-    color: colors.textPrimary,
-    paddingVertical: 2,
-  },
-  editorClose: { padding: 7, borderRadius: 9, backgroundColor: colors.bgCard },
-  hideRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    borderRadius: 12,
-    backgroundColor: colors.bgCard,
-  },
-  hideRowTitle: { fontSize: 13.5, color: colors.textPrimary },
-  hideRowSubtitle: { fontSize: 11, color: colors.textMuted, marginTop: 2 },
-  colorLabel: {
-    fontFamily: monoFont,
-    fontSize: 10.5,
-    letterSpacing: 1.3,
-    textTransform: 'uppercase',
-    color: colors.textMuted,
-    marginBottom: 10,
-    marginLeft: 2,
-  },
-  colorGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  colorSwatch: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    borderColor: colors.textPrimary,
-  },
-  errorText: { fontSize: 12.5, color: colors.accentNow },
-  editorRemove: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 6,
-    paddingVertical: 8,
-  },
-  editorRemoveText: { fontSize: 13, fontWeight: '500', color: colors.accentNow },
-  editorSave: {
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 11,
-  },
-  editorSaveText: {
-    fontSize: 13.5,
-    fontWeight: '600',
-  },
   mt28: { marginTop: 28 },
   accountCard: { borderRadius: 12, backgroundColor: colors.bgCard, overflow: 'hidden' },
   accountEmailRow: { paddingHorizontal: 14, paddingVertical: 12 },
@@ -1290,7 +816,12 @@ const styles = StyleSheet.create({
   },
   mcpRevokeBtnText: { fontSize: 13, fontWeight: '500', color: colors.textPrimary },
   mcpWarn: { fontSize: 11.5, color: colors.textFaint, marginTop: 2 },
-  howBlock: { marginTop: 10, borderTopWidth: 1, borderTopColor: colors.borderSubtle, paddingTop: 10 },
+  howBlock: {
+    marginTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: colors.borderSubtle,
+    paddingTop: 10,
+  },
   howToggle: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   howToggleText: { fontSize: 12.5, fontWeight: '500', color: colors.textSecondary },
   howBody: { marginTop: 10, gap: 4 },

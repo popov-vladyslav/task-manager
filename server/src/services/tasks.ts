@@ -14,6 +14,7 @@ import { ownedBy, type Executor } from '../db/scope';
 import { between } from '../lib/frac-index';
 import { nextInstance as computeNext } from '../lib/recurrence';
 import { badRequest, notFound } from '../lib/errors';
+import { parseWhen } from '../lib/when';
 import { invalidateReminderClocks } from './reminder-clock';
 
 // A task may only point at a context its own owner holds. Without this, a
@@ -51,27 +52,24 @@ function resolveDuration(due: Date | null, durationMin: number | null | undefine
 // instances. Copied onto each spawned instance's due_at. (CR02 §1)
 function timeOf(d: Date | string | null | undefined): string | null {
   if (!d) return null;
-  const date = typeof d === 'string' ? new Date(d) : d;
+  const date = typeof d === 'string' ? parseWhen(d) : d;
   if (Number.isNaN(date.getTime())) return null;
   return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
 }
 
-// Task columns + the derived comment count + the linked recurrence rule.
+// Task columns + the linked recurrence rule.
 const selection = {
   task: tasks,
   rule: recurrenceRules.rule,
-  commentsCount: sql<number>`(select count(*)::int from comments c where c.task_id = ${tasks.id})`,
 };
 
 type Row = {
   task: typeof tasks.$inferSelect;
   rule: string | null;
-  commentsCount: number;
 };
 
 function rowToTask(r: Row): Task {
   return toTask(r.task, {
-    commentsCount: Number(r.commentsCount ?? 0),
     nextInstance: r.rule ? computeNext(r.rule) : null,
     recurrenceRule: r.rule,
   });
@@ -140,7 +138,7 @@ export async function createTask(userId: string, input: CreateTaskInput): Promis
   const title = input.title?.trim();
   if (!title) throw badRequest('Title is required');
   const contextId = input.contextId ?? null;
-  const dueAt = input.dueAt ? new Date(input.dueAt) : null;
+  const dueAt = input.dueAt ? parseWhen(input.dueAt) : null;
   await assertContextOwned(db, userId, contextId);
 
   // One unit of work: a failure between the rule insert and the task insert would
@@ -179,12 +177,13 @@ export async function createTask(userId: string, input: CreateTaskInput): Promis
         title,
         contextId,
         dueAt,
-        remindAt: input.remindAt ? new Date(input.remindAt) : null,
+        remindAt: input.remindAt ? parseWhen(input.remindAt) : null,
         durationMin: resolveDuration(dueAt, input.durationMin),
         sortGlobal: Number(mins.ming) - 1,
         sortContext: Number(mins.minc) - 1,
         recurrenceId,
         createdVia: 'app',
+        note: input.note?.trim() || null,
       })
       .returning();
     return row.id;
@@ -225,15 +224,16 @@ export async function updateTask(
     if (patch.title !== undefined) set.title = patch.title;
     if (patch.contextId !== undefined) set.contextId = patch.contextId;
     if (patch.status !== undefined) set.status = patch.status;
-    if (patch.dueAt !== undefined) set.dueAt = patch.dueAt ? new Date(patch.dueAt) : null;
+    if (patch.dueAt !== undefined) set.dueAt = patch.dueAt ? parseWhen(patch.dueAt) : null;
     if (patch.remindAt !== undefined)
-      set.remindAt = patch.remindAt ? new Date(patch.remindAt) : null;
+      set.remindAt = patch.remindAt ? parseWhen(patch.remindAt) : null;
+    if (patch.note !== undefined) set.note = patch.note?.trim() || null;
 
     // Deadline ⇒ duration invariant: recompute whenever either changes so a task
     // with a deadline always has a duration (default 30), and one without has none.
     if (patch.dueAt !== undefined || patch.durationMin !== undefined) {
       const nextDue =
-        patch.dueAt !== undefined ? (patch.dueAt ? new Date(patch.dueAt) : null) : cur.dueAt;
+        patch.dueAt !== undefined ? (patch.dueAt ? parseWhen(patch.dueAt) : null) : cur.dueAt;
       const nextDur = patch.durationMin !== undefined ? patch.durationMin : cur.durationMin;
       set.durationMin = resolveDuration(nextDue, nextDur);
     }
@@ -298,7 +298,10 @@ export async function updateTask(
     }
 
     if (Object.keys(set).length > 0) {
-      await tx.update(tasks).set(set).where(and(ownedBy(tasks.userId, userId), eq(tasks.id, id)));
+      await tx
+        .update(tasks)
+        .set(set)
+        .where(and(ownedBy(tasks.userId, userId), eq(tasks.id, id)));
     }
 
     // A new deadline is a new event, but the due claim is keyed on task_id alone
@@ -340,6 +343,12 @@ export async function updateTask(
   // completing a task or changing its status takes it out of the due set too.
   invalidateReminderClocks();
   return getTask(userId, id);
+}
+
+export async function appendNote(userId: string, id: string, text: string): Promise<Task> {
+  const cur = await getTask(userId, id);
+  const next = [cur.note?.trim(), text.trim()].filter(Boolean).join('\n\n');
+  return updateTask(userId, id, { note: next });
 }
 
 export async function deleteTask(userId: string, id: string): Promise<void> {

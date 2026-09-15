@@ -70,6 +70,7 @@ export const contexts = pgTable('contexts', {
   sortOrder: integer('sort_order').notNull().default(0),
   archived: boolean('archived').notNull().default(false),
   excludeFromAll: boolean('exclude_from_all').notNull().default(false),
+  emoji: text('emoji'),
 });
 
 export const recurrenceRules = pgTable('recurrence_rules', {
@@ -116,6 +117,7 @@ export const tasks = pgTable('tasks', {
   createdVia: text('created_via', { enum: ['app', 'mcp'] })
     .notNull()
     .default('app'),
+  note: text('note'),
 });
 
 export const comments = pgTable('comments', {

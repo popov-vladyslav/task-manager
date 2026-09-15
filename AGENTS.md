@@ -25,6 +25,7 @@ Commands (Claude Code): /cairn:spec  /cairn:challenge  /cairn:plan  /cairn:next 
 - No new dependency without a one-line justification (and a decision record if it's load-bearing).
 - Smallest change that satisfies the acceptance criteria. No speculative abstraction.
 - Leave the build green: typecheck, lint, and tests pass before you stop.
+- No company names or the owner's private data anywhere in the codebase — code, tests, fixtures, comments, docs. Use generic names (Work, Home, Payments, "Team sync"). Identifiers that must carry the owner's name (bundle ids, EAS owner) are the only exception.
 
 ## Review rules
 - Re-read the spec's acceptance criteria; check the diff against each, one by one.
