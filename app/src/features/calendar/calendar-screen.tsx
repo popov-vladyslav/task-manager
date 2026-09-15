@@ -510,7 +510,7 @@ function Timeline({
         open={draft !== null}
         initial={draftInitial}
         onClose={() => setDraft(null)}
-        onCreated={() => load()}
+        onCreated={() => useCalendarStore.getState().load()}
       />
     </View>
   );

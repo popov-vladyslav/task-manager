@@ -290,7 +290,7 @@ function ToolButton({
   onPress: () => void;
 }) {
   const t = useTheme();
-  const styles = useMemo(() => makeStyles(t), [t]);
+  const styles = useMemo(() => makeStyles(t, false), [t]);
   return (
     <Pressable
       onPress={onPress}
