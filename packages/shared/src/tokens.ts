@@ -6,16 +6,19 @@ export const colors = {
   bgCard: '#161B22', // task cards, inputs (mobile)
   bgCardWeb: '#171C24', // task cards (web)
   bgElevated: '#262D39', // badges, secondary buttons
+  bgControl: '#151B23', // icon buttons, chips
   borderSubtle: '#1F2630',
   borderStrong: '#242B35',
+  borderControl: '#222934', // icon buttons, chips
   textPrimary: '#E9EEF4',
   textSecondary: '#7A8492',
+  textControl: '#8B95A2', // chip labels, secondary icons
   textMuted: '#4E5865',
   textFaint: '#3A4150',
   accentPrimary: '#E9A23B', // amber — CTA, active tab, "today"
-  accentTimer: '#4FB6A9', // teal — active timer, done
+  accentTimer: '#3FC9A8', // teal — active timer, done
   accentReminder: '#9B7EDE', // violet — reminders
-  accentNow: '#D9668B', // rose — "now" line
+  accentNow: '#E8608C', // rose — "now" line, overdue
 } as const;
 
 export type Palette = Record<keyof typeof colors, string>;
