@@ -18,8 +18,7 @@ import { haptics } from '../../lib/haptics';
 import { useCalendarStore } from '../../store/calendar';
 import { useTasksStore } from '../../store/tasks';
 import { useRefreshOnFocus } from '../../lib/use-refresh-on-focus';
-import { SideNavLinks } from '../nav/nav-chrome';
-import { useAuthStore } from '../../store/auth';
+import { WideSidebar } from '../nav/wide-sidebar';
 import { useTaskCard } from '../tasks/task-card-host';
 import {
   HOUR_END,
@@ -180,13 +179,7 @@ export function CalendarScreen() {
     return (
       <>
         <View style={styles.wideRoot}>
-          <View style={[styles.sidebar, { paddingTop: insets.top + 16 }]}>
-            <SideNavLinks />
-            <View style={styles.flex1} />
-            <Pressable onPress={() => useAuthStore.getState().signOut()} style={styles.signOutBtn}>
-              <Text style={styles.signOutText}>Sign out</Text>
-            </Pressable>
-          </View>
+          <WideSidebar />
           <View style={[styles.wideMain, { paddingTop: insets.top + 24 }]}>
             {header}
             <View style={styles.flex1}>{body}</View>
@@ -747,16 +740,6 @@ const styles = StyleSheet.create({
   modeBtnText: { fontSize: 12.5 },
   // CalendarScreen — wide/mobile layout
   wideRoot: { flex: 1, flexDirection: 'row', backgroundColor: colors.bgBase },
-  sidebar: {
-    width: 240,
-    paddingHorizontal: 16,
-    paddingBottom: 16,
-    backgroundColor: '#10141B',
-    borderRightWidth: 1,
-    borderRightColor: colors.bgCard,
-  },
-  signOutBtn: { paddingHorizontal: 8, paddingVertical: 8 },
-  signOutText: { fontSize: 12, color: colors.textMuted },
   wideMain: { flex: 1, paddingHorizontal: 24 },
   mobileRoot: { flex: 1, backgroundColor: colors.bgSurface },
   mobileInner: { paddingHorizontal: 16, flex: 1 },

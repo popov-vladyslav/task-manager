@@ -33,7 +33,6 @@ export function ContextScreen() {
   const loadCompleted = useTasksStore((s) => s.loadCompleted);
   const uncomplete = useTasksStore((s) => s.uncomplete);
   const toggleComplete = useTasksStore((s) => s.toggleComplete);
-  const patchTask = useTasksStore((s) => s.patchTask);
   const removeTask = useTasksStore((s) => s.removeTask);
   const undoRemove = useTasksStore((s) => s.undoRemove);
   const reorder = useTasksStore((s) => s.reorder);
@@ -102,11 +101,6 @@ export function ContextScreen() {
 
   const onOpenDetail = useCallback((task: Task) => openTask(task.id), [openTask]);
 
-  const onPatchTitle = useCallback(
-    (id: string, title: string) => patchTask(id, { title }),
-    [patchTask],
-  );
-
   const onDeleteTask = useCallback(
     (id: string) => {
       const task = useTasksStore.getState().tasks.find((x) => x.id === id);
@@ -127,12 +121,11 @@ export function ContextScreen() {
         context={item.contextId != null ? contextById.get(item.contextId) : undefined}
         onToggle={onToggle}
         onOpenDetail={onOpenDetail}
-        onPatchTitle={onPatchTitle}
         onDelete={onDeleteTask}
         onDrag={drag}
       />
     ),
-    [contextById, onToggle, onOpenDetail, onPatchTitle, onDeleteTask],
+    [contextById, onToggle, onOpenDetail, onDeleteTask],
   );
 
   const completedSection = (

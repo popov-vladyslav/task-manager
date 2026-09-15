@@ -24,7 +24,7 @@ export function useTaskCard(): { openTask: (id: string) => void; taskCardNode: R
 
   const taskCardNode = wide ? (
     <BottomSheet open={openId !== null} onClose={close} padded={false}>
-      {openId ? <TaskCardScreen taskId={openId} onClose={close} /> : null}
+      {openId ? <TaskCardScreen taskId={openId} onClose={close} compact /> : null}
     </BottomSheet>
   ) : null;
 

@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { AlignLeft, Bell, Check, Play, Repeat, Trash2 } from 'lucide-react-native';
+import { AlignLeft, Bell, Check, MoreHorizontal, Play, Repeat, Trash2 } from 'lucide-react-native';
 import { formatTrackedShort } from '@task-manager/shared';
-import { BottomSheet } from '../../components/bottom-sheet';
 import { Header } from '../../components/header';
-import { usePopoverAnchor } from '../../components/popover';
+import { IconButton } from '../../components/icon-button';
+import { Popover, usePopoverAnchor } from '../../components/popover';
 import { haptics } from '../../lib/haptics';
 import { useTasksStore } from '../../store/tasks';
 import { useTimerStore } from '../../store/timer';
@@ -18,11 +18,12 @@ const isWeb = process.env.EXPO_OS === 'web';
 interface TaskCardScreenProps {
   taskId: string;
   onClose: () => void;
+  compact?: boolean;
 }
 
-export function TaskCardScreen({ taskId, onClose }: TaskCardScreenProps) {
+export function TaskCardScreen({ taskId, onClose, compact = false }: TaskCardScreenProps) {
   const t = useTheme();
-  const styles = useMemo(() => makeStyles(t), [t]);
+  const styles = useMemo(() => makeStyles(t, compact), [t, compact]);
   const task = useTasksStore(
     (s) => s.tasks.find((x) => x.id === taskId) ?? s.completed.find((x) => x.id === taskId),
   );
@@ -37,8 +38,8 @@ export function TaskCardScreen({ taskId, onClose }: TaskCardScreenProps) {
   const openTimer = useTimerStore((s) => s.open);
 
   const popover = usePopoverAnchor();
+  const menu = usePopoverAnchor();
   const [whenOpen, setWhenOpen] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
   const [title, setTitle] = useState(task?.title ?? '');
   const [note, setNote] = useState(task?.note ?? '');
   const [titleHeight, setTitleHeight] = useState<number>();
@@ -101,7 +102,7 @@ export function TaskCardScreen({ taskId, onClose }: TaskCardScreenProps) {
 
   const remove = () => {
     if (!task) return;
-    setMenuOpen(false);
+    menu.close();
     removeTask(task.id);
     useToastStore.getState().show({
       title: 'Task deleted',
@@ -134,8 +135,18 @@ export function TaskCardScreen({ taskId, onClose }: TaskCardScreenProps) {
         onLeftPress={onClose}
         onTitlePress={popover.open}
         titleRef={popover.ref}
-        onMorePress={() => setMenuOpen(true)}
+        right={
+          <View ref={menu.ref} collapsable={false}>
+            <IconButton
+              icon={MoreHorizontal}
+              onPress={menu.open}
+              accessibilityLabel="More"
+              iconSize={17}
+            />
+          </View>
+        }
         align="start"
+        horizontalPadding={compact ? 16 : 12}
       />
 
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
@@ -259,12 +270,12 @@ export function TaskCardScreen({ taskId, onClose }: TaskCardScreenProps) {
         }}
       />
 
-      <BottomSheet open={menuOpen} onClose={() => setMenuOpen(false)}>
+      <Popover anchor={menu.anchor} onClose={menu.close} width={200}>
         <Pressable onPress={remove} accessibilityRole="button" style={styles.menuItem}>
-          <Trash2 size={18} color={t.colors.accentNow} strokeWidth={1.8} />
+          <Trash2 size={17} color={t.colors.accentNow} strokeWidth={1.8} />
           <Text style={styles.menuDanger}>Delete task</Text>
         </Pressable>
-      </BottomSheet>
+      </Popover>
     </View>
   );
 }
@@ -292,13 +303,20 @@ function ToolButton({
   );
 }
 
-const makeStyles = (t: Theme) =>
+const makeStyles = (t: Theme, compact: boolean) =>
   StyleSheet.create({
     flex1: { flex: 1 },
-    root: { flex: 1, backgroundColor: t.colors.bgBase },
+    root: {
+      flex: compact ? undefined : 1,
+      backgroundColor: compact ? t.colors.bgSurface : t.colors.bgBase,
+    },
     spacer: { width: 38, height: 38 },
     missing: { padding: 24, color: t.colors.textMuted },
-    content: { paddingHorizontal: 18, paddingTop: 6, paddingBottom: 24 },
+    content: {
+      paddingHorizontal: compact ? 22 : 18,
+      paddingTop: 6,
+      paddingBottom: compact ? 16 : 24,
+    },
     when: { flexDirection: 'row', alignItems: 'flex-start', gap: 11 },
     whenIcon: {
       width: 26,
@@ -328,9 +346,9 @@ const makeStyles = (t: Theme) =>
     checkDone: { backgroundColor: t.colors.accentPrimary, borderColor: t.colors.accentPrimary },
     title: {
       flex: 1,
-      fontSize: 22,
+      fontSize: compact ? 19 : 22,
       fontWeight: '700',
-      lineHeight: 29,
+      lineHeight: compact ? 25 : 29,
       letterSpacing: -0.2,
       color: t.colors.textPrimary,
       padding: 0,
@@ -349,9 +367,9 @@ const makeStyles = (t: Theme) =>
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      paddingHorizontal: 16,
-      paddingTop: 12,
-      paddingBottom: 22,
+      paddingHorizontal: compact ? 20 : 16,
+      paddingTop: compact ? 4 : 12,
+      paddingBottom: compact ? 18 : 22,
     },
     tools: {
       flexDirection: 'row',
@@ -391,9 +409,10 @@ const makeStyles = (t: Theme) =>
     menuItem: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 13,
-      paddingVertical: 12,
-      paddingHorizontal: 4,
+      gap: 11,
+      paddingVertical: 9,
+      paddingHorizontal: 10,
+      borderRadius: 10,
     },
-    menuDanger: { fontSize: 14.5, fontWeight: '600', color: t.colors.accentNow },
+    menuDanger: { fontSize: 14, fontWeight: '600', color: t.colors.accentNow },
   });

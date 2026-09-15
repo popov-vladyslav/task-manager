@@ -23,7 +23,7 @@ import { useRefreshOnFocus } from '../../lib/use-refresh-on-focus';
 import { colors, headerDate, monoFont, webInputReset, WIDE_BREAKPOINT } from '../../theme';
 import { useTasksStore } from '../../store/tasks';
 import { useAuthStore } from '../../store/auth';
-import { SideNavLinks } from '../nav/nav-chrome';
+import { WideSidebar } from '../nav/wide-sidebar';
 
 const isWeb = process.env.EXPO_OS === 'web';
 const isIOS = process.env.EXPO_OS === 'ios';
@@ -46,16 +46,7 @@ export function SettingsScreen() {
   if (wide) {
     return (
       <View style={styles.wideRoot}>
-        <View style={[styles.sidebar, { paddingTop: insets.top + 16 }]}>
-          <SideNavLinks />
-          <View style={styles.flex1} />
-          <Pressable
-            onPress={() => useAuthStore.getState().signOut()}
-            style={styles.sidebarSignOut}
-          >
-            <Text style={styles.sidebarSignOutText}>Sign out</Text>
-          </Pressable>
-        </View>
+        <WideSidebar />
         <View style={[styles.wideMain, { paddingTop: insets.top + 24 }]}>
           <Text style={styles.wideTitle}>Settings</Text>
           <ScrollView
@@ -408,8 +399,8 @@ function DangerSection() {
         <Text style={styles.dangerTitle}>Delete account</Text>
         <Text style={styles.dangerText}>
           Permanently deletes your account and everything in it — tasks, contexts, recurring rules,
-          tracked time, notes and any MCP token. You are signed out on every device. This cannot
-          be undone.
+          tracked time, notes and any MCP token. You are signed out on every device. This cannot be
+          undone.
         </Text>
         <Pressable onPress={() => setDeleteModal(true)} style={styles.dangerBtn}>
           <Trash2 size={13} color={colors.accentNow} />
@@ -664,17 +655,7 @@ function SectionLabel({ children }: { children: string }) {
 
 const styles = StyleSheet.create({
   wideRoot: { flex: 1, flexDirection: 'row', backgroundColor: colors.bgBase },
-  sidebar: {
-    width: 240,
-    paddingHorizontal: 16,
-    paddingBottom: 16,
-    backgroundColor: '#10141B',
-    borderRightWidth: 1,
-    borderRightColor: colors.bgCard,
-  },
   flex1: { flex: 1 },
-  sidebarSignOut: { paddingHorizontal: 8, paddingVertical: 8 },
-  sidebarSignOutText: { fontSize: 12, color: colors.textMuted },
   wideMain: { flex: 1, paddingHorizontal: 24 },
   wideTitle: {
     fontSize: 22,
