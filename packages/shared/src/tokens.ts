@@ -7,9 +7,13 @@ export const colors = {
   bgCardWeb: '#171C24', // task cards (web)
   bgElevated: '#262D39', // badges, secondary buttons
   bgControl: '#151B23', // icon buttons, chips
+  bgPopover: '#171E27',
   borderSubtle: '#1F2630',
   borderStrong: '#242B35',
   borderControl: '#222934', // icon buttons, chips
+  borderPopover: '#2C3644',
+  handle: '#2B333F', // sheet grab handle
+  scrim: 'rgba(4,6,10,0.7)',
   textPrimary: '#E9EEF4',
   textSecondary: '#7A8492',
   textControl: '#8B95A2', // chip labels, secondary icons
@@ -25,7 +29,8 @@ export type Palette = Record<keyof typeof colors, string>;
 
 export const radius = {
   card: 12, // rounded-xl
-  sheet: 24, // sheet/modal top radius
+  sheet: 20, // sheet/modal top radius
+  popover: 16,
 } as const;
 
 export const contextStripWidth = 3; // border-left px on each card
