@@ -17,7 +17,7 @@ export { nearestEmoji };
 export interface NotifTitleInput {
   contextName: string | null;
   contextColor: string | null; // hex, e.g. '#5B8DEF'
-  contextEmoji?: string | null; // the context's own emoji, when set
+  contextEmoji?: string | null;
   dueAt: Date | string | null;
 }
 

@@ -408,7 +408,7 @@ function DangerSection() {
         <Text style={styles.dangerTitle}>Delete account</Text>
         <Text style={styles.dangerText}>
           Permanently deletes your account and everything in it — tasks, contexts, recurring rules,
-          tracked time, comments and any MCP token. You are signed out on every device. This cannot
+          tracked time, notes and any MCP token. You are signed out on every device. This cannot
           be undone.
         </Text>
         <Pressable onPress={() => setDeleteModal(true)} style={styles.dangerBtn}>

@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { and, eq, isNull } from 'drizzle-orm';
 import { closePool, mcpCall, resetDb, startTestServer, type TestServer } from './harness';
 import { db } from '../db/client';
-import { comments, contexts, loginCodes, tasks, timeEntries, users } from '../db/schema';
+import { contexts, loginCodes, tasks, timeEntries, users } from '../db/schema';
 import { hashToken } from '../lib/tokens';
 
 let server: TestServer;
@@ -106,9 +106,9 @@ function cases(): { tool: string; args: Record<string, unknown>; successPhrase: 
     { tool: 'complete_task', args: { id: bobTaskId }, successPhrase: 'Completed:' },
     { tool: 'delete_task', args: { id: bobTaskId }, successPhrase: 'Deleted:' },
     {
-      tool: 'add_comment',
-      args: { id: bobTaskId, body: 'injected' },
-      successPhrase: 'Comment added',
+      tool: 'append_note',
+      args: { id: bobTaskId, text: 'injected' },
+      successPhrase: 'Note updated',
     },
     { tool: 'start_timer', args: { id: bobTaskId }, successPhrase: 'Timer started' },
     {
@@ -133,7 +133,12 @@ test('every mutating tool aimed at another account refuses', async () => {
 
 test("nothing of Bob's moved in the database", async () => {
   const [task] = await db
-    .select({ title: tasks.title, status: tasks.status, trackedSec: tasks.trackedSec })
+    .select({
+      title: tasks.title,
+      status: tasks.status,
+      trackedSec: tasks.trackedSec,
+      note: tasks.note,
+    })
     .from(tasks)
     .where(eq(tasks.id, bobTaskId));
   assert.ok(task, "Bob's task was deleted by another account");
@@ -141,8 +146,7 @@ test("nothing of Bob's moved in the database", async () => {
   assert.equal(task.status, 'active');
   assert.equal(task.trackedSec, 0);
 
-  const bobComments = await db.select().from(comments).where(eq(comments.taskId, bobTaskId));
-  assert.equal(bobComments.length, 0, "a comment was injected onto Bob's task");
+  assert.equal(task.note, null, "a note was injected onto Bob's task");
 
   const [ctx] = await db
     .select({ label: contexts.label })
@@ -155,7 +159,7 @@ test("nothing of Bob's moved in the database", async () => {
   assert.equal(entries.length, 0, "a timer was started on Bob's task by another account");
 });
 
-test("list_tasks leaks nothing, filtered or not", async () => {
+test('list_tasks leaks nothing, filtered or not', async () => {
   // Filtered by another account's slug. Note this alone is a WEAK check: the
   // slug is resolved by the scoped findContextBySlug and rejected before
   // listTasks is ever reached, so it passes even if listTasks itself is
@@ -165,8 +169,14 @@ test("list_tasks leaks nothing, filtered or not", async () => {
     context: bobSlug,
   });
   assert.equal(filtered.status, 200);
-  assert.ok(!filtered.text.includes('bob original'), `Bob's task leaked: ${filtered.text.slice(0, 300)}`);
-  assert.ok(!filtered.text.includes(bobTaskId), `Bob's task id leaked: ${filtered.text.slice(0, 300)}`);
+  assert.ok(
+    !filtered.text.includes('bob original'),
+    `Bob's task leaked: ${filtered.text.slice(0, 300)}`,
+  );
+  assert.ok(
+    !filtered.text.includes(bobTaskId),
+    `Bob's task id leaked: ${filtered.text.slice(0, 300)}`,
+  );
 
   const unfiltered = await mcpCall(server.baseUrl, alice.mcpToken, 'list_tasks');
   assert.equal(unfiltered.status, 200);

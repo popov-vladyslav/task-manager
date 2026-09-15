@@ -108,7 +108,6 @@ export async function updateContext(
   return toContext(row);
 }
 
-// Ids that are not the caller's own match no row and are skipped, never written.
 export async function reorderContexts(userId: string, ids: number[]): Promise<Context[]> {
   await db.transaction(async (tx) => {
     for (const [index, id] of ids.entries()) {

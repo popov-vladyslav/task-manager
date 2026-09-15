@@ -117,6 +117,7 @@ export const tasks = pgTable('tasks', {
   createdVia: text('created_via', { enum: ['app', 'mcp'] })
     .notNull()
     .default('app'),
+  note: text('note'),
 });
 
 export const comments = pgTable('comments', {

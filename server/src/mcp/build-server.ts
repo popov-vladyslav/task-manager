@@ -1,10 +1,9 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { contextEmoji } from '@task-manager/shared';
-import type { Comment, Context, Task, UpdateContextInput } from '@task-manager/shared';
+import { contextEmoji, EMOJI_MAX_LENGTH, isSingleGrapheme } from '@task-manager/shared';
+import type { Context, Task, UpdateContextInput } from '@task-manager/shared';
 import * as tasksSvc from '../services/tasks';
 import * as contextsSvc from '../services/contexts';
-import * as commentsSvc from '../services/comments';
 import * as timerSvc from '../services/timer';
 import { ruleFromSpec } from '../lib/recurrence';
 import { fmtTask } from '../lib/mcp-task-format';
@@ -50,11 +49,6 @@ function toRuleString(r: RecurrenceMcpInput): { rule: string } | { error: string
 async function contextLabels(userId: string): Promise<Map<number, string>> {
   const cs = await contextsSvc.listContexts(userId);
   return new Map(cs.map((c) => [c.id, c.label]));
-}
-
-async function commentsByTask(userId: string, list: Task[]): Promise<Map<string, Comment[]>> {
-  const ids = list.filter((t) => t.commentsCount > 0).map((t) => t.id);
-  return commentsSvc.listCommentsForTasks(userId, ids);
 }
 
 interface Resolved {
@@ -114,6 +108,11 @@ export function buildMcpServer(userId: string): McpServer {
   };
 
   const hexColor = z.string().regex(/^#[0-9a-fA-F]{6}$/, 'Color must be a #RRGGBB hex string');
+  const emojiSchema = z
+    .string()
+    .trim()
+    .max(EMOJI_MAX_LENGTH)
+    .refine(isSingleGrapheme, 'Emoji must be a single character');
   const fmtContext = (c: Context) =>
     `${contextEmoji(c) ?? ''} ${c.slug} — ${c.label} (${c.color})`.trim();
 
@@ -134,7 +133,7 @@ export function buildMcpServer(userId: string): McpServer {
       inputSchema: {
         label: z.string().min(1),
         color: hexColor,
-        emoji: z.string().trim().min(1).max(8).optional(),
+        emoji: emojiSchema.optional(),
         exclude_from_all: z.boolean().optional(),
       },
     },
@@ -159,7 +158,7 @@ export function buildMcpServer(userId: string): McpServer {
         slug: z.string().min(1),
         label: z.string().min(1).optional(),
         color: hexColor.optional(),
-        emoji: z.string().trim().min(1).max(8).nullable().optional(),
+        emoji: emojiSchema.nullable().optional(),
         exclude_from_all: z.boolean().optional(),
       },
     },
@@ -201,7 +200,7 @@ export function buildMcpServer(userId: string): McpServer {
     'list_tasks',
     {
       description:
-        'List open tasks. Filter by context slug, status, or overdue. Each task with a deadline reports duration_min — its block length in minutes; when no explicit duration was set this is the implicit default and is marked "(default)". The latest 2 comments are shown inline, each truncated to 200 chars — call get_comments for the full text.',
+        'List open tasks (times shown in Europe/Warsaw). Filter by context slug, status, or overdue. Each task with a deadline reports duration_min — its block length in minutes; when no explicit duration was set this is the implicit default and is marked "(default)". A note, when set, is shown inline (first 200 chars).',
       inputSchema: {
         context: z.string().optional(),
         status: z.enum(['active', 'waiting', 'done', 'missed']).optional(),
@@ -220,16 +219,11 @@ export function buildMcpServer(userId: string): McpServer {
         status,
         dueBefore: overdue ? new Date() : undefined,
       });
-      const [labels, byTask] = await Promise.all([
-        contextLabels(userId),
-        commentsByTask(userId, list),
-      ]);
+      const labels = await contextLabels(userId);
       return text(
         list.length
           ? list
-              .map((t) =>
-                fmtTask(t, t.contextId ? labels.get(t.contextId) : undefined, byTask.get(t.id)),
-              )
+              .map((t) => fmtTask(t, t.contextId ? labels.get(t.contextId) : undefined))
               .join('\n')
           : 'No matching tasks.',
       );
@@ -240,7 +234,7 @@ export function buildMcpServer(userId: string): McpServer {
     'get_today',
     {
       description:
-        'Today\'s agenda: open tasks due today or overdue, plus any running timer. Each task reports duration_min — its block length in minutes; when no explicit duration was set this is the implicit default and is marked "(default)". The latest 2 comments are shown inline, each truncated to 200 chars — call get_comments for the full text.',
+        'Today\'s agenda: open tasks due today or overdue, plus any running timer. Each task reports duration_min — its block length in minutes; when no explicit duration was set this is the implicit default and is marked "(default)". A note, when set, is shown inline (first 200 chars).',
       inputSchema: {},
     },
     async () => {
@@ -249,14 +243,9 @@ export function buildMcpServer(userId: string): McpServer {
         contextLabels(userId),
         timerSvc.getActiveTimer(userId),
       ]);
-      const byTask = await commentsByTask(userId, list);
       const tasksSection = list.length
         ? 'Due today / overdue:\n' +
-          list
-            .map((t) =>
-              fmtTask(t, t.contextId ? labels.get(t.contextId) : undefined, byTask.get(t.id)),
-            )
-            .join('\n')
+          list.map((t) => fmtTask(t, t.contextId ? labels.get(t.contextId) : undefined)).join('\n')
         : 'Nothing due today.';
       const timerSection = active
         ? `\n\n⏱ Timer running: ${active.taskTitle} (since ${active.startedAt.slice(11, 16)} UTC)`
@@ -269,7 +258,7 @@ export function buildMcpServer(userId: string): McpServer {
     'create_task',
     {
       description:
-        'Create a task. Optionally set context (slug), due_at (ISO — the deadline, also the calendar block start), remind_at (ISO), duration_min (block length in minutes; a task with a due_at is shown on the calendar, default 30 min), recurrence (a repeat rule — see the recurrence field), and an initial comment.',
+        'Create a task. Optionally set context (slug), due_at (ISO 8601 — the deadline, also the calendar block start; a value without an offset is Europe/Warsaw local time, e.g. 2026-09-15T18:00 — add +02:00 or Z to be explicit), remind_at (same format), duration_min (block length in minutes; a task with a due_at is shown on the calendar, default 30 min), recurrence (a repeat rule — see the recurrence field), and a note (free text attached to the task).',
       inputSchema: {
         title: z.string().min(1),
         context: z.string().optional(),
@@ -277,10 +266,10 @@ export function buildMcpServer(userId: string): McpServer {
         remind_at: z.string().optional(),
         duration_min: z.number().int().positive().optional(),
         recurrence: recurrenceInput.optional(),
-        comment: z.string().optional(),
+        note: z.string().optional(),
       },
     },
-    async ({ title, context, due_at, remind_at, duration_min, recurrence, comment }) => {
+    async ({ title, context, due_at, remind_at, duration_min, recurrence, note }) => {
       let contextId: number | null = null;
       if (context) {
         const c = await contextsSvc.findContextBySlug(userId, context);
@@ -300,8 +289,8 @@ export function buildMcpServer(userId: string): McpServer {
         remindAt: remind_at ?? null,
         durationMin: duration_min ?? null,
         recurrence: recurrenceRule,
+        note: note ?? null,
       });
-      if (comment) await commentsSvc.addComment(userId, task.id, comment);
       logWrite('create_task', { id: task.id, title });
       return text(`Created: ${fmtTask(task)}`);
     },
@@ -311,7 +300,7 @@ export function buildMcpServer(userId: string): McpServer {
     'update_task',
     {
       description:
-        'Update a task by id or title_match. Set any of: title, context (slug), due_at (deadline / calendar block start; pass null to clear), remind_at, duration_min (block length in minutes), status, recurrence (a repeat rule — pass null to remove).',
+        'Update a task by id or title_match. Set any of: title, context (slug), due_at (deadline / calendar block start; ISO 8601, zone-less = Europe/Warsaw local time; pass null to clear), remind_at (same format), duration_min (block length in minutes), status, recurrence (a repeat rule — pass null to remove), note (free text; pass null to clear — use append_note to add to it instead of replacing).',
       inputSchema: {
         id: z.string().optional(),
         title_match: z.string().optional(),
@@ -322,6 +311,7 @@ export function buildMcpServer(userId: string): McpServer {
         duration_min: z.number().int().positive().nullable().optional(),
         status: z.enum(['active', 'waiting', 'done', 'missed']).optional(),
         recurrence: recurrenceInput.nullable().optional(),
+        note: z.string().nullable().optional(),
       },
     },
     async (a) => {
@@ -333,6 +323,7 @@ export function buildMcpServer(userId: string): McpServer {
       if (a.remind_at !== undefined) patch.remindAt = a.remind_at;
       if (a.duration_min !== undefined) patch.durationMin = a.duration_min;
       if (a.status !== undefined) patch.status = a.status;
+      if (a.note !== undefined) patch.note = a.note;
       if (a.context !== undefined) {
         const c = await contextsSvc.findContextBySlug(userId, a.context);
         if (!c) return text(`Unknown context '${a.context}'.`);
@@ -417,39 +408,22 @@ export function buildMcpServer(userId: string): McpServer {
   );
 
   reg(
-    'add_comment',
+    'append_note',
     {
-      description: 'Add a comment to a task, by id or title_match.',
+      description:
+        "Append text to a task's note (kept, separated by a blank line), by id or title_match. Use this to add context to a task without overwriting what is already there.",
       inputSchema: {
         id: z.string().optional(),
         title_match: z.string().optional(),
-        body: z.string().min(1),
+        text: z.string().min(1),
       },
     },
-    async ({ id, title_match, body }) => {
+    async ({ id, title_match, text: body }) => {
       const r = await resolveTask(userId, id, title_match);
       if (!r.task) return text(unresolvedText(r.candidates, title_match));
-      await commentsSvc.addComment(userId, r.task.id, body);
-      logWrite('add_comment', { id: r.task.id });
-      return text(`Comment added to "${r.task.title}".`);
-    },
-  );
-
-  reg(
-    'get_comments',
-    {
-      description: 'Read the full comments on a task, by id or title_match. Oldest first.',
-      inputSchema: { id: z.string().optional(), title_match: z.string().optional() },
-    },
-    async ({ id, title_match }) => {
-      const r = await resolveTask(userId, id, title_match);
-      if (!r.task) return text(unresolvedText(r.candidates, title_match));
-      const list = await commentsSvc.listComments(userId, r.task.id);
-      if (list.length === 0) return text(`No comments on "${r.task.title}".`);
-      return text(
-        `Comments on "${r.task.title}":\n` +
-          list.map((c) => `• ${c.createdAt.slice(0, 16).replace('T', ' ')} — ${c.body}`).join('\n'),
-      );
+      const updated = await tasksSvc.appendNote(userId, r.task.id, body);
+      logWrite('append_note', { id: updated.id });
+      return text(`Note updated: ${fmtTask(updated)}`);
     },
   );
 

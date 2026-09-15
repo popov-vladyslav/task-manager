@@ -67,6 +67,13 @@ build installed before that rename polls the now-dead `preview` channel and will
 further OTA updates — it must be reinstalled once from a fresh build. Internal-distribution
 builds do not self-update.
 
+**Running web against stage locally.** Use `npm --workspace app run web:stage` — it sets
+`APP_VARIANT`/`EXPO_PUBLIC_API_URL` and serves Expo web on `http://localhost:8081`. This only
+works if the stage `log-api`'s `ALLOWED_ORIGINS` env var (see `server/src/env.ts`) includes
+`http://localhost:8081` — unlike native, browser requests carry an `Origin` header and are
+rejected by CORS if it's not allowlisted (native requests have no `Origin` header and always
+pass). The production default already includes `localhost:8081`; stage needs it set explicitly.
+
 ## MCP connector (claude.ai)
 
 The API exposes an MCP server at `POST /mcp` (Streamable HTTP) with 8 thick tools:

@@ -1,5 +1,3 @@
-// Fixed palette with a representative RGB per emoji for nearest matching.
-// Tuned so the app's context colors map intuitively (amber → 🟠, not 🟡).
 const PALETTE: { emoji: string; rgb: [number, number, number] }[] = [
   { emoji: '🔵', rgb: [45, 120, 230] },
   { emoji: '🟢', rgb: [80, 190, 90] },
@@ -19,7 +17,6 @@ function parseHex(hex: string): [number, number, number] | null {
   return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
 }
 
-// Nearest palette emoji to a hex color by squared RGB distance.
 export function nearestEmoji(hex: string | null): string | null {
   if (!hex) return null;
   const rgb = parseHex(hex);
@@ -36,7 +33,25 @@ export function nearestEmoji(hex: string | null): string | null {
   return best;
 }
 
-// The emoji to show for a context: its own when set, else derived from its color.
 export function contextEmoji(ctx: { emoji?: string | null; color: string | null }): string | null {
   return ctx.emoji || nearestEmoji(ctx.color);
+}
+
+export const EMOJI_MAX_LENGTH = 32;
+
+export function graphemes(s: string): string[] {
+  const Segmenter = (
+    Intl as { Segmenter?: new () => { segment(s: string): Iterable<{ segment: string }> } }
+  ).Segmenter;
+  if (Segmenter) return Array.from(new Segmenter().segment(s), (x) => x.segment);
+  return Array.from(s);
+}
+
+export function firstGrapheme(s: string): string {
+  return graphemes(s.trim())[0] ?? '';
+}
+
+export function isSingleGrapheme(s: string): boolean {
+  const t = s.trim();
+  return t.length > 0 && t.length <= EMOJI_MAX_LENGTH && graphemes(t).length === 1;
 }

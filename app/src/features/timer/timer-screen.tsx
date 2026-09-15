@@ -1,5 +1,14 @@
 import { useEffect, useState } from 'react';
-import { AppState, Modal, Platform, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import {
+  AppState,
+  Modal,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  useWindowDimensions,
+  View,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useKeepAwake } from 'expo-keep-awake';
 import * as ScreenOrientation from 'expo-screen-orientation';
@@ -56,6 +65,7 @@ function TimerModal() {
   }, []);
 
   const running = useTimerStore((s) => s.running);
+  const taskTitle = useTimerStore((s) => s.session?.taskTitle ?? '');
   const runningSince = useTimerStore((s) => s.runningSince);
   const baseMs = useTimerStore((s) => s.baseMs);
   const pause = useTimerStore((s) => s.pause);
@@ -88,7 +98,13 @@ function TimerModal() {
   const maxSize = landscape ? 240 : 108;
 
   return (
-    <Modal visible transparent={false} animationType="fade" onRequestClose={close} statusBarTranslucent>
+    <Modal
+      visible
+      transparent={false}
+      animationType="fade"
+      onRequestClose={close}
+      statusBarTranslucent
+    >
       <View style={styles.root}>
         <Pressable
           onPress={close}
@@ -100,6 +116,9 @@ function TimerModal() {
         </Pressable>
 
         <View style={styles.center}>
+          <Text numberOfLines={2} style={styles.title}>
+            {taskTitle}
+          </Text>
           <Text
             numberOfLines={1}
             adjustsFontSizeToFit
@@ -133,6 +152,14 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#000' },
   closeBtn: { position: 'absolute', right: 20, padding: 8, zIndex: 2 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 40 },
+  title: {
+    textAlign: 'center',
+    fontSize: 15,
+    fontWeight: '500',
+    color: MUTED,
+    marginBottom: 12,
+    maxWidth: 480,
+  },
   digits: {
     alignSelf: 'stretch',
     textAlign: 'center',

@@ -51,6 +51,7 @@
     "start": "expo start",
     "start:prod": "APP_VARIANT=production EXPO_PUBLIC_API_URL=https://api.task-tracker.net expo start",
     "start:stage": "APP_VARIANT=stage EXPO_PUBLIC_API_URL=https://stage-api.task-tracker.net expo start",
+    "web:stage": "APP_VARIANT=stage EXPO_PUBLIC_API_URL=https://stage-api.task-tracker.net expo start --web",
     "ios:prod": "export APP_VARIANT=production EXPO_PUBLIC_API_URL=https://api.task-tracker.net EXPO_NO_GIT_STATUS=1 && expo prebuild --platform ios --clean && expo run:ios",
     "ios:stage": "export APP_VARIANT=stage EXPO_PUBLIC_API_URL=https://stage-api.task-tracker.net EXPO_NO_GIT_STATUS=1 && expo prebuild --platform ios --clean && expo run:ios",
     "android": "expo run:android",

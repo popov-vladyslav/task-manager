@@ -1,6 +1,6 @@
 import type { InferSelectModel } from 'drizzle-orm';
-import type { Context, Task, Comment } from '@task-manager/shared';
-import { contexts, tasks, comments } from './schema';
+import type { Context, Task } from '@task-manager/shared';
+import { contexts, tasks } from './schema';
 
 const iso = (d: Date | null): string | null => (d ? d.toISOString() : null);
 
@@ -18,7 +18,6 @@ export function toContext(r: InferSelectModel<typeof contexts>): Context {
 }
 
 export interface TaskExtras {
-  commentsCount: number;
   nextInstance: string | null;
   recurrenceRule: string | null;
 }
@@ -40,16 +39,7 @@ export function toTask(r: InferSelectModel<typeof tasks>, extras: TaskExtras): T
     completedAt: iso(r.completedAt),
     createdAt: r.createdAt.toISOString(),
     createdVia: r.createdVia,
-    commentsCount: extras.commentsCount,
+    note: r.note,
     nextInstance: extras.nextInstance,
-  };
-}
-
-export function toComment(r: InferSelectModel<typeof comments>): Comment {
-  return {
-    id: r.id,
-    taskId: r.taskId as string,
-    body: r.body,
-    createdAt: r.createdAt.toISOString(),
   };
 }

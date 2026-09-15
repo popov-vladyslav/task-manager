@@ -3,7 +3,7 @@
 //
 // These are the tests the spec requires ("tests that actively attempt to cross
 // the boundary and assert failure"). They grow as each module is scoped —
-// contexts here (step 9); tasks, comments, timer, calendar and data follow.
+// contexts here (step 9); tasks, timer, calendar and data follow.
 import { after, before, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { eq } from 'drizzle-orm';
@@ -228,37 +228,7 @@ test('A cannot attach a task to B’s context', async () => {
   assert.notEqual(row.contextId, bobCtx);
 });
 
-// -------------------------------------------- comments / timer / data --
-
-test('A cannot read, add to, or delete comments on B’s task', async () => {
-  const taskId = await bobsTaskId();
-
-  const added = await fetch(`${server.baseUrl}/api/tasks/${taskId}/comments`, {
-    method: 'POST',
-    headers: bob.headers,
-    body: JSON.stringify({ body: 'bob private note' }),
-  });
-  assert.equal(added.status, 201);
-  const bobComment = (await added.json()) as { id: string };
-
-  const read = await fetch(`${server.baseUrl}/api/tasks/${taskId}/comments`, {
-    headers: alice.headers,
-  });
-  assert.deepEqual(await read.json(), [], "B's comments must not be readable by A");
-
-  const write = await fetch(`${server.baseUrl}/api/tasks/${taskId}/comments`, {
-    method: 'POST',
-    headers: alice.headers,
-    body: JSON.stringify({ body: 'injected' }),
-  });
-  assert.equal(write.status, 404, 'commenting on another account’s task must fail');
-
-  const del = await fetch(`${server.baseUrl}/api/comments/${bobComment.id}`, {
-    method: 'DELETE',
-    headers: alice.headers,
-  });
-  assert.equal(del.status, 404);
-});
+// ------------------------------------------------------- timer / data --
 
 // The running timer used to be table-wide: one account starting or stopping a
 // timer would have closed whoever else's happened to be open.
@@ -445,9 +415,6 @@ test('every /api route requires authentication', async () => {
     ['DELETE', '/api/tasks/x'],
     ['POST', '/api/tasks/x/reorder'],
     ['POST', '/api/tasks/x/snooze'],
-    ['GET', '/api/tasks/x/comments'],
-    ['POST', '/api/tasks/x/comments'],
-    ['DELETE', '/api/comments/x'],
     ['GET', '/api/timer'],
     ['POST', '/api/timer/start'],
     ['POST', '/api/timer/stop'],

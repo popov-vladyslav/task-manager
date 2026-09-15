@@ -42,7 +42,7 @@ function sample(id: string, title: string, patch: Partial<Task>): Task {
     completedAt: null,
     createdAt: hourAgo,
     createdVia: 'app',
-    commentsCount: 0,
+    note: null,
     nextInstance: null,
     ...patch,
   };

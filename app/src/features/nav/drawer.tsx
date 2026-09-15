@@ -7,7 +7,7 @@ import ReorderableList, {
   useReorderableDrag,
 } from 'react-native-reorderable-list';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { EyeOff, Menu, Plus } from 'lucide-react-native';
+import { EyeOff, List, Plus } from 'lucide-react-native';
 import { contextEmoji, type Context } from '@task-manager/shared';
 import { haptics } from '../../lib/haptics';
 import { useTasksStore } from '../../store/tasks';
@@ -66,7 +66,13 @@ function ContextRow({
 
 const MemoRow = memo(ContextRow);
 
-export function DrawerContent({ onNavigate }: { onNavigate?: () => void }) {
+export function DrawerContent({
+  onNavigate,
+  showFooter = true,
+}: {
+  onNavigate?: () => void;
+  showFooter?: boolean;
+}) {
   const t = useTheme();
   const styles = useMemo(() => makeStyles(t), [t]);
   const contexts = useTasksStore((s) => s.contexts);
@@ -106,7 +112,7 @@ export function DrawerContent({ onNavigate }: { onNavigate?: () => void }) {
         accessibilityState={{ selected: activeContextId == null }}
         style={[styles.row, styles.allRow, activeContextId == null && styles.rowActive]}
       >
-        <Menu size={16} color={t.colors.textPrimary} strokeWidth={1.9} />
+        <List size={16} color={t.colors.textPrimary} strokeWidth={1.9} />
         <Text style={styles.label}>All</Text>
         <Text style={styles.count}>{counts.all}</Text>
       </Pressable>
@@ -148,16 +154,18 @@ export function DrawerContent({ onNavigate }: { onNavigate?: () => void }) {
         }
       />
 
-      <View style={styles.footer}>
-        <Pressable
-          onPress={() => openContextEditor(null)}
-          accessibilityRole="button"
-          style={({ pressed }) => [styles.newContext, pressed && styles.pressed]}
-        >
-          <Plus size={15} color={t.colors.accentPrimary} strokeWidth={2.4} />
-          <Text style={styles.newContextText}>New context</Text>
-        </Pressable>
-      </View>
+      {showFooter ? (
+        <View style={styles.footer}>
+          <Pressable
+            onPress={() => openContextEditor(null)}
+            accessibilityRole="button"
+            style={({ pressed }) => [styles.newContext, pressed && styles.pressed]}
+          >
+            <Plus size={15} color={t.colors.accentPrimary} strokeWidth={2.4} />
+            <Text style={styles.newContextText}>New context</Text>
+          </Pressable>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -183,8 +191,8 @@ export function Drawer() {
     [openDrawer, closeDrawer],
   );
 
-  const pan = useMemo(
-    () =>
+  const [edgePan, panelPan] = useMemo(() => {
+    const makePan = () =>
       Gesture.Pan()
         .runOnJS(true)
         .activeOffsetX([-12, 12])
@@ -199,15 +207,19 @@ export function Drawer() {
           const shouldOpen = e.velocityX > 300 || (e.velocityX > -300 && x.value > -WIDTH / 2);
           x.value = withTiming(shouldOpen ? 0 : -WIDTH, { duration: DURATION });
           settle(shouldOpen);
-        }),
-    [dragStart, settle, x],
-  );
+        });
+    return [makePan(), makePan()];
+  }, [dragStart, settle, x]);
 
   const panelStyle = useAnimatedStyle(() => ({ transform: [{ translateX: x.value }] }));
   const scrimStyle = useAnimatedStyle(() => ({ opacity: (x.value + WIDTH) / WIDTH }));
   const inset = useMemo(
-    () => StyleSheet.create({ panel: { paddingTop: insets.top + 14 } }),
-    [insets.top],
+    () =>
+      StyleSheet.create({
+        panel: { paddingTop: insets.top + 14 },
+        edge: { top: insets.top + 60, bottom: insets.bottom + 72 },
+      }),
+    [insets.top, insets.bottom],
   );
 
   if (width >= t.sizes.wideBreakpoint) return null;
@@ -215,14 +227,14 @@ export function Drawer() {
   return (
     <>
       {!open ? (
-        <GestureDetector gesture={pan}>
-          <View style={styles.edge} />
+        <GestureDetector gesture={edgePan}>
+          <View style={[styles.edge, inset.edge]} />
         </GestureDetector>
       ) : null}
       <Animated.View pointerEvents={open ? 'auto' : 'none'} style={[styles.scrim, scrimStyle]}>
         <Pressable onPress={closeDrawer} accessibilityLabel="Close menu" style={styles.flex1} />
       </Animated.View>
-      <GestureDetector gesture={pan}>
+      <GestureDetector gesture={panelPan}>
         <Animated.View
           pointerEvents={open ? 'auto' : 'none'}
           style={[styles.panel, inset.panel, panelStyle]}
@@ -237,7 +249,7 @@ export function Drawer() {
 const makeStyles = (t: Theme) =>
   StyleSheet.create({
     flex1: { flex: 1 },
-    edge: { position: 'absolute', left: 0, top: 0, bottom: 0, width: EDGE },
+    edge: { position: 'absolute', left: 0, width: EDGE },
     scrim: {
       position: 'absolute',
       left: 0,

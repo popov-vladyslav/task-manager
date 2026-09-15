@@ -16,6 +16,7 @@ interface HeaderProps {
   onTitlePress?: () => void;
   titleRef?: Ref<View>;
   align?: 'center' | 'start';
+  horizontalPadding?: number;
 }
 
 export function Header({
@@ -29,13 +30,17 @@ export function Header({
   onTitlePress,
   titleRef,
   align = 'center',
+  horizontalPadding = 12,
 }: HeaderProps) {
   const t = useTheme();
   const insets = useSafeAreaInsets();
   const styles = useMemo(() => makeStyles(t), [t]);
   const inset = useMemo(
-    () => StyleSheet.create({ row: { paddingTop: insets.top + 8 } }),
-    [insets.top],
+    () =>
+      StyleSheet.create({
+        row: { paddingTop: insets.top + 8, paddingHorizontal: horizontalPadding },
+      }),
+    [insets.top, horizontalPadding],
   );
 
   const leftNode =
@@ -93,7 +98,6 @@ const makeStyles = (t: Theme) =>
     row: {
       flexDirection: 'row',
       alignItems: 'center',
-      paddingHorizontal: 12,
       paddingBottom: 8,
       gap: 10,
     },

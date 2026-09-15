@@ -44,11 +44,22 @@ function MobileSheet({ open, onClose, children, padded = true }: BottomSheetProp
   const t = useTheme();
   const styles = useMemo(() => makeStyles(t), [t]);
   const ref = useRef<BottomSheetModal>(null);
+  const presented = useRef(false);
 
   useEffect(() => {
-    if (open) ref.current?.present();
-    else ref.current?.dismiss();
+    if (open) {
+      presented.current = true;
+      ref.current?.present();
+    } else if (presented.current) {
+      presented.current = false;
+      ref.current?.dismiss();
+    }
   }, [open]);
+
+  const handleDismiss = useCallback(() => {
+    presented.current = false;
+    onClose();
+  }, [onClose]);
 
   const renderBackdrop = useCallback(
     (p: BottomSheetBackdropProps) => (
@@ -68,7 +79,8 @@ function MobileSheet({ open, onClose, children, padded = true }: BottomSheetProp
       ref={ref}
       enableDynamicSizing
       enablePanDownToClose
-      onDismiss={onClose}
+      stackBehavior="push"
+      onDismiss={handleDismiss}
       backdropComponent={renderBackdrop}
       keyboardBehavior="interactive"
       keyboardBlurBehavior="restore"

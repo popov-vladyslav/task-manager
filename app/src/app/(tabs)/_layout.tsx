@@ -62,7 +62,7 @@ export default function TabsLayout() {
         <TabTrigger name="calendar" href="/calendar" />
         <TabTrigger name="countdown" href="/countdown" />
         <TabTrigger name="settings" href="/settings" />
-        <TabTrigger name="demo" href="/demo" />
+        {__DEV__ ? <TabTrigger name="demo" href="/demo" /> : null}
       </TabList>
 
       <Drawer />

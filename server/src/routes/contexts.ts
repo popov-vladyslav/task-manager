@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
+import { EMOJI_MAX_LENGTH, isSingleGrapheme } from '@task-manager/shared';
 import * as svc from '../services/contexts';
 import { requireUserId } from '../middleware/auth';
 
@@ -9,12 +10,18 @@ const router = Router();
 // color→emoji matcher (nearestEmoji) can parse.
 const hexColor = z.string().regex(/^#[0-9a-fA-F]{6}$/, 'Color must be a #RRGGBB hex string');
 
+const emojiSchema = z
+  .string()
+  .trim()
+  .max(EMOJI_MAX_LENGTH)
+  .refine(isSingleGrapheme, 'Emoji must be a single character');
+
 const createSchema = z.object({
   label: z.string().min(1),
   color: hexColor,
   slug: z.string().optional(),
   excludeFromAll: z.boolean().optional(),
-  emoji: z.string().trim().min(1).max(8).optional(),
+  emoji: emojiSchema.optional(),
 });
 
 const updateSchema = z.object({
@@ -22,8 +29,7 @@ const updateSchema = z.object({
   color: hexColor.optional(),
   archived: z.boolean().optional(),
   excludeFromAll: z.boolean().optional(),
-  emoji: z.string().trim().min(1).max(8).nullable().optional(),
-  sortOrder: z.number().int().min(0).optional(),
+  emoji: emojiSchema.nullable().optional(),
 });
 
 const reorderSchema = z.object({

@@ -1,7 +1,13 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 import { Trash2, X } from 'lucide-react-native';
-import { contextPalette, nearestEmoji, type Context } from '@task-manager/shared';
+import {
+  contextPalette,
+  EMOJI_MAX_LENGTH,
+  firstGrapheme,
+  nearestEmoji,
+  type Context,
+} from '@task-manager/shared';
 import { BottomSheet, SheetInput } from '../../components/bottom-sheet';
 import { useTasksStore } from '../../store/tasks';
 import { useUiStore } from '../../store/ui';
@@ -35,13 +41,6 @@ function ContextEditorForm({ context, onClose }: { context?: Context; onClose: (
   const [excludeFromAll, setExcludeFromAll] = useState(context?.excludeFromAll ?? false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    setLabel(context?.label ?? '');
-    setColor(context?.color ?? contextPalette[0]);
-    setEmoji(context?.emoji ?? '');
-    setExcludeFromAll(context?.excludeFromAll ?? false);
-  }, [context]);
 
   const canSave = label.trim().length > 0 && !busy;
   const derived = nearestEmoji(color) ?? '';
@@ -97,10 +96,10 @@ function ContextEditorForm({ context, onClose }: { context?: Context; onClose: (
         <View style={[styles.emojiBox, dynamic.emojiBox]}>
           <SheetInput
             value={emoji}
-            onChangeText={(v) => setEmoji(Array.from(v.trim()).slice(0, 2).join(''))}
+            onChangeText={(v) => setEmoji(firstGrapheme(v))}
             placeholder={derived}
             placeholderTextColor={t.colors.textMuted}
-            maxLength={8}
+            maxLength={EMOJI_MAX_LENGTH}
             accessibilityLabel="Emoji"
             style={[styles.emojiInput, webInputReset]}
           />

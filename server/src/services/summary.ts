@@ -1,4 +1,4 @@
-import { and, asc, isNotNull, isNull, lt, notInArray, sql } from 'drizzle-orm';
+import { and, asc, isNotNull, isNull, lt, notInArray } from 'drizzle-orm';
 import { TERMINAL_STATUSES, type MorningSummary } from '@task-manager/shared';
 import { db } from '../db/client';
 import { tasks } from '../db/schema';
@@ -19,7 +19,6 @@ export async function getMorningSummary(
   const rows = await db
     .select({
       task: tasks,
-      commentsCount: sql<number>`(select count(*)::int from comments c where c.task_id = ${tasks.id})`,
     })
     .from(tasks)
     .where(
@@ -35,7 +34,6 @@ export async function getMorningSummary(
 
   const overdue = rows.map((r) =>
     toTask(r.task, {
-      commentsCount: Number(r.commentsCount ?? 0),
       // Ordinary tasks only, so there is never a recurrence rule to report.
       nextInstance: null,
       recurrenceRule: null,

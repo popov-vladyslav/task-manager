@@ -1,5 +1,11 @@
 import { create } from 'zustand';
-import type { Context, ReorderScope, Task, UpdateContextInput } from '@task-manager/shared';
+import type {
+  Context,
+  RecurrenceInput,
+  ReorderScope,
+  Task,
+  UpdateContextInput,
+} from '@task-manager/shared';
 import { api } from '../lib/api';
 import { TOAST_DURATION_MS, useToastStore } from './toast';
 
@@ -52,13 +58,14 @@ interface TasksState {
       dueAt?: string | null;
       remindAt?: string | null;
       durationMin?: number | null;
+      note?: string | null;
+      recurrence?: RecurrenceInput | null;
     },
   ) => Promise<Task | null>;
   toggleComplete: (task: Task) => Promise<void>;
   patchTask: (id: string, patch: Parameters<typeof api.updateTask>[1]) => Promise<void>;
   removeTask: (id: string) => Promise<void>;
   undoRemove: (id: string) => void; // restore a task within its delete-undo window
-  adjustCommentCount: (id: string, delta: number) => void;
   reorder: (
     id: string,
     afterId: string | null,
@@ -184,6 +191,8 @@ export const useTasksStore = create<TasksState>((set, get) => ({
       dueAt: extra?.dueAt ?? undefined,
       remindAt: extra?.remindAt ?? undefined,
       durationMin: extra?.durationMin ?? undefined,
+      note: extra?.note ?? undefined,
+      recurrence: extra?.recurrence ?? undefined,
     });
     set({ tasks: [created, ...get().tasks] });
     return created;
@@ -236,14 +245,6 @@ export const useTasksStore = create<TasksState>((set, get) => ({
     clearTimeout(pending.timer);
     pendingDeletes.delete(id);
     if (!get().tasks.some((t) => t.id === id)) set({ tasks: [pending.task, ...get().tasks] });
-  },
-
-  adjustCommentCount(id, delta) {
-    set({
-      tasks: get().tasks.map((t) =>
-        t.id === id ? { ...t, commentsCount: Math.max(0, t.commentsCount + delta) } : t,
-      ),
-    });
   },
 
   requestOpenTask(id) {

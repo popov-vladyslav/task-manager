@@ -1,7 +1,6 @@
 import type {
   ActiveTimer,
   CalendarData,
-  Comment,
   Context,
   CreateContextInput,
   CreateTaskInput,
@@ -104,10 +103,6 @@ export const api = {
     request<Task>(`/api/tasks/${id}/reorder`, { method: 'POST', body: input }),
   snoozeTask: (id: string, minutes: number) =>
     request<Task>(`/api/tasks/${id}/snooze`, { method: 'POST', body: { minutes } }),
-  listComments: (taskId: string) => request<Comment[]>(`/api/tasks/${taskId}/comments`),
-  addComment: (taskId: string, body: string) =>
-    request<Comment>(`/api/tasks/${taskId}/comments`, { method: 'POST', body: { body } }),
-  deleteComment: (id: string) => request<void>(`/api/comments/${id}`, { method: 'DELETE' }),
   registerPush: (token: string, device?: string) =>
     request<{ ok: boolean }>('/api/push/register', { method: 'POST', body: { token, device } }),
   getActiveTimer: () => request<ActiveTimer | null>('/api/timer'),

@@ -1,4 +1,5 @@
 import { DEFAULT_DURATION_MIN, formatTrackedShort, type Task } from '@task-manager/shared';
+import { fmtWhen } from './when';
 
 // One-line rendering of a task for the MCP tools. Pure, so the payload a client
 // actually receives is unit-testable.
@@ -14,32 +15,22 @@ export function fmtDuration(t: Pick<Task, 'dueAt' | 'durationMin'>): string | nu
   return `duration_min=${DEFAULT_DURATION_MIN} (default)`;
 }
 
-// Inline comment preview for the MCP list tools. Cap is on both count and body
-// length: prod bodies average ~426 chars while no task has more than 2 comments,
-// so length is the real payload risk. Full text lives behind get_comments.
-const COMMENT_CAP = 2;
-const COMMENT_BODY_MAX = 200;
+const NOTE_MAX = 200;
 
-export interface CommentPreview {
-  body: string;
-  createdAt: string;
+function clip(text: string, max: number): string {
+  const flat = text.replace(/\s+/g, ' ').trim();
+  return flat.length > max ? `${flat.slice(0, max)}…` : flat;
 }
 
-function fmtComment(c: CommentPreview): string {
-  const body = c.body.replace(/\s+/g, ' ').trim();
-  const shown = body.length > COMMENT_BODY_MAX ? `${body.slice(0, COMMENT_BODY_MAX)}…` : body;
-  return `    ↳ ${c.createdAt.slice(0, 10)}: ${shown}`;
-}
-
-export function fmtTask(t: Task, contextLabel?: string, comments?: CommentPreview[]): string {
+export function fmtTask(t: Task, contextLabel?: string): string {
   const bits = [`• ${t.title}`, `[${t.id}]`];
   if (contextLabel) bits.push(`(${contextLabel})`);
   if (t.dueAt) {
-    bits.push(`due ${t.dueAt.slice(0, 16).replace('T', ' ')}`);
+    bits.push(`due ${fmtWhen(t.dueAt)}`);
     const duration = fmtDuration(t);
     if (duration) bits.push(duration);
   }
-  if (t.remindAt) bits.push(`remind ${t.remindAt.slice(0, 16).replace('T', ' ')}`);
+  if (t.remindAt) bits.push(`remind ${fmtWhen(t.remindAt)}`);
   // Time actually spent, accumulated across timer sessions. Omitted when never
   // tracked, so an untouched task stays terse.
   const tracked = formatTrackedShort(t.trackedSec);
@@ -48,8 +39,7 @@ export function fmtTask(t: Task, contextLabel?: string, comments?: CommentPrevie
     bits.push(`repeats ${t.recurrenceRule}${t.nextInstance ? ` (next ${t.nextInstance})` : ''}`);
   }
   if (t.status !== 'active') bits.push(t.status);
-  if (t.commentsCount) bits.push(`${t.commentsCount} comment(s)`);
-  const line = bits.join(' ');
-  if (!comments?.length) return line;
-  return [line, ...comments.slice(-COMMENT_CAP).map(fmtComment)].join('\n');
+  const lines = [bits.join(' ')];
+  if (t.note) lines.push(`    note: ${clip(t.note, NOTE_MAX)}`);
+  return lines.join('\n');
 }
