@@ -90,7 +90,10 @@ export async function resolveToken(rawToken: string): Promise<ResolvedToken | nu
   // scale-to-zero database awake for no user-visible benefit.
   const hourAgo = new Date(Date.now() - 3_600_000);
   if (!row.lastUsedAt || row.lastUsedAt < hourAgo) {
-    await db.update(mcpTokens).set({ lastUsedAt: sql`now()` }).where(eq(mcpTokens.id, row.id));
+    await db
+      .update(mcpTokens)
+      .set({ lastUsedAt: sql`now()` })
+      .where(eq(mcpTokens.id, row.id));
   }
 
   return { userId: row.userId, tokenId: row.id };

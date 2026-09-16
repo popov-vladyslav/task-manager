@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Check } from 'lucide-react-native';
 import { contextEmoji, type Context } from '@task-manager/shared';
 import { Popover, type AnchorRect } from '../../components/popover';
+import { useT } from '../../lib/i18n';
 import { useTasksStore } from '../../store/tasks';
 import { openCounts } from '../../store/task-selectors';
 import { useTheme, type Theme } from '../../theme';
@@ -16,6 +17,7 @@ interface ContextPopoverProps {
 
 export function ContextPopover({ anchor, selectedId, onSelect, onClose }: ContextPopoverProps) {
   const t = useTheme();
+  const tr = useT();
   const styles = useMemo(() => makeStyles(t), [t]);
   const contexts = useTasksStore((s) => s.contexts);
   const tasks = useTasksStore((s) => s.tasks);
@@ -45,7 +47,7 @@ export function ContextPopover({ anchor, selectedId, onSelect, onClose }: Contex
         style={({ pressed }) => [styles.row, (pressed || selectedId == null) && styles.rowOn]}
       >
         <View style={[styles.emojiBox, styles.emojiBoxNone]} />
-        <Text style={styles.name}>No context</Text>
+        <Text style={styles.name}>{tr('common.noContext')}</Text>
         {selectedId == null ? (
           <Check size={14} color={t.colors.accentPrimary} strokeWidth={2.6} />
         ) : null}

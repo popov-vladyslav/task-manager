@@ -47,7 +47,9 @@ before(async () => {
   // Seed it the way the single-user database actually looks: a context, a task
   // in it, a comment and a tracked interval on that task, a push token and a
   // settings row. None of these carry an owner yet.
-  await client.query(`INSERT INTO contexts (slug, label, color) VALUES ('work', 'Work', '#112233')`);
+  await client.query(
+    `INSERT INTO contexts (slug, label, color) VALUES ('work', 'Work', '#112233')`,
+  );
   await client.query(`
     INSERT INTO tasks (title, context_id, status)
     VALUES ('legacy task', (SELECT id FROM contexts WHERE slug = 'work'), 'active')
@@ -60,8 +62,12 @@ before(async () => {
     INSERT INTO time_entries (task_id, started_at, ended_at)
     VALUES ((SELECT id FROM tasks WHERE title = 'legacy task'), now() - interval '1 hour', now())
   `);
-  await client.query(`INSERT INTO push_tokens (token, device) VALUES ('ExpoPushToken[legacy]', 'iPhone')`);
-  await client.query(`INSERT INTO settings (key, value) VALUES ('repeat_reminders', 'true'::jsonb)`);
+  await client.query(
+    `INSERT INTO push_tokens (token, device) VALUES ('ExpoPushToken[legacy]', 'iPhone')`,
+  );
+  await client.query(
+    `INSERT INTO settings (key, value) VALUES ('repeat_reminders', 'true'::jsonb)`,
+  );
 
   // ...then upgrade.
   await apply(MIGRATION_UNDER_TEST);

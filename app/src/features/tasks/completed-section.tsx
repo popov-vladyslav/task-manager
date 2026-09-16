@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Check, ChevronDown, ChevronRight } from 'lucide-react-native';
 import type { Task } from '@task-manager/shared';
+import { useIntlTag, useT, type T } from '../../lib/i18n';
 import { useTheme, type Theme } from '../../theme';
 
 const WARSAW_TZ = 'Europe/Warsaw';
@@ -24,12 +25,12 @@ function warsawDayKey(iso: string): string {
   }
 }
 
-function completedDayLabel(key: string): string {
-  if (!key) return 'Earlier';
+function completedDayLabel(key: string, tr: T, intl: string): string {
+  if (!key) return tr('common.earlier');
   const now = Date.now();
-  if (key === warsawDayKey(new Date(now).toISOString())) return 'Today';
-  if (key === warsawDayKey(new Date(now - 86_400_000).toISOString())) return 'Yesterday';
-  return new Date(`${key}T12:00:00`).toLocaleDateString('en-US', {
+  if (key === warsawDayKey(new Date(now).toISOString())) return tr('common.today');
+  if (key === warsawDayKey(new Date(now - 86_400_000).toISOString())) return tr('common.yesterday');
+  return new Date(`${key}T12:00:00`).toLocaleDateString(intl, {
     weekday: 'short',
     month: 'short',
     day: 'numeric',
@@ -42,7 +43,7 @@ interface CompletedGroup {
   tasks: Task[];
 }
 
-export function groupCompletedByDay(tasks: Task[]): CompletedGroup[] {
+export function groupCompletedByDay(tasks: Task[], tr: T, intl: string): CompletedGroup[] {
   const groups = new Map<string, Task[]>();
   for (const t of tasks) {
     const key = t.completedAt ? warsawDayKey(t.completedAt) : '';
@@ -54,7 +55,7 @@ export function groupCompletedByDay(tasks: Task[]): CompletedGroup[] {
     .sort(([a], [b]) => (a < b ? 1 : a > b ? -1 : 0))
     .map(([key, ts]) => ({
       key,
-      label: completedDayLabel(key),
+      label: completedDayLabel(key, tr, intl),
       tasks: ts.sort((a, b) => (b.completedAt ?? '').localeCompare(a.completedAt ?? '')),
     }));
 }
@@ -75,8 +76,10 @@ export function CompletedSection({
   onOpen,
 }: CompletedSectionProps) {
   const t = useTheme();
+  const tr = useT();
+  const intl = useIntlTag();
   const styles = useMemo(() => makeStyles(t), [t]);
-  const groups = useMemo(() => groupCompletedByDay(tasks), [tasks]);
+  const groups = useMemo(() => groupCompletedByDay(tasks, tr, intl), [tasks, tr, intl]);
 
   return (
     <View style={styles.wrap}>
@@ -86,11 +89,13 @@ export function CompletedSection({
         ) : (
           <ChevronRight size={14} color={t.colors.textMuted} />
         )}
-        <Text style={styles.toggleLabel}>{open ? 'HIDE COMPLETED' : 'SHOW COMPLETED'}</Text>
+        <Text style={styles.toggleLabel}>
+          {open ? tr('tasks.completed.hide') : tr('tasks.completed.show')}
+        </Text>
       </Pressable>
       {open ? (
         tasks.length === 0 ? (
-          <Text style={styles.none}>No completed tasks</Text>
+          <Text style={styles.none}>{tr('tasks.completed.empty')}</Text>
         ) : (
           groups.map((g) => (
             <View key={g.key || 'earlier'} style={styles.group}>
@@ -104,7 +109,7 @@ export function CompletedSection({
                     }}
                     hitSlop={8}
                     accessibilityRole="checkbox"
-                    accessibilityLabel={`Reopen ${task.title}`}
+                    accessibilityLabel={tr('tasks.completed.reopen', { title: task.title })}
                     style={styles.check}
                   >
                     <Check size={12} color={t.colors.bgBase} />

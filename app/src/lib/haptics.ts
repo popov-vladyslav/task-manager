@@ -26,6 +26,7 @@ export const haptics = {
   },
   // Affirmative buzz for completing something.
   success() {
-    if (enabled) Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+    if (enabled)
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
   },
 };

@@ -8,6 +8,7 @@ import {
   type LucideProps,
 } from 'lucide-react-native';
 import { TabTrigger, type TabTriggerSlotProps } from 'expo-router/ui';
+import { useT } from '../../lib/i18n';
 import { colors } from '../../theme';
 
 // Shared navigation chrome for the custom tab layout. Screen switching runs
@@ -19,19 +20,20 @@ type IconType = ComponentType<LucideProps>;
 
 // ---- Mobile bottom bar (rendered by the tabs layout) ----
 export function MobileTabBar({ bottomInset }: { bottomInset: number }) {
+  const tr = useT();
   return (
     <View style={[styles.mobileBar, { paddingBottom: bottomInset }]}>
       <TabTrigger name="index" asChild>
-        <BottomTabButton label="Tasks" icon={ListTodo} />
+        <BottomTabButton label={tr('common.tasks')} icon={ListTodo} />
       </TabTrigger>
       <TabTrigger name="calendar" asChild>
-        <BottomTabButton label="Calendar" icon={CalendarDays} />
+        <BottomTabButton label={tr('nav.calendar')} icon={CalendarDays} />
       </TabTrigger>
       <TabTrigger name="countdown" asChild>
-        <BottomTabButton label="Countdown" icon={Hourglass} />
+        <BottomTabButton label={tr('nav.countdown')} icon={Hourglass} />
       </TabTrigger>
       <TabTrigger name="settings" asChild>
-        <BottomTabButton label="Settings" icon={SettingsIcon} />
+        <BottomTabButton label={tr('nav.settings')} icon={SettingsIcon} />
       </TabTrigger>
     </View>
   );
@@ -39,19 +41,20 @@ export function MobileTabBar({ bottomInset }: { bottomInset: number }) {
 
 // ---- Web sidebar nav links (rendered inside each screen's sidebar) ----
 export function SideNavLinks() {
+  const tr = useT();
   return (
     <>
       <TabTrigger name="index" asChild>
-        <SideNavButton label="Tasks" icon={ListTodo} />
+        <SideNavButton label={tr('common.tasks')} icon={ListTodo} />
       </TabTrigger>
       <TabTrigger name="calendar" asChild>
-        <SideNavButton label="Calendar" icon={CalendarDays} />
+        <SideNavButton label={tr('nav.calendar')} icon={CalendarDays} />
       </TabTrigger>
       <TabTrigger name="countdown" asChild>
-        <SideNavButton label="Countdown" icon={Hourglass} />
+        <SideNavButton label={tr('nav.countdown')} icon={Hourglass} />
       </TabTrigger>
       <TabTrigger name="settings" asChild>
-        <SideNavButton label="Settings" icon={SettingsIcon} />
+        <SideNavButton label={tr('nav.settings')} icon={SettingsIcon} />
       </TabTrigger>
     </>
   );

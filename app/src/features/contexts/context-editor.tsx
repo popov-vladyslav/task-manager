@@ -9,6 +9,8 @@ import {
   type Context,
 } from '@task-manager/shared';
 import { BottomSheet, SheetInput } from '../../components/bottom-sheet';
+import { ApiError } from '../../lib/api';
+import { useT } from '../../lib/i18n';
 import { useTasksStore } from '../../store/tasks';
 import { useUiStore } from '../../store/ui';
 import { useTheme, webInputReset, type Theme } from '../../theme';
@@ -33,6 +35,7 @@ const webCaretHidden: object | undefined =
 
 function ContextEditorForm({ context, onClose }: { context?: Context; onClose: () => void }) {
   const t = useTheme();
+  const tr = useT();
   const styles = useMemo(() => makeStyles(t), [t]);
   const createContext = useTasksStore((s) => s.createContext);
   const updateContext = useTasksStore((s) => s.updateContext);
@@ -76,7 +79,7 @@ function ContextEditorForm({ context, onClose }: { context?: Context; onClose: (
       }
       onClose();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not save');
+      setError(e instanceof Error ? e.message : tr('contexts.editor.saveFailed'));
       setBusy(false);
     }
   };
@@ -89,7 +92,13 @@ function ContextEditorForm({ context, onClose }: { context?: Context; onClose: (
       await deleteContext(context.id);
       onClose();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not delete');
+      setError(
+        e instanceof ApiError && e.status === 409
+          ? tr('contexts.menu.deleteBlocked')
+          : e instanceof Error
+            ? e.message
+            : tr('contexts.editor.deleteFailed'),
+      );
       setBusy(false);
     }
   };
@@ -108,31 +117,34 @@ function ContextEditorForm({ context, onClose }: { context?: Context; onClose: (
             maxLength={EMOJI_MAX_LENGTH}
             caretHidden
             selectionColor="transparent"
-            accessibilityLabel="Emoji"
+            accessibilityLabel={tr('contexts.editor.emoji')}
             style={[styles.emojiInput, webInputReset, webCaretHidden]}
           />
         </View>
         <SheetInput
           value={label}
           onChangeText={setLabel}
-          placeholder="Context name"
+          placeholder={tr('contexts.editor.namePlaceholder')}
           placeholderTextColor={t.colors.textMuted}
           autoFocus
           returnKeyType="done"
           onSubmitEditing={save}
           style={[styles.input, webInputReset]}
         />
-        <Pressable onPress={onClose} hitSlop={8} accessibilityLabel="Close" style={styles.close}>
+        <Pressable
+          onPress={onClose}
+          hitSlop={8}
+          accessibilityLabel={tr('common.close')}
+          style={styles.close}
+        >
           <X size={16} color={t.colors.textSecondary} />
         </Pressable>
       </View>
 
       <View style={styles.hideRow}>
         <View style={styles.flex1}>
-          <Text style={styles.hideTitle}>Hide from All</Text>
-          <Text style={styles.hideSubtitle}>
-            Still listed in the drawer; tasks stay out of All.
-          </Text>
+          <Text style={styles.hideTitle}>{tr('contexts.editor.hideFromAll')}</Text>
+          <Text style={styles.hideSubtitle}>{tr('contexts.editor.hideFromAllHint')}</Text>
         </View>
         <Switch
           value={excludeFromAll}
@@ -143,7 +155,7 @@ function ContextEditorForm({ context, onClose }: { context?: Context; onClose: (
       </View>
 
       <View>
-        <Text style={styles.colorLabel}>COLOUR</Text>
+        <Text style={styles.colorLabel}>{tr('contexts.editor.colour')}</Text>
         <View style={styles.colorGrid}>
           {contextPalette.map((c) => (
             <Pressable
@@ -163,7 +175,7 @@ function ContextEditorForm({ context, onClose }: { context?: Context; onClose: (
         {context ? (
           <Pressable onPress={remove} disabled={busy} style={styles.remove}>
             <Trash2 size={15} color={t.colors.accentNow} />
-            <Text style={styles.removeText}>Delete</Text>
+            <Text style={styles.removeText}>{tr('common.delete')}</Text>
           </Pressable>
         ) : null}
         <View style={styles.flex1} />
@@ -171,7 +183,7 @@ function ContextEditorForm({ context, onClose }: { context?: Context; onClose: (
           {busy ? (
             <ActivityIndicator size="small" color={t.colors.bgBase} />
           ) : (
-            <Text style={[styles.saveText, dynamic.saveText]}>Save</Text>
+            <Text style={[styles.saveText, dynamic.saveText]}>{tr('common.save')}</Text>
           )}
         </Pressable>
       </View>

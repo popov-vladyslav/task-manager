@@ -1,5 +1,8 @@
 import { forwardRef, useImperativeHandle, useMemo, useRef } from 'react';
 import { StyleSheet, View } from 'react-native';
+import { INTL_TAG } from '@task-manager/shared';
+import { useT } from '../../lib/i18n';
+import { useLocaleStore } from '../../store/locale';
 import { useTheme, type Theme } from '../../theme';
 
 export interface TimeFieldHandle {
@@ -16,7 +19,8 @@ const pad = (n: number) => String(n).padStart(2, '0');
 export function formatMinutes(minutes: number | null): string {
   if (minutes == null) return '—';
   const d = new Date(2000, 0, 1, Math.floor(minutes / 60), minutes % 60);
-  return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  const tag = INTL_TAG[useLocaleStore.getState().locale];
+  return d.toLocaleTimeString(tag, { hour: 'numeric', minute: '2-digit' });
 }
 
 export const TimeField = forwardRef<TimeFieldHandle, TimeFieldProps>(function TimeField(
@@ -24,6 +28,7 @@ export const TimeField = forwardRef<TimeFieldHandle, TimeFieldProps>(function Ti
   ref,
 ) {
   const t = useTheme();
+  const tr = useT();
   const styles = useMemo(() => makeStyles(t), [t]);
   const inputRef = useRef<HTMLInputElement>(null);
   useImperativeHandle(ref, () => ({ open: () => inputRef.current?.focus() }));
@@ -52,7 +57,7 @@ export const TimeField = forwardRef<TimeFieldHandle, TimeFieldProps>(function Ti
         type="time"
         value={value}
         step={300}
-        aria-label="Time"
+        aria-label={tr('when.row.time')}
         onChange={(e) => {
           const [h, m] = e.target.value.split(':').map(Number);
           if (Number.isFinite(h) && Number.isFinite(m)) onChange(h * 60 + m);

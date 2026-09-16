@@ -4,10 +4,10 @@ import { db } from '../db/client';
 import { contexts, notificationLog, pushTokens, settings, tasks, users } from '../db/schema';
 import { composeNotificationTitle } from '../lib/notification-title';
 import { dispatchReminders } from '../lib/reminder-dispatch';
-import { summaryPushBody } from '../lib/morning-summary';
+import { summaryPushBody, summaryPushTitle } from '../lib/morning-summary';
 import { getMorningSummary } from './summary';
 import { invalidateDueClock, invalidateReminderClocks } from './reminder-clock';
-import { mutedUserIds } from './settings';
+import { languagesByUser, mutedUserIds } from './settings';
 import { dueCutoff } from '../lib/due-window';
 import { reminderCutoff } from '../lib/reminder-window';
 
@@ -121,6 +121,7 @@ export async function sendReminders(now: Date = new Date()): Promise<number> {
     );
 
   const muted = await mutedUserIds();
+  const languages = await languagesByUser();
   const sendable = muted.size ? due.filter((t) => !muted.has(t.userId)) : due;
 
   const sent = await dispatchReminders(sendable, {
@@ -142,6 +143,7 @@ export async function sendReminders(now: Date = new Date()): Promise<number> {
         },
         'reminder',
         now,
+        languages.get(t.userId),
       );
       await sendPush(t.userId, title, t.title, { taskId: t.id });
     },
@@ -208,6 +210,7 @@ export async function sendDueNotifications(now: Date = new Date()): Promise<numb
     );
 
   const muted = await mutedUserIds();
+  const languages = await languagesByUser();
   const sendable = muted.size ? due.filter((t) => !muted.has(t.userId)) : due;
 
   const sent = await dispatchReminders(sendable, {
@@ -229,6 +232,7 @@ export async function sendDueNotifications(now: Date = new Date()): Promise<numb
         },
         'reminder',
         now,
+        languages.get(t.userId),
       );
       await sendPush(t.userId, title, t.title, { taskId: t.id });
     },
@@ -268,6 +272,7 @@ export async function repeatReminders(now: Date = new Date()): Promise<number> {
   const muted = await mutedUserIds();
   for (const userId of muted) enabled.delete(userId);
   if (enabled.size === 0) return 0;
+  const languages = await languagesByUser();
 
   let notified = 0;
 
@@ -306,6 +311,7 @@ export async function repeatReminders(now: Date = new Date()): Promise<number> {
         },
         'reminder',
         now,
+        languages.get(userId),
       );
       await sendPush(userId, title, r.title, { taskId: r.id });
       await db.insert(notificationLog).values({ taskId: r.id, kind: 'repeat', userId });
@@ -343,6 +349,7 @@ export async function sendMorningSummary(now: Date = new Date()): Promise<number
   // anyone else's summary.
   const accounts = await db.select({ id: users.id }).from(users);
   const muted = await mutedUserIds();
+  const languages = await languagesByUser();
   let total = 0;
 
   for (const account of accounts) {
@@ -359,10 +366,11 @@ export async function sendMorningSummary(now: Date = new Date()): Promise<number
     // Nothing overdue → stay silent rather than sending "0 tasks".
     if (count === 0) continue;
 
+    const locale = languages.get(account.id);
     await sendPush(
       account.id,
-      "Yesterday's leftovers",
-      summaryPushBody({ yesterday: yesterday.length, older: older.length }),
+      summaryPushTitle(locale),
+      summaryPushBody({ yesterday: yesterday.length, older: older.length }, locale),
       { kind: 'morning-summary' },
     );
 

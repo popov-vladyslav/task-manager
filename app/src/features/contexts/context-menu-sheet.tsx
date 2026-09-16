@@ -3,6 +3,8 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Eye, EyeOff, Pencil, Trash2, type LucideProps } from 'lucide-react-native';
 import { contextEmoji } from '@task-manager/shared';
 import { BottomSheet } from '../../components/bottom-sheet';
+import { ApiError } from '../../lib/api';
+import { useT } from '../../lib/i18n';
 import { useTasksStore } from '../../store/tasks';
 import { useUiStore } from '../../store/ui';
 import { openCounts } from '../../store/task-selectors';
@@ -39,6 +41,7 @@ function MenuItem({
 
 export function ContextMenuSheet() {
   const t = useTheme();
+  const tr = useT();
   const styles = useMemo(() => makeStyles(t), [t]);
   const open = useUiStore((s) => s.contextMenuOpen);
   const close = useUiStore((s) => s.closeContextMenu);
@@ -73,7 +76,13 @@ export function ContextMenuSheet() {
       await deleteContext(context.id);
       close();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not delete context');
+      setError(
+        e instanceof ApiError && e.status === 409
+          ? tr('contexts.menu.deleteBlocked')
+          : e instanceof Error
+            ? e.message
+            : tr('contexts.menu.deleteFailed'),
+      );
     }
   };
 
@@ -88,23 +97,29 @@ export function ContextMenuSheet() {
             <View>
               <Text style={styles.name}>{context.label}</Text>
               <Text style={styles.sub}>
-                {count} {count === 1 ? 'task' : 'tasks'}
+                {tr(count === 1 ? 'contexts.menu.taskCountOne' : 'contexts.menu.taskCount', {
+                  n: count,
+                })}
               </Text>
             </View>
           </View>
           <View style={styles.group}>
             <MenuItem
               icon={Pencil}
-              label="Rename, colour & emoji"
+              label={tr('contexts.menu.rename')}
               onPress={() => openEditor(context.id)}
               trailing={<View style={[styles.dot, { backgroundColor: context.color }]} />}
             />
             <MenuItem
               icon={context.excludeFromAll ? Eye : EyeOff}
-              label={context.excludeFromAll ? 'Show in All' : 'Hide from All'}
+              label={
+                context.excludeFromAll
+                  ? tr('contexts.menu.showInAll')
+                  : tr('contexts.editor.hideFromAll')
+              }
               onPress={toggleHidden}
             />
-            <MenuItem icon={Trash2} label="Delete context" onPress={remove} danger />
+            <MenuItem icon={Trash2} label={tr('contexts.menu.delete')} onPress={remove} danger />
           </View>
           {error ? <Text style={styles.error}>{error}</Text> : null}
         </>

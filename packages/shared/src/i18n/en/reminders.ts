@@ -1,0 +1,17 @@
+export const reminders = {
+  'reminders.modal.label': 'REMINDER',
+  'reminders.modal.dismiss': 'Dismiss',
+  'reminders.snooze.minutes': 'Snooze {n} min',
+  'reminders.snooze.hour': 'Snooze 1 hour',
+  'reminders.notification.fallbackTitle': 'Reminder',
+  'reminders.summary.greeting': 'Good morning',
+  'reminders.summary.checking': 'Checking what is still open…',
+  'reminders.summary.yesterdayCount': '{n} left from yesterday',
+  'reminders.summary.olderCount': '{n} older overdue',
+  'reminders.summary.notNow': 'Not now',
+  'reminders.summary.wasDue': 'was due {when}',
+  'reminders.summary.moveToToday': 'Move {title} to today',
+  'reminders.summary.clearTime': 'Clear the scheduled time of {title}',
+  'reminders.channel.default': 'Task reminders',
+  'reminders.channel.critical': 'Important task reminders',
+} as const;

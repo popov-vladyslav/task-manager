@@ -7,6 +7,7 @@ import {
   View,
   type LayoutChangeEvent,
 } from 'react-native';
+import { useT } from '../lib/i18n';
 import { useTheme, type Theme } from '../theme';
 
 export interface AnchorRect {
@@ -29,6 +30,7 @@ interface PopoverProps {
 
 export function Popover({ anchor, onClose, children, width = 286 }: PopoverProps) {
   const t = useTheme();
+  const tr = useT();
   const window = useWindowDimensions();
   const styles = useMemo(() => makeStyles(t), [t]);
   const [cardHeight, setCardHeight] = useState(0);
@@ -62,7 +64,7 @@ export function Popover({ anchor, onClose, children, width = 286 }: PopoverProps
 
   return (
     <Modal transparent visible={anchor !== null} animationType="fade" onRequestClose={onClose}>
-      <Pressable onPress={onClose} style={styles.backdrop} accessibilityLabel="Close">
+      <Pressable onPress={onClose} style={styles.backdrop} accessibilityLabel={tr('common.close')}>
         {placement ? (
           <View onLayout={onLayout} style={[styles.card, placement.styles.card]}>
             <View

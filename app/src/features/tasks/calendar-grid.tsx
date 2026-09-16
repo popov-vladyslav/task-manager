@@ -2,10 +2,17 @@ import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { ChevronLeft, ChevronRight } from 'lucide-react-native';
 import { IconButton } from '../../components/icon-button';
+import { useIntlTag, useT } from '../../lib/i18n';
 import { useTheme, type Theme } from '../../theme';
 import { sameDay, startOfDay, visibleDays } from '../calendar/calendar-dates';
 
-const WEEKDAYS = ['MO', 'TU', 'WE', 'TH', 'FR', 'SA', 'SU'];
+const REFERENCE_MONDAY_YEAR = 2024;
+
+export function shortWeekdays(tag: string): string[] {
+  return Array.from({ length: 7 }, (_, i) =>
+    new Date(REFERENCE_MONDAY_YEAR, 0, 1 + i).toLocaleDateString(tag, { weekday: 'short' }),
+  );
+}
 
 interface CalendarGridProps {
   value: Date | null;
@@ -14,11 +21,14 @@ interface CalendarGridProps {
 
 export function CalendarGrid({ value, onChange }: CalendarGridProps) {
   const t = useTheme();
+  const tr = useT();
+  const tag = useIntlTag();
   const styles = useMemo(() => makeStyles(t), [t]);
   const [anchor, setAnchor] = useState(() => startOfDay(value ?? new Date()));
   const today = useMemo(() => startOfDay(new Date()), []);
   const days = useMemo(() => visibleDays('month', anchor), [anchor]);
-  const monthLabel = anchor.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  const weekdays = useMemo(() => shortWeekdays(tag).map((w) => w.toUpperCase()), [tag]);
+  const monthLabel = anchor.toLocaleDateString(tag, { month: 'long', year: 'numeric' });
   const shift = (n: number) => setAnchor(new Date(anchor.getFullYear(), anchor.getMonth() + n, 1));
 
   return (
@@ -29,21 +39,21 @@ export function CalendarGrid({ value, onChange }: CalendarGridProps) {
           <IconButton
             icon={ChevronLeft}
             onPress={() => shift(-1)}
-            accessibilityLabel="Previous month"
+            accessibilityLabel={tr('when.calendar.prevMonth')}
             iconSize={16}
             color={t.colors.textSecondary}
           />
           <IconButton
             icon={ChevronRight}
             onPress={() => shift(1)}
-            accessibilityLabel="Next month"
+            accessibilityLabel={tr('when.calendar.nextMonth')}
             iconSize={16}
             color={t.colors.textSecondary}
           />
         </View>
       </View>
       <View style={styles.grid}>
-        {WEEKDAYS.map((w) => (
+        {weekdays.map((w) => (
           <Text key={w} style={styles.weekday}>
             {w}
           </Text>
@@ -58,7 +68,12 @@ export function CalendarGrid({ value, onChange }: CalendarGridProps) {
               onPress={() => onChange(day)}
               accessibilityRole="button"
               accessibilityState={{ selected }}
-              accessibilityLabel={day.toDateString()}
+              accessibilityLabel={day.toLocaleDateString(tag, {
+                weekday: 'long',
+                month: 'long',
+                day: 'numeric',
+                year: 'numeric',
+              })}
               style={[styles.cell, selected && styles.cellSelected]}
             >
               <Text

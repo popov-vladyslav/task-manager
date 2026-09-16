@@ -13,6 +13,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useKeepAwake } from 'expo-keep-awake';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import { Pause, Play, X } from 'lucide-react-native';
+import { useT } from '../../lib/i18n';
 import { useTimerStore } from '../../store/timer';
 
 const DIGIT = '#C7CCD4';
@@ -53,6 +54,7 @@ function TimerModal() {
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
   const landscape = width > height;
+  const tr = useT();
 
   // Allow the timer to rotate freely; lock back to portrait when it closes.
   // (Native only — screen orientation isn't a thing on web.)
@@ -109,7 +111,7 @@ function TimerModal() {
         <Pressable
           onPress={close}
           hitSlop={14}
-          accessibilityLabel="Stop timer"
+          accessibilityLabel={tr('timer.stopTimer')}
           style={[styles.closeBtn, { top: insets.top + 14 }]}
         >
           <X size={26} color={MUTED} />
@@ -133,7 +135,7 @@ function TimerModal() {
           <Pressable
             onPress={running ? pause : resume}
             hitSlop={10}
-            accessibilityLabel={running ? 'Pause' : 'Resume'}
+            accessibilityLabel={running ? tr('timer.pause') : tr('timer.resume')}
             style={styles.pauseBtn}
           >
             {running ? (

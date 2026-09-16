@@ -3,6 +3,9 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import DateTimePicker, {
   type DateTimePickerChangeEvent,
 } from '@react-native-community/datetimepicker';
+import { INTL_TAG } from '@task-manager/shared';
+import { useT } from '../../lib/i18n';
+import { useLocaleStore } from '../../store/locale';
 import { useTheme, type Theme } from '../../theme';
 
 const isAndroid = process.env.EXPO_OS === 'android';
@@ -22,7 +25,8 @@ interface TimeFieldProps {
 export function formatMinutes(minutes: number | null): string {
   if (minutes == null) return '—';
   const d = new Date(2000, 0, 1, Math.floor(minutes / 60), minutes % 60);
-  return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  const tag = INTL_TAG[useLocaleStore.getState().locale];
+  return d.toLocaleTimeString(tag, { hour: 'numeric', minute: '2-digit' });
 }
 
 export const TimeField = forwardRef<TimeFieldHandle, TimeFieldProps>(function TimeField(
@@ -30,6 +34,7 @@ export const TimeField = forwardRef<TimeFieldHandle, TimeFieldProps>(function Ti
   ref,
 ) {
   const t = useTheme();
+  const tr = useT();
   const styles = useMemo(() => makeStyles(t), [t]);
   const [dialogOpen, setDialogOpen] = useState(false);
   const value = new Date(2000, 0, 1, Math.floor((minutes ?? 540) / 60), (minutes ?? 540) % 60);
@@ -51,7 +56,7 @@ export const TimeField = forwardRef<TimeFieldHandle, TimeFieldProps>(function Ti
         <Pressable
           onPress={() => setDialogOpen(true)}
           accessibilityRole="button"
-          accessibilityLabel="Time"
+          accessibilityLabel={tr('when.row.time')}
           style={styles.value}
         >
           <Text style={styles.valueText}>{formatMinutes(minutes)}</Text>

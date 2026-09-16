@@ -32,7 +32,7 @@ async function assertContextOwned(
     .select({ id: contexts.id })
     .from(contexts)
     .where(and(ownedBy(contexts.userId, userId), eq(contexts.id, contextId)));
-  if (!row) throw badRequest('Unknown context');
+  if (!row) throw badRequest('Unknown category');
 }
 
 interface ListFilter {

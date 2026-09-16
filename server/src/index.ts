@@ -14,7 +14,7 @@ process.on('unhandledRejection', (reason) => {
 // launch blocker the moment sign-up is open to other people.
 if (env.APP_ENV === 'prod' && usingSandboxSender) {
   console.warn(
-    '[mail] WARNING: prod is using Resend\'s sandbox sender. Confirmation codes ' +
+    "[mail] WARNING: prod is using Resend's sandbox sender. Confirmation codes " +
       'will only reach the Resend account owner. Set MAIL_FROM to an address on ' +
       'a verified domain before opening sign-up.',
   );

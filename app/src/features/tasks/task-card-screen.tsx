@@ -17,6 +17,7 @@ import { Header } from '../../components/header';
 import { IconButton } from '../../components/icon-button';
 import { Popover, usePopoverAnchor } from '../../components/popover';
 import { haptics } from '../../lib/haptics';
+import { useT } from '../../lib/i18n';
 import { useTasksStore } from '../../store/tasks';
 import { useTimerStore } from '../../store/timer';
 import { useToastStore } from '../../store/toast';
@@ -35,6 +36,7 @@ interface TaskCardScreenProps {
 
 export function TaskCardScreen({ taskId, onClose, compact = false }: TaskCardScreenProps) {
   const t = useTheme();
+  const tr = useT();
   const styles = useMemo(() => makeStyles(t, compact), [t, compact]);
   const task = useTasksStore(
     (s) => s.tasks.find((x) => x.id === taskId) ?? s.completed.find((x) => x.id === taskId),
@@ -175,7 +177,7 @@ export function TaskCardScreen({ taskId, onClose, compact = false }: TaskCardScr
     } else {
       toggleComplete(task);
       useToastStore.getState().show({
-        title: task.recurrenceId ? 'Completed · next instance scheduled' : 'Task completed',
+        title: task.recurrenceId ? tr('toasts.taskCompletedNext') : tr('toasts.taskCompleted'),
         message: task.title,
         onUndo: () => uncomplete(task),
       });
@@ -187,7 +189,7 @@ export function TaskCardScreen({ taskId, onClose, compact = false }: TaskCardScr
     menu.close();
     removeTask(task.id);
     useToastStore.getState().show({
-      title: 'Task deleted',
+      title: tr('toasts.taskDeleted'),
       message: task.title,
       onUndo: () => undoRemove(task.id),
     });
@@ -198,12 +200,12 @@ export function TaskCardScreen({ taskId, onClose, compact = false }: TaskCardScr
     return (
       <View style={styles.root}>
         <Header
-          title="Task"
+          title={tr('common.task')}
           left="back"
           onLeftPress={onClose}
           right={<View style={styles.spacer} />}
         />
-        <Text style={styles.missing}>This task is no longer here.</Text>
+        <Text style={styles.missing}>{tr('tasks.card.missing')}</Text>
       </View>
     );
   }
@@ -211,7 +213,7 @@ export function TaskCardScreen({ taskId, onClose, compact = false }: TaskCardScr
   return (
     <View style={styles.root}>
       <Header
-        title={context?.label ?? 'No context'}
+        title={context?.label ?? tr('common.noContext')}
         emoji={context?.emoji}
         left="back"
         onLeftPress={onClose}
@@ -222,7 +224,7 @@ export function TaskCardScreen({ taskId, onClose, compact = false }: TaskCardScr
             <IconButton
               icon={MoreHorizontal}
               onPress={menu.open}
-              accessibilityLabel="More"
+              accessibilityLabel={tr('common.more')}
               iconSize={17}
             />
           </View>
@@ -252,7 +254,9 @@ export function TaskCardScreen({ taskId, onClose, compact = false }: TaskCardScr
               ref={addRef}
               onAdd={(title) =>
                 addSubtask(task.id, title).catch(() =>
-                  useToastStore.getState().show({ title: 'Couldn’t add subtask', message: title }),
+                  useToastStore
+                    .getState()
+                    .show({ title: tr('toasts.addSubtaskFailed'), message: title }),
                 )
               }
               onDismiss={() => {
@@ -299,7 +303,7 @@ export function TaskCardScreen({ taskId, onClose, compact = false }: TaskCardScr
                 onChangeText={setNote}
                 onBlur={commitNote}
                 multiline
-                placeholder="Add a note…"
+                placeholder={tr('tasks.card.notePlaceholder')}
                 placeholderTextColor={t.colors.textFaint}
                 scrollEnabled={false}
                 style={[styles.note, webInputReset]}
@@ -319,7 +323,7 @@ export function TaskCardScreen({ taskId, onClose, compact = false }: TaskCardScr
               <View style={styles.flex1}>
                 <View style={styles.whenMainRow}>
                   <Text style={[styles.whenMain, !when.main && styles.whenEmpty]}>
-                    {when.main ?? 'No deadline'}
+                    {when.main ?? tr('common.noDeadline')}
                   </Text>
                   {task.remindAt ? (
                     <Bell size={13} color={t.colors.accentPrimary} strokeWidth={1.8} />
@@ -342,17 +346,17 @@ export function TaskCardScreen({ taskId, onClose, compact = false }: TaskCardScr
       <View style={styles.toolbar}>
         <View style={styles.tools}>
           <ToolButton
-            label="Note"
+            label={tr('tasks.card.note')}
             onPress={revealNote}
             icon={<AlignLeft size={18} color={t.colors.textControl} strokeWidth={1.9} />}
           />
           <ToolButton
-            label="Subtask"
+            label={tr('tasks.card.subtask')}
             onPress={revealAdd}
             icon={<ListChecks size={18} color={t.colors.textControl} strokeWidth={1.8} />}
           />
           <ToolButton
-            label="Reminder"
+            label={tr('tasks.card.reminder')}
             onPress={() => setWhenOpen(true)}
             icon={
               <Bell
@@ -363,7 +367,7 @@ export function TaskCardScreen({ taskId, onClose, compact = false }: TaskCardScr
             }
           />
           <ToolButton
-            label="Delete"
+            label={tr('common.delete')}
             onPress={remove}
             icon={<Trash2 size={18} color={t.colors.textControl} strokeWidth={1.8} />}
           />
@@ -371,7 +375,7 @@ export function TaskCardScreen({ taskId, onClose, compact = false }: TaskCardScr
         <Pressable
           onPress={() => openTimer(task.id, task.title)}
           accessibilityRole="button"
-          accessibilityLabel="Start timer"
+          accessibilityLabel={tr('tasks.card.startTimer')}
           style={styles.timer}
         >
           <Play size={16} color={t.colors.accentTimer} fill={t.colors.accentTimer} />
@@ -403,7 +407,7 @@ export function TaskCardScreen({ taskId, onClose, compact = false }: TaskCardScr
       <Popover anchor={menu.anchor} onClose={menu.close} width={200}>
         <Pressable onPress={remove} accessibilityRole="button" style={styles.menuItem}>
           <Trash2 size={17} color={t.colors.accentNow} strokeWidth={1.8} />
-          <Text style={styles.menuDanger}>Delete task</Text>
+          <Text style={styles.menuDanger}>{tr('tasks.card.deleteTask')}</Text>
         </Pressable>
       </Popover>
     </View>

@@ -12,9 +12,14 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { ChevronLeft, ChevronRight } from 'lucide-react-native';
-import { DEFAULT_DURATION_MIN, type CalendarBlock } from '@task-manager/shared';
+import {
+  DEFAULT_DURATION_MIN,
+  type CalendarBlock,
+  type TranslationKey,
+} from '@task-manager/shared';
 import { colors, monoFont, WIDE_BREAKPOINT } from '../../theme';
 import { haptics } from '../../lib/haptics';
+import { useIntlTag, useT } from '../../lib/i18n';
 import { useCalendarStore } from '../../store/calendar';
 import { useTasksStore } from '../../store/tasks';
 import { useRefreshOnFocus } from '../../lib/use-refresh-on-focus';
@@ -42,11 +47,11 @@ import { QuickCreateSheet } from '../tasks/quick-create-sheet';
 const LABEL_W = 44;
 const HOURS = Array.from({ length: HOUR_END - HOUR_START }, (_, i) => HOUR_START + i);
 
-const MODES: { k: CalMode; label: string }[] = [
-  { k: 'day', label: 'Day' },
-  { k: '3day', label: '3 days' },
-  { k: 'week', label: 'Week' },
-  { k: 'month', label: 'Month' },
+const MODES: { k: CalMode; label: TranslationKey }[] = [
+  { k: 'day', label: 'calendar.mode.day' },
+  { k: '3day', label: 'calendar.mode.threeDay' },
+  { k: 'week', label: 'calendar.mode.week' },
+  { k: 'month', label: 'calendar.mode.month' },
 ];
 
 // A light selection tick when a block is grabbed / a slot is long-pressed to
@@ -57,6 +62,8 @@ export function CalendarScreen() {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const wide = width >= WIDE_BREAKPOINT;
+  const tr = useT();
+  const intlTag = useIntlTag();
 
   const {
     mode,
@@ -98,15 +105,15 @@ export function CalendarScreen() {
 
   const title = useMemo(() => {
     if (mode === 'month')
-      return anchor.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+      return anchor.toLocaleDateString(intlTag, { month: 'long', year: 'numeric' });
     const days = visibleDays(mode, anchor);
     const first = days[0];
     const last = days[days.length - 1];
     if (mode === 'day')
-      return first.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
-    const fmt = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      return first.toLocaleDateString(intlTag, { weekday: 'long', month: 'short', day: 'numeric' });
+    const fmt = (d: Date) => d.toLocaleDateString(intlTag, { month: 'short', day: 'numeric' });
     return `${fmt(first)} – ${fmt(last)}`;
-  }, [mode, anchor]);
+  }, [mode, anchor, intlTag]);
 
   const header = (
     <View style={styles.headerContainer}>
@@ -117,7 +124,7 @@ export function CalendarScreen() {
             <ChevronLeft size={16} color={colors.textSecondary} />
           </NavBtn>
           <Pressable onPress={goToToday} style={styles.todayBtn}>
-            <Text style={styles.todayText}>Today</Text>
+            <Text style={styles.todayText}>{tr('common.today')}</Text>
           </Pressable>
           <NavBtn onPress={() => shift(1)}>
             <ChevronRight size={16} color={colors.textSecondary} />
@@ -147,7 +154,7 @@ export function CalendarScreen() {
                   },
                 ]}
               >
-                {m.label}
+                {tr(m.label)}
               </Text>
             </Pressable>
           );
@@ -229,6 +236,12 @@ function Timeline({
   const days = useMemo(() => visibleDays(mode, anchor), [mode, anchor]);
   const now = new Date();
   const scrollRef = useRef<ScrollView>(null);
+  const intlTag = useIntlTag();
+  const hourLabels = useMemo(
+    () =>
+      HOURS.map((h) => new Date(2000, 0, 1, h).toLocaleTimeString(intlTag, { hour: 'numeric' })),
+    [intlTag],
+  );
 
   const moveBlock = useCalendarStore((s) => s.moveBlock);
   const [gridW, setGridW] = useState(0);
@@ -377,7 +390,7 @@ function Timeline({
           return (
             <View key={d.toISOString()} style={styles.tlDayHeader}>
               <Text style={styles.tlWeekday}>
-                {d.toLocaleDateString('en-US', { weekday: 'short' }).toUpperCase()}
+                {d.toLocaleDateString(intlTag, { weekday: 'short' }).toUpperCase()}
               </Text>
               <View
                 style={[
@@ -415,9 +428,9 @@ function Timeline({
               onLayout={(e) => setGridW(e.nativeEvent.layout.width)}
             >
               <View style={styles.labelCol}>
-                {HOURS.map((h) => (
+                {HOURS.map((h, i) => (
                   <View key={h} style={{ height: hourH }}>
-                    <Text style={styles.hourLabel}>{h}:00</Text>
+                    <Text style={styles.hourLabel}>{hourLabels[i]}</Text>
                   </View>
                 ))}
               </View>
@@ -621,14 +634,17 @@ function MonthView({
   const days = visibleDays('month', anchor);
   const now = new Date();
   const month = anchor.getMonth();
-  const weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  const intlTag = useIntlTag();
+  const weekdays = days
+    .slice(0, 7)
+    .map((d) => d.toLocaleDateString(intlTag, { weekday: 'short' }).toUpperCase());
 
   return (
     <View style={styles.flex1}>
       <View style={styles.mvWeekRow}>
         {weekdays.map((w) => (
           <Text key={w} style={styles.mvWeekday}>
-            {w.toUpperCase()}
+            {w}
           </Text>
         ))}
       </View>

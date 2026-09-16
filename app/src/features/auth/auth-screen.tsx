@@ -9,12 +9,14 @@ import {
   View,
 } from 'react-native';
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
+import { useT, type T } from '../../lib/i18n';
 import { colors, monoFont, webInputReset } from '../../theme';
 import { useAuthStore } from '../../store/auth';
 
-const msg = (e: unknown) => (e instanceof Error ? e.message : 'Something went wrong');
+const msg = (e: unknown, tr: T) => (e instanceof Error ? e.message : tr('common.error'));
 
 export function AuthScreen() {
+  const tr = useT();
   const requestLink = useAuthStore((s) => s.requestLink);
   const signInWithToken = useAuthStore((s) => s.signInWithToken);
 
@@ -31,7 +33,7 @@ export function AuthScreen() {
       await requestLink(email.trim());
       setSent(true);
     } catch (e) {
-      setError(msg(e));
+      setError(msg(e, tr));
     } finally {
       setBusy(false);
     }
@@ -43,7 +45,7 @@ export function AuthScreen() {
     try {
       await signInWithToken(token.trim());
     } catch (e) {
-      setError(msg(e));
+      setError(msg(e, tr));
     } finally {
       setBusy(false);
     }
@@ -59,15 +61,13 @@ export function AuthScreen() {
     >
       <View style={styles.card}>
         <Text style={styles.brand}>TASK TRACKER</Text>
-        <Text style={styles.subtitle}>Sign in with your email</Text>
-        <Text style={styles.hint}>
-          New here? Entering your email creates your account — there is nothing else to fill in.
-        </Text>
+        <Text style={styles.subtitle}>{tr('auth.subtitle')}</Text>
+        <Text style={styles.hint}>{tr('auth.hint')}</Text>
 
         <TextInput
           value={email}
           onChangeText={setEmail}
-          placeholder="you@example.com"
+          placeholder={tr('auth.emailPlaceholder')}
           placeholderTextColor={colors.textMuted}
           autoCapitalize="none"
           keyboardType="email-address"
@@ -84,20 +84,17 @@ export function AuthScreen() {
           {busy ? (
             <ActivityIndicator color={colors.bgSurface} />
           ) : (
-            <Text style={styles.sendLabel}>Email me a sign-in code</Text>
+            <Text style={styles.sendLabel}>{tr('auth.sendCode')}</Text>
           )}
         </Pressable>
 
         {sent ? (
           <>
-            <Text style={styles.sentInfo}>
-              Check your email. Open the link, or paste the code below (in dev it is printed to
-              the server console).
-            </Text>
+            <Text style={styles.sentInfo}>{tr('auth.sentInfo')}</Text>
             <TextInput
               value={token}
               onChangeText={setToken}
-              placeholder="Paste sign-in code"
+              placeholder={tr('auth.codePlaceholder')}
               placeholderTextColor={colors.textMuted}
               autoCapitalize="none"
               style={[styles.input, webInputReset]}
@@ -107,7 +104,7 @@ export function AuthScreen() {
               disabled={busy || !token.trim()}
               style={[styles.verifyBtn, { opacity: verifyOpacity }]}
             >
-              <Text style={styles.verifyLabel}>Sign in</Text>
+              <Text style={styles.verifyLabel}>{tr('auth.signIn')}</Text>
             </Pressable>
           </>
         ) : null}

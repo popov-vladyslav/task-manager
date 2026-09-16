@@ -13,6 +13,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { colors } from '../theme';
 import { useAuthStore } from '../store/auth';
 import { useTasksStore } from '../store/tasks';
+import { useLocaleStore } from '../store/locale';
 import { useSummaryStore } from '../store/summary';
 import { ReminderModal } from '../features/reminders/reminder-modal';
 import { TopToast } from '../components/top-toast';
@@ -56,7 +57,7 @@ function RootLayout() {
   useEffect(() => {
     (async () => {
       try {
-        await useAuthStore.getState().load();
+        await Promise.all([useAuthStore.getState().load(), useLocaleStore.getState().hydrate()]);
         if (useAuthStore.getState().jwt) await useTasksStore.getState().load();
       } finally {
         setBooted(true);

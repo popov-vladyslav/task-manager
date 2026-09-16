@@ -95,7 +95,10 @@ export const MCP_TOKEN_SUBJECT = `Your ${PRODUCT_NAME} MCP token`;
 // only a hash is stored — so losing it means regenerating, which immediately
 // invalidates the old one. Deliberately carries no link: this is a credential,
 // not a sign-in.
-export function buildMcpTokenEmail(token: string, endpoint: string): { html: string; text: string } {
+export function buildMcpTokenEmail(
+  token: string,
+  endpoint: string,
+): { html: string; text: string } {
   const safeToken = escapeHtml(token);
   const safeEndpoint = escapeHtml(endpoint);
 

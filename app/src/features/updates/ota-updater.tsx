@@ -4,9 +4,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { RefreshCw } from 'lucide-react-native';
 import * as Updates from 'expo-updates';
 import { useUpdates } from 'expo-updates';
+import { useT } from '../../lib/i18n';
 import { colors, monoFont } from '../../theme';
 
 export function OtaUpdater() {
+  const tr = useT();
   const insets = useSafeAreaInsets();
   const { isUpdateAvailable, isUpdatePending, isDownloading, isRestarting, downloadProgress } =
     useUpdates();
@@ -44,14 +46,16 @@ export function OtaUpdater() {
         <Pressable onPress={apply} disabled={isRestarting} style={styles.ready}>
           <RefreshCw size={14} color={colors.bgBase} />
           <Text style={styles.readyText}>
-            {isRestarting ? 'Restarting…' : 'Update ready — tap to restart'}
+            {isRestarting ? tr('settings.updates.restarting') : tr('settings.updates.readyTap')}
           </Text>
         </Pressable>
       ) : (
         <View style={styles.downloading}>
           <ActivityIndicator size="small" color={colors.textSecondary} />
           <Text style={styles.downloadingText}>
-            {pct != null ? `Downloading update… ${pct}%` : 'Downloading update…'}
+            {pct != null
+              ? tr('settings.updates.downloadingPct', { pct })
+              : tr('settings.updates.downloading')}
           </Text>
         </View>
       )}

@@ -1,6 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { bucketOverdue, startOfLocalDay, summaryPushBody } from './morning-summary';
+import {
+  bucketOverdue,
+  startOfLocalDay,
+  summaryPushBody,
+  summaryPushTitle,
+} from './morning-summary';
 
 // Thu Jul 30 2026, 07:30 local — the hour the morning push fires.
 const NOW = new Date(2026, 6, 30, 7, 30);
@@ -76,4 +81,20 @@ test('startOfLocalDay strips the time', () => {
   const s = startOfLocalDay(NOW);
   assert.equal(s.getHours(), 0);
   assert.equal(s.getDate(), 30);
+});
+
+test('push body pluralises per language', () => {
+  assert.equal(
+    summaryPushBody({ yesterday: 1, older: 0 }, 'uk'),
+    'У вас 1 прострочених задача з учора.',
+  );
+  assert.equal(
+    summaryPushBody({ yesterday: 3, older: 0 }, 'pl'),
+    'Masz 3 zadania po terminie z wczoraj.',
+  );
+  assert.equal(
+    summaryPushBody({ yesterday: 0, older: 5 }, 'ru'),
+    'У вас 5 более ранних просроченных задач.',
+  );
+  assert.equal(summaryPushTitle('uk'), 'Залишки з учора');
 });

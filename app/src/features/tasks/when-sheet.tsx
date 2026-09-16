@@ -1,42 +1,58 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Bell, Clock, Repeat, Timer } from 'lucide-react-native';
-import { DEFAULT_DURATION_MIN, type RecurrenceInput } from '@task-manager/shared';
+import {
+  DEFAULT_DURATION_MIN,
+  INTL_TAG,
+  type RecurrenceInput,
+  type TranslationKey,
+} from '@task-manager/shared';
 import { BottomSheet } from '../../components/bottom-sheet';
 import { Chip } from '../../components/chip';
+import { currentT, useIntlTag, useT, type T } from '../../lib/i18n';
+import { useLocaleStore } from '../../store/locale';
 import { useTheme, type Theme } from '../../theme';
 import { addDays, sameDay, startOfDay, startOfWeek } from '../calendar/calendar-dates';
-import { CalendarGrid } from './calendar-grid';
+import { CalendarGrid, shortWeekdays } from './calendar-grid';
 import { DurationField, type DurationFieldHandle } from './duration-field';
-import { OptionField, type Option, type OptionFieldHandle } from './option-field';
+import { OptionField, type Option, type OptionFieldHandle } from '../../components/option-field';
 import { TimeField, type TimeFieldHandle } from './time-field';
 
 const WEEKDAYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
 const WEEK_ORDER = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const;
-const DAY_LABEL: Record<string, string> = {
-  mon: 'M',
-  tue: 'T',
-  wed: 'W',
-  thu: 'T',
-  fri: 'F',
-  sat: 'S',
-  sun: 'S',
+const DAY_LABEL_KEY: Record<string, TranslationKey> = {
+  mon: 'common.weekdayMon',
+  tue: 'common.weekdayTue',
+  wed: 'common.weekdayWed',
+  thu: 'common.weekdayThu',
+  fri: 'common.weekdayFri',
+  sat: 'common.weekdaySat',
+  sun: 'common.weekdaySun',
 };
 type RecKind = 'none' | 'daily' | 'weekly' | 'monthly';
-const REC_OPTIONS: Option<RecKind>[] = [
-  { value: 'none', label: 'No repeat' },
-  { value: 'daily', label: 'Daily' },
-  { value: 'weekly', label: 'Weekly' },
-  { value: 'monthly', label: 'Monthly' },
+const recOptions = (tr: T): Option<RecKind>[] => [
+  { value: 'none', label: tr('when.repeat.none') },
+  { value: 'daily', label: tr('when.repeat.daily') },
+  { value: 'weekly', label: tr('when.repeat.weekly') },
+  { value: 'monthly', label: tr('when.repeat.monthly') },
 ];
-const REMINDER_OPTIONS: Option<number | null>[] = [
-  { value: null, label: 'None' },
-  { value: 0, label: 'At time' },
-  { value: 30, label: '30 min before' },
-  { value: 60, label: '1 h before' },
-  { value: 1440, label: '1 day before' },
+const reminderOptions = (tr: T): Option<number | null>[] => [
+  { value: null, label: tr('common.none') },
+  { value: 0, label: tr('when.reminder.atTime') },
+  { value: 30, label: tr('when.reminder.minBefore', { n: 30 }) },
+  { value: 60, label: tr('when.reminder.hourBefore') },
+  { value: 1440, label: tr('when.reminder.dayBefore') },
 ];
 const DEFAULT_TIME_MIN = 12 * 60;
+
+function currentIntlTag(): string {
+  return INTL_TAG[useLocaleStore.getState().locale];
+}
+
+function weekdayName(token: string, tag: string): string {
+  const index = (WEEK_ORDER as readonly string[]).indexOf(token);
+  return index < 0 ? token : shortWeekdays(tag)[index];
+}
 
 export interface WhenValue {
   dueAt: string | null;
@@ -76,31 +92,38 @@ function reminderOffset(dueAt: string | null, remindAt: string | null): number |
 }
 
 export function describeWhen(v: WhenValue): { main: string | null; sub: string | null } {
+  const tr = currentT();
+  const tag = currentIntlTag();
   const main = v.dueAt ? dueLine(v.dueAt, v.durationMin) : null;
   const kind = recKind(v.recurrenceRule);
   const sub =
     kind === 'none'
       ? null
       : kind === 'daily'
-        ? 'Daily'
+        ? tr('when.repeat.daily')
         : kind === 'weekly'
-          ? `Weekly on ${weeklyDays(v.recurrenceRule)
-              .map((d) => d.charAt(0).toUpperCase() + d.slice(1))
-              .join(', ')}`
-          : `Monthly on the ${v.recurrenceRule?.slice(8)}`;
+          ? tr('when.repeat.weeklyOn', {
+              days: weeklyDays(v.recurrenceRule)
+                .map((d) => weekdayName(d, tag))
+                .join(', '),
+            })
+          : tr('when.repeat.monthlyOn', { day: v.recurrenceRule?.slice(8) ?? '' });
   return { main, sub };
 }
 
 function dueLine(iso: string, durationMin: number | null): string {
+  const tr = currentT();
+  const tag = currentIntlTag();
   const d = new Date(iso);
   const today = startOfDay(new Date());
   const day = sameDay(d, today)
-    ? 'Today'
+    ? tr('common.today')
     : sameDay(d, addDays(today, 1))
-      ? 'Tomorrow'
-      : d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-  const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-  return `${day}, ${time}${durationMin ? ` · ${durationMin} min` : ''}`;
+      ? tr('common.tomorrow')
+      : d.toLocaleDateString(tag, { weekday: 'short', month: 'short', day: 'numeric' });
+  const time = d.toLocaleTimeString(tag, { hour: 'numeric', minute: '2-digit' });
+  const line = tr('when.due.line', { day, time });
+  return durationMin ? `${line} · ${tr('common.minutesShort', { n: durationMin })}` : line;
 }
 
 interface WhenSheetProps {
@@ -112,7 +135,10 @@ interface WhenSheetProps {
 
 export function WhenSheet({ open, value, onClose, onSave }: WhenSheetProps) {
   const t = useTheme();
+  const tr = useT();
+  const tag = useIntlTag();
   const styles = useMemo(() => makeStyles(t), [t]);
+  const options = useMemo(() => ({ repeat: recOptions(tr), reminder: reminderOptions(tr) }), [tr]);
 
   const [day, setDay] = useState<Date | null>(null);
   const [minutes, setMinutes] = useState<number | null>(null);
@@ -139,10 +165,10 @@ export function WhenSheet({ open, value, onClose, onSave }: WhenSheetProps) {
   const today = startOfDay(new Date());
   const nextMonday = addDays(startOfWeek(today), 7);
   const quick: { label: string; day: Date | null }[] = [
-    { label: 'Today', day: today },
-    { label: 'Tomorrow', day: addDays(today, 1) },
-    { label: 'Mon', day: nextMonday },
-    { label: 'No date', day: null },
+    { label: tr('common.today'), day: today },
+    { label: tr('common.tomorrow'), day: addDays(today, 1) },
+    { label: nextMonday.toLocaleDateString(tag, { weekday: 'short' }), day: nextMonday },
+    { label: tr('when.quick.noDate'), day: null },
   ];
 
   const toggleWeekday = (d: string) => {
@@ -183,13 +209,14 @@ export function WhenSheet({ open, value, onClose, onSave }: WhenSheetProps) {
   };
 
   const reminderLabel =
-    REMINDER_OPTIONS.find((o) => o.value === reminder)?.label ?? `${reminder} min before`;
+    options.reminder.find((o) => o.value === reminder)?.label ??
+    tr('when.reminder.minBefore', { n: reminder ?? 0 });
   const repeatLabel =
     kind === 'none'
-      ? 'Never'
+      ? tr('common.never')
       : kind === 'weekly'
-        ? `Weekly, ${days.map((d) => DAY_LABEL[d]).join('')}`
-        : (REC_OPTIONS.find((o) => o.value === kind)?.label ?? 'Never');
+        ? tr('when.repeat.weeklyDays', { days: days.map((d) => tr(DAY_LABEL_KEY[d])).join('') })
+        : (options.repeat.find((o) => o.value === kind)?.label ?? tr('common.never'));
 
   const pickKind = (k: RecKind) => {
     setKind(k);
@@ -209,7 +236,9 @@ export function WhenSheet({ open, value, onClose, onSave }: WhenSheetProps) {
               accessibilityState={{ selected: on }}
               style={[styles.weekday, on && styles.weekdayOn]}
             >
-              <Text style={[styles.weekdayText, on && styles.weekdayTextOn]}>{DAY_LABEL[d]}</Text>
+              <Text style={[styles.weekdayText, on && styles.weekdayTextOn]}>
+                {tr(DAY_LABEL_KEY[d])}
+              </Text>
             </Pressable>
           );
         })}
@@ -238,7 +267,7 @@ export function WhenSheet({ open, value, onClose, onSave }: WhenSheetProps) {
       <View style={styles.rows}>
         <Row
           icon={<Clock size={15} color={t.colors.textSecondary} strokeWidth={1.8} />}
-          label="Time"
+          label={tr('when.row.time')}
           value="—"
           control={
             day ? (
@@ -253,7 +282,7 @@ export function WhenSheet({ open, value, onClose, onSave }: WhenSheetProps) {
         />
         <Row
           icon={<Timer size={15} color={t.colors.textSecondary} strokeWidth={1.8} />}
-          label="Duration"
+          label={tr('when.row.duration')}
           value="—"
           control={
             day ? (
@@ -268,7 +297,7 @@ export function WhenSheet({ open, value, onClose, onSave }: WhenSheetProps) {
         />
         <Row
           icon={<Bell size={15} color={t.colors.textSecondary} strokeWidth={1.8} />}
-          label="Reminder"
+          label={tr('when.row.reminder')}
           value="—"
           control={
             day ? (
@@ -276,7 +305,7 @@ export function WhenSheet({ open, value, onClose, onSave }: WhenSheetProps) {
                 ref={reminderRef}
                 value={reminder}
                 label={reminderLabel}
-                options={REMINDER_OPTIONS}
+                options={options.reminder}
                 onChange={setReminder}
               />
             ) : null
@@ -285,14 +314,14 @@ export function WhenSheet({ open, value, onClose, onSave }: WhenSheetProps) {
         />
         <Row
           icon={<Repeat size={15} color={t.colors.textSecondary} strokeWidth={1.8} />}
-          label="Repeat"
+          label={tr('when.row.repeat')}
           value="—"
           control={
             <OptionField
               ref={repeatRef}
               value={kind}
               label={repeatLabel}
-              options={REC_OPTIONS}
+              options={options.repeat}
               onChange={pickKind}
               closeOnPick={(k) => k !== 'weekly'}
               footer={weekdayPicker}
@@ -306,10 +335,10 @@ export function WhenSheet({ open, value, onClose, onSave }: WhenSheetProps) {
 
       <View style={styles.actions}>
         <Pressable onPress={onClose} accessibilityRole="button" style={styles.cancel}>
-          <Text style={styles.cancelText}>Cancel</Text>
+          <Text style={styles.cancelText}>{tr('common.cancel')}</Text>
         </Pressable>
         <Pressable onPress={save} accessibilityRole="button" style={styles.save}>
-          <Text style={styles.saveText}>Save</Text>
+          <Text style={styles.saveText}>{tr('common.save')}</Text>
         </Pressable>
       </View>
     </BottomSheet>

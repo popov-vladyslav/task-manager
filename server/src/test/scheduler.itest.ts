@@ -115,10 +115,7 @@ test('one account disabling repeats does not suppress another account’s', asyn
   // the gate must report work is (or will be) pending rather than "never".
   assert.equal(typeof next, 'boolean');
   const peeked = repeatClock.peek();
-  assert.ok(
-    peeked instanceof Date,
-    'the gate must see B’s eligible work even though A opted out',
-  );
+  assert.ok(peeked instanceof Date, 'the gate must see B’s eligible work even though A opted out');
 });
 
 // The master switch is per account, and muting must not consume anything: no
@@ -141,16 +138,10 @@ test('a muted account gets no reminder while an unmuted one still does', async (
   const sent = await sendReminders();
   assert.equal(sent, 1, 'only the unmuted account is notified');
 
-  const aLogs = await db
-    .select()
-    .from(notificationLog)
-    .where(eq(notificationLog.taskId, aTask.id));
+  const aLogs = await db.select().from(notificationLog).where(eq(notificationLog.taskId, aTask.id));
   assert.equal(aLogs.length, 0, 'a muted account must not even claim a log row');
 
-  const bLogs = await db
-    .select()
-    .from(notificationLog)
-    .where(eq(notificationLog.taskId, bTask.id));
+  const bLogs = await db.select().from(notificationLog).where(eq(notificationLog.taskId, bTask.id));
   assert.equal(bLogs.length, 1, 'the unmuted account’s reminder still fires');
 
   const [aAfter] = await db
@@ -372,7 +363,11 @@ test('a due notification does not push back the repeat gate', async () => {
 
   const { repeatClock } = await import('../services/reminder-clock');
   repeatClock.invalidate();
-  assert.equal(await repeatClock.due(new Date()), true, 'the repeat is eligible before the due row');
+  assert.equal(
+    await repeatClock.due(new Date()),
+    true,
+    'the repeat is eligible before the due row',
+  );
 
   // ...and its deadline passing just now must not move that.
   await db.insert(notificationLog).values({ taskId: task.id, kind: 'due', userId: bob });

@@ -137,3 +137,25 @@ test('reminder · overdue', () => {
     '🟢 Home · overdue',
   );
 });
+
+test('titles follow the account language', () => {
+  assert.equal(
+    composeNotificationTitle(
+      { contextName: 'Home', contextColor: GREEN, dueAt: inMin(15) },
+      'reminder',
+      NOW,
+      'uk',
+    ),
+    '🟢 Home · через 15 хв',
+  );
+  assert.equal(
+    composeNotificationTitle(
+      { contextName: null, contextColor: null, dueAt: null },
+      'spawn',
+      NOW,
+      'pl',
+    ),
+    'nowe',
+  );
+  assert.equal(relativeTime(inMin(-60), NOW, 'ru'), 'просрочено');
+});

@@ -3,6 +3,7 @@ import { ActivityIndicator, StyleSheet, Text, useWindowDimensions, View } from '
 import type { Context, Task } from '@task-manager/shared';
 import { Header } from '../../components/header';
 import { haptics } from '../../lib/haptics';
+import { useT } from '../../lib/i18n';
 import { useRefreshOnFocus } from '../../lib/use-refresh-on-focus';
 import { useTasksStore } from '../../store/tasks';
 import { excludedContextIds, isInAll } from '../../store/task-selectors';
@@ -19,6 +20,7 @@ import { useTaskCard } from '../tasks/task-card-host';
 
 export function ContextScreen() {
   const t = useTheme();
+  const tr = useT();
   const styles = useMemo(() => makeStyles(t), [t]);
   const { width } = useWindowDimensions();
   const wide = width >= t.sizes.wideBreakpoint;
@@ -91,12 +93,12 @@ export function ContextScreen() {
       haptics.success();
       toggleComplete(task);
       useToastStore.getState().show({
-        title: task.recurrenceId ? 'Completed · next instance scheduled' : 'Task completed',
+        title: task.recurrenceId ? tr('toasts.taskCompletedNext') : tr('toasts.taskCompleted'),
         message: task.title,
         onUndo: () => uncomplete(task),
       });
     },
-    [toggleComplete, uncomplete],
+    [toggleComplete, uncomplete, tr],
   );
 
   const onOpenDetail = useCallback((task: Task) => openTask(task.id), [openTask]);
@@ -106,12 +108,12 @@ export function ContextScreen() {
       const task = useTasksStore.getState().tasks.find((x) => x.id === id);
       removeTask(id);
       useToastStore.getState().show({
-        title: 'Task deleted',
+        title: tr('toasts.taskDeleted'),
         message: task?.title,
         onUndo: () => undoRemove(id),
       });
     },
-    [removeTask, undoRemove],
+    [removeTask, undoRemove, tr],
   );
 
   const renderCard = useCallback(
@@ -152,12 +154,12 @@ export function ContextScreen() {
           reorder(movedId, afterId, beforeId, activeContextId == null ? 'global' : 'context')
         }
         footer={completedSection}
-        empty={<Text style={styles.empty}>No open tasks</Text>}
+        empty={<Text style={styles.empty}>{tr('contexts.screen.noOpenTasks')}</Text>}
         renderCard={renderCard}
       />
     );
 
-  const title = activeContext?.label ?? 'All';
+  const title = activeContext?.label ?? tr('common.all');
 
   if (wide) {
     return (

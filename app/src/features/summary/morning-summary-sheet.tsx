@@ -17,8 +17,9 @@ import {
 } from '@gorhom/bottom-sheet';
 import { CalendarOff, ChevronDown, ChevronRight, Sunrise, X } from 'lucide-react-native';
 import type { Task } from '@task-manager/shared';
-import { colors, monoFont, radius, shortDateTime, WIDE_BREAKPOINT } from '../../theme';
+import { colors, monoFont, radius, WIDE_BREAKPOINT } from '../../theme';
 import { haptics } from '../../lib/haptics';
+import { useIntlTag, useT, type T } from '../../lib/i18n';
 import { useSummaryStore } from '../../store/summary';
 
 // The morning summary: yesterday's unfinished tasks, each actionable in one tap
@@ -87,26 +88,28 @@ function Sheet() {
 // Only mentions the buckets that actually have something in them — "0 left from
 // yesterday" reads like a bug when the pile is purely historical.
 function summaryLine({
+  tr,
   loading,
   yesterday,
   older,
 }: {
+  tr: T;
   loading: boolean;
   yesterday: Task[];
   older: Task[];
 }): string {
-  if (loading && yesterday.length + older.length === 0) return 'Checking what is still open…';
-  if (yesterday.length === 0 && older.length === 0)
-    return 'Nothing was left unfinished. Clear slate.';
-  const olderPart = `${older.length} older overdue`;
+  if (loading && yesterday.length + older.length === 0) return tr('reminders.summary.checking');
+  if (yesterday.length === 0 && older.length === 0) return tr('summary.empty');
+  const olderPart = tr('reminders.summary.olderCount', { n: older.length });
   if (yesterday.length === 0) return olderPart;
-  const yesterdayPart = `${yesterday.length} left from yesterday`;
+  const yesterdayPart = tr('reminders.summary.yesterdayCount', { n: yesterday.length });
   return older.length ? `${yesterdayPart} · ${olderPart}` : yesterdayPart;
 }
 
 function SummaryContent({ onClose }: { onClose: () => void }) {
   const { yesterday, older, loading } = useSummaryStore();
   const [showOlder, setShowOlder] = useState(false);
+  const tr = useT();
 
   const total = yesterday.length + older.length;
 
@@ -115,8 +118,8 @@ function SummaryContent({ onClose }: { onClose: () => void }) {
       <View style={styles.header}>
         <Sunrise size={18} color={colors.accentPrimary} />
         <View style={styles.headerText}>
-          <Text style={styles.title}>Good morning</Text>
-          <Text style={styles.subtitle}>{summaryLine({ loading, yesterday, older })}</Text>
+          <Text style={styles.title}>{tr('reminders.summary.greeting')}</Text>
+          <Text style={styles.subtitle}>{summaryLine({ tr, loading, yesterday, older })}</Text>
         </View>
         <Pressable onPress={onClose} hitSlop={8} style={styles.closeBtn}>
           <X size={16} color={colors.textSecondary} />
@@ -129,7 +132,7 @@ function SummaryContent({ onClose }: { onClose: () => void }) {
 
       {yesterday.length > 0 ? (
         <View style={styles.section}>
-          <Text style={styles.sectionLabel}>YESTERDAY</Text>
+          <Text style={styles.sectionLabel}>{tr('common.yesterday').toUpperCase()}</Text>
           {yesterday.map((t) => (
             <SummaryRow key={t.id} task={t} />
           ))}
@@ -146,7 +149,9 @@ function SummaryContent({ onClose }: { onClose: () => void }) {
             ) : (
               <ChevronRight size={13} color={colors.textMuted} />
             )}
-            <Text style={styles.sectionLabel}>{older.length} OLDER OVERDUE</Text>
+            <Text style={styles.sectionLabel}>
+              {tr('reminders.summary.olderCount', { n: older.length }).toUpperCase()}
+            </Text>
           </Pressable>
           {showOlder ? older.map((t) => <SummaryRow key={t.id} task={t} />) : null}
         </View>
@@ -154,7 +159,7 @@ function SummaryContent({ onClose }: { onClose: () => void }) {
 
       {total > 0 ? (
         <Pressable onPress={onClose} style={styles.dismissBtn}>
-          <Text style={styles.dismissText}>Not now</Text>
+          <Text style={styles.dismissText}>{tr('reminders.summary.notNow')}</Text>
         </Pressable>
       ) : null}
     </View>
@@ -164,6 +169,16 @@ function SummaryContent({ onClose }: { onClose: () => void }) {
 function SummaryRow({ task }: { task: Task }) {
   const { rescheduleToToday, clearDueDate, busyIds } = useSummaryStore();
   const busy = busyIds.includes(task.id);
+  const tr = useT();
+  const intlTag = useIntlTag();
+  const dueLabel = task.dueAt
+    ? new Date(task.dueAt).toLocaleString(intlTag, {
+        month: 'short',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+      })
+    : null;
 
   return (
     <View style={styles.row}>
@@ -171,7 +186,9 @@ function SummaryRow({ task }: { task: Task }) {
         <Text numberOfLines={2} style={styles.rowTitle}>
           {task.title}
         </Text>
-        <Text style={styles.rowDue}>was due {shortDateTime(task.dueAt)}</Text>
+        {dueLabel ? (
+          <Text style={styles.rowDue}>{tr('reminders.summary.wasDue', { when: dueLabel })}</Text>
+        ) : null}
       </View>
 
       {busy ? (
@@ -183,17 +200,17 @@ function SummaryRow({ task }: { task: Task }) {
               haptics.select();
               void rescheduleToToday(task);
             }}
-            accessibilityLabel={`Move ${task.title} to today`}
+            accessibilityLabel={tr('reminders.summary.moveToToday', { title: task.title })}
             style={styles.todayBtn}
           >
-            <Text style={styles.todayText}>Today</Text>
+            <Text style={styles.todayText}>{tr('common.today')}</Text>
           </Pressable>
           <Pressable
             onPress={() => {
               haptics.select();
               void clearDueDate(task);
             }}
-            accessibilityLabel={`Clear the scheduled time of ${task.title}`}
+            accessibilityLabel={tr('reminders.summary.clearTime', { title: task.title })}
             style={styles.clearBtn}
           >
             <CalendarOff size={14} color={colors.textSecondary} />

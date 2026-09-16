@@ -13,7 +13,9 @@ router.get('/', async (req, res) => {
 });
 
 router.post('/start', async (req, res) => {
-  res.status(201).json(await svc.startTimer(requireUserId(req), startSchema.parse(req.body).taskId));
+  res
+    .status(201)
+    .json(await svc.startTimer(requireUserId(req), startSchema.parse(req.body).taskId));
 });
 
 router.post('/stop', async (req, res) => {

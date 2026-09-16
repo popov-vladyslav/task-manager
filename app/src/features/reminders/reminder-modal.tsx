@@ -2,6 +2,7 @@ import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Bell } from 'lucide-react-native';
 import { colors, monoFont, radius } from '../../theme';
 import { api } from '../../lib/api';
+import { useT } from '../../lib/i18n';
 import { SNOOZE_ACTIONS } from '../../lib/push';
 import { useRemindersStore } from '../../store/reminders';
 
@@ -10,7 +11,11 @@ import { useRemindersStore } from '../../store/reminders';
 export function ReminderModal() {
   const active = useRemindersStore((s) => s.active);
   const dismiss = useRemindersStore((s) => s.dismiss);
+  const tr = useT();
   if (!active) return null;
+
+  const snoozeLabel = (minutes: number) =>
+    minutes === 60 ? tr('reminders.snooze.hour') : tr('reminders.snooze.minutes', { n: minutes });
 
   const snooze = async (minutes: number) => {
     try {
@@ -27,7 +32,7 @@ export function ReminderModal() {
         <View style={styles.card}>
           <View style={styles.headerRow}>
             <Bell size={16} color={colors.accentReminder} />
-            <Text style={styles.label}>REMINDER</Text>
+            <Text style={styles.label}>{tr('reminders.modal.label')}</Text>
           </View>
           <Text style={styles.title}>{active.title}</Text>
           <View style={styles.actions}>
@@ -37,12 +42,12 @@ export function ReminderModal() {
                 onPress={() => snooze(a.minutes)}
                 style={styles.snoozeBtn}
               >
-                <Text style={styles.snoozeText}>{a.buttonTitle}</Text>
+                <Text style={styles.snoozeText}>{snoozeLabel(a.minutes)}</Text>
               </Pressable>
             ))}
           </View>
           <Pressable onPress={dismiss} style={styles.dismissBtn}>
-            <Text style={styles.dismissText}>Dismiss</Text>
+            <Text style={styles.dismissText}>{tr('reminders.modal.dismiss')}</Text>
           </Pressable>
         </View>
       </View>

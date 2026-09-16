@@ -1,6 +1,7 @@
 import Constants from 'expo-constants';
 import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
+import { currentT } from './i18n';
 import { api } from './api';
 
 // How notifications appear while the app is foregrounded (SDK 54+ shape).
@@ -17,17 +18,24 @@ Notifications.setNotificationHandler({
 
 // Snooze actions shown on a reminder notification (category 'reminder').
 export const SNOOZE_ACTIONS = [
-  { identifier: 'snooze_10', minutes: 10, buttonTitle: 'Snooze 10 min' },
-  { identifier: 'snooze_30', minutes: 30, buttonTitle: 'Snooze 30 min' },
-  { identifier: 'snooze_60', minutes: 60, buttonTitle: 'Snooze 1 hour' },
+  { identifier: 'snooze_10', minutes: 10 },
+  { identifier: 'snooze_30', minutes: 30 },
+  { identifier: 'snooze_60', minutes: 60 },
 ];
+
+function snoozeTitle(minutes: number): string {
+  const tr = currentT();
+  return minutes >= 60
+    ? tr('reminders.snooze.hour')
+    : tr('reminders.snooze.minutes', { n: minutes });
+}
 
 export function snoozeMinutesFor(actionIdentifier: string): number | null {
   return SNOOZE_ACTIONS.find((a) => a.identifier === actionIdentifier)?.minutes ?? null;
 }
 
 // Register the reminder category so the push (sent with categoryId 'reminder')
-// shows the snooze action buttons. Call once at startup.
+// shows the snooze action buttons. Call at startup and again on a language change.
 export async function registerReminderCategory(): Promise<void> {
   if (process.env.EXPO_OS === 'web') return;
   try {
@@ -35,7 +43,7 @@ export async function registerReminderCategory(): Promise<void> {
       'reminder',
       SNOOZE_ACTIONS.map((a) => ({
         identifier: a.identifier,
-        buttonTitle: a.buttonTitle,
+        buttonTitle: snoozeTitle(a.minutes),
         options: { opensAppToForeground: false },
       })),
     );
@@ -49,12 +57,12 @@ export async function registerReminderCategory(): Promise<void> {
   if (process.env.EXPO_OS === 'android') {
     try {
       await Notifications.setNotificationChannelAsync('tasks-default', {
-        name: 'Task reminders',
+        name: currentT()('reminders.channel.default'),
         importance: Notifications.AndroidImportance.HIGH,
         sound: 'default',
       });
       await Notifications.setNotificationChannelAsync('tasks-critical', {
-        name: 'Important task reminders',
+        name: currentT()('reminders.channel.critical'),
         importance: Notifications.AndroidImportance.MAX,
         sound: 'default',
       });

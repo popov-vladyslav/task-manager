@@ -1,0 +1,18 @@
+export const tasks = {
+  'tasks.list.addTask': 'Add task…',
+  'tasks.card.missing': 'This task is no longer here.',
+  'tasks.card.notePlaceholder': 'Add a note…',
+  'tasks.card.note': 'Note',
+  'tasks.card.subtask': 'Subtask',
+  'tasks.card.reminder': 'Reminder',
+  'tasks.card.startTimer': 'Start timer',
+  'tasks.card.startTimerFor': 'Start timer for {title}',
+  'tasks.card.completeTask': 'Complete {title}',
+  'tasks.card.deleteTask': 'Delete task',
+  'tasks.subtask.newPlaceholder': 'New subtask',
+  'tasks.subtask.reorder': 'Reorder',
+  'tasks.completed.show': 'SHOW COMPLETED',
+  'tasks.completed.hide': 'HIDE COMPLETED',
+  'tasks.completed.empty': 'No completed tasks',
+  'tasks.completed.reopen': 'Reopen {title}',
+} as const;
