@@ -20,6 +20,7 @@ import { SplashOverlay } from '../components/splash-overlay';
 import { NotificationBridge } from '../features/reminders/notification-bridge';
 import { MorningSummarySheet } from '../features/summary/morning-summary-sheet';
 import { OtaUpdater } from '../features/updates/ota-updater';
+import { TimerScreen } from '../features/timer/timer-screen';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 SystemUI.setBackgroundColorAsync(colors.bgBase).catch(() => {});
@@ -109,6 +110,7 @@ function RootLayout() {
             />
             {Platform.OS !== 'web' ? <NotificationBridge /> : null}
             {Platform.OS !== 'web' ? <OtaUpdater /> : null}
+            <TimerScreen />
             <ReminderModal />
             <MorningSummarySheet />
             <TopToast />

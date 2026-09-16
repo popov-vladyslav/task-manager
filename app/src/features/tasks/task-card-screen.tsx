@@ -12,7 +12,7 @@ import {
   Repeat,
   Trash2,
 } from 'lucide-react-native';
-import { formatTrackedShort, type Subtask } from '@task-manager/shared';
+import type { Subtask } from '@task-manager/shared';
 import { Header } from '../../components/header';
 import { IconButton } from '../../components/icon-button';
 import { Popover, usePopoverAnchor } from '../../components/popover';
@@ -87,7 +87,6 @@ export function TaskCardScreen({ taskId, onClose, compact = false }: TaskCardScr
         : { main: null, sub: null },
     [task],
   );
-  const tracked = task ? formatTrackedShort(task.trackedSec) : null;
   const subtasks = useMemo(() => task?.subtasks ?? [], [task?.subtasks]);
   const [subs, setSubs] = useState(subtasks);
   useEffect(() => setSubs(subtasks), [subtasks]);
@@ -375,8 +374,7 @@ export function TaskCardScreen({ taskId, onClose, compact = false }: TaskCardScr
           accessibilityLabel="Start timer"
           style={styles.timer}
         >
-          <Play size={12} color={t.colors.accentTimer} fill={t.colors.accentTimer} />
-          <Text style={styles.timerText}>{tracked ?? 'Start'}</Text>
+          <Play size={16} color={t.colors.accentTimer} fill={t.colors.accentTimer} />
         </Pressable>
       </View>
 
@@ -524,21 +522,15 @@ const makeStyles = (t: Theme, compact: boolean) =>
     },
     toolPressed: { backgroundColor: t.colors.bgControl },
     timer: {
-      flexDirection: 'row',
+      width: 44,
+      height: 44,
+      borderRadius: 22,
       alignItems: 'center',
-      gap: 8,
-      height: 40,
-      paddingHorizontal: 14,
-      borderRadius: 20,
+      justifyContent: 'center',
+      paddingLeft: 2,
       backgroundColor: `${t.colors.accentTimer}1F`,
       borderWidth: 1,
       borderColor: `${t.colors.accentTimer}59`,
-    },
-    timerText: {
-      fontFamily: t.fonts.mono,
-      fontSize: 13,
-      fontWeight: '700',
-      color: t.colors.accentTimer,
     },
     menuItem: {
       flexDirection: 'row',
