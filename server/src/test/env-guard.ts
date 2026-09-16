@@ -27,9 +27,7 @@ const TEST_ENDPOINT_ID = 'ep-blue-dust-asj4jy45';
 const url = process.env.TEST_DATABASE_URL;
 
 if (!url) {
-  throw new Error(
-    'TEST_DATABASE_URL is not set — refusing to run destructive integration tests.',
-  );
+  throw new Error('TEST_DATABASE_URL is not set — refusing to run destructive integration tests.');
 }
 if (process.env.CONFIRM_DESTRUCTIVE_TESTS !== '1') {
   throw new Error(

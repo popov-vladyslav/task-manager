@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { ChevronLeft, ChevronsUpDown, Menu, MoreHorizontal } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { IconButton } from './icon-button';
+import { useT } from '../lib/i18n';
 import { useTheme, type Theme } from '../theme';
 
 interface HeaderProps {
@@ -33,6 +34,7 @@ export function Header({
   horizontalPadding = 12,
 }: HeaderProps) {
   const t = useTheme();
+  const tr = useT();
   const insets = useSafeAreaInsets();
   const styles = useMemo(() => makeStyles(t), [t]);
   const inset = useMemo(
@@ -47,12 +49,12 @@ export function Header({
     leftOverride !== undefined ? (
       leftOverride
     ) : left === 'menu' ? (
-      <IconButton icon={Menu} onPress={onLeftPress} accessibilityLabel="Open menu" />
+      <IconButton icon={Menu} onPress={onLeftPress} accessibilityLabel={tr('nav.openMenu')} />
     ) : (
       <IconButton
         icon={ChevronLeft}
         onPress={onLeftPress}
-        accessibilityLabel="Back"
+        accessibilityLabel={tr('common.back')}
         iconSize={20}
       />
     );
@@ -64,7 +66,7 @@ export function Header({
       <IconButton
         icon={MoreHorizontal}
         onPress={onMorePress}
-        accessibilityLabel="More"
+        accessibilityLabel={tr('common.more')}
         iconSize={17}
       />
     );

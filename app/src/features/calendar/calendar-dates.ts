@@ -16,7 +16,11 @@ export const yToMinutes = (y: number, hourH: number = HOUR_H): number =>
   HOUR_START * 60 + (y / hourH) * 60;
 
 // Snap minutes to the nearest `step`, clamped so a `durationMin` block stays in [0, 24h).
-export const snapMinutes = (min: number, step: number = SNAP_MIN, durationMin: number = 0): number => {
+export const snapMinutes = (
+  min: number,
+  step: number = SNAP_MIN,
+  durationMin: number = 0,
+): number => {
   const snapped = Math.round(min / step) * step;
   return Math.max(0, Math.min(24 * 60 - durationMin, snapped));
 };
@@ -35,7 +39,9 @@ export const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d
 export const addDays = (d: Date, n: number) =>
   new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
 export const sameDay = (a: Date, b: Date) =>
-  a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+  a.getFullYear() === b.getFullYear() &&
+  a.getMonth() === b.getMonth() &&
+  a.getDate() === b.getDate();
 
 // Monday-start week (Europe/Warsaw convention).
 export function startOfWeek(d: Date): Date {
@@ -63,7 +69,10 @@ export function rangeFor(mode: CalMode, anchor: Date): { from: Date; to: Date } 
   const days = visibleDays(mode, anchor);
   const from = days[0];
   const last = days[days.length - 1];
-  return { from, to: new Date(last.getFullYear(), last.getMonth(), last.getDate(), 23, 59, 59, 999) };
+  return {
+    from,
+    to: new Date(last.getFullYear(), last.getMonth(), last.getDate(), 23, 59, 59, 999),
+  };
 }
 
 export function shiftAnchor(mode: CalMode, anchor: Date, dir: number): Date {

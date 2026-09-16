@@ -9,6 +9,7 @@ import type {
   UpdateSubtaskInput,
 } from '@task-manager/shared';
 import { api } from '../lib/api';
+import { currentT } from '../lib/i18n';
 import { TOAST_DURATION_MS, useToastStore } from './toast';
 
 // Must exceed the toast duration so the Undo action can never outlive the commit.
@@ -111,7 +112,10 @@ export const useTasksStore = create<TasksState>((set, get) => ({
         const open = pendingDeletes.size ? tasks.filter((t) => !pendingDeletes.has(t.id)) : tasks;
         set({ contexts, tasks: open, loading: false, hydrated: true, lastLoadedAt: Date.now() });
       } catch (e) {
-        set({ loading: false, error: e instanceof Error ? e.message : 'Failed to load' });
+        set({
+          loading: false,
+          error: e instanceof Error ? e.message : currentT()('toasts.loadFailed'),
+        });
       } finally {
         inFlightLoad = null;
       }
@@ -248,9 +252,10 @@ export const useTasksStore = create<TasksState>((set, get) => ({
       pendingDeletes.delete(id);
       api.deleteTask(id).catch(() => {
         if (!get().tasks.some((t) => t.id === id)) set({ tasks: [task, ...get().tasks] });
+        const tr = currentT();
         useToastStore
           .getState()
-          .show({ title: 'Couldn’t delete task — restored', message: task.title });
+          .show({ title: tr('toasts.deleteTaskFailed'), message: task.title });
       });
     }, DELETE_UNDO_MS);
     pendingDeletes.set(id, { task, timer });

@@ -3,6 +3,7 @@ import type {
   CalendarData,
   Context,
   CreateContextInput,
+  Locale,
   CreateSubtaskInput,
   CreateTaskInput,
   MorningSummary,
@@ -123,7 +124,7 @@ export const api = {
     request<CalendarData>(`/api/calendar${qs({ from: fromISO, to: toISO })}`),
   getMorningSummary: () => request<MorningSummary>('/api/summary/morning'),
   getSettings: () => request<AppSettings>('/api/settings'),
-  updateSettings: (patch: AppSettings) =>
+  updateSettings: (patch: Partial<AppSettings>) =>
     request<AppSettings>('/api/settings', { method: 'PATCH', body: patch }),
 
   // Identity comes from the server, not from decoding the JWT: the token says
@@ -145,6 +146,7 @@ export interface AccountInfo {
 
 export interface AppSettings {
   notificationsEnabled: boolean;
+  language: Locale | null;
 }
 
 export interface McpTokenMetadata {

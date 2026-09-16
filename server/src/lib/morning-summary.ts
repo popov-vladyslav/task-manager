@@ -1,4 +1,10 @@
-import type { Task } from '@task-manager/shared';
+import {
+  DEFAULT_LOCALE,
+  pluralForm,
+  translate,
+  type Locale,
+  type Task,
+} from '@task-manager/shared';
 
 // Buckets for the morning summary. Yesterday's leftovers are the actionable
 // list; anything older is a separate, potentially long and stale pile that the
@@ -39,10 +45,21 @@ export function bucketOverdue<T extends Pick<Task, 'dueAt'>>(
 
 // Body of the morning push. Deliberately just the count — the actionable list
 // lives in the in-app sheet the notification opens.
-export function summaryPushBody(counts: { yesterday: number; older: number }): string {
+export function summaryPushBody(
+  counts: { yesterday: number; older: number },
+  locale: Locale = DEFAULT_LOCALE,
+): string {
   const total = counts.yesterday + counts.older;
-  const noun = total === 1 ? 'task' : 'tasks';
-  if (counts.older === 0) return `You have ${total} overdue ${noun} from yesterday.`;
-  if (counts.yesterday === 0) return `You have ${total} older overdue ${noun}.`;
-  return `You have ${total} overdue ${noun} — ${counts.yesterday} from yesterday.`;
+  const form = pluralForm(locale, total);
+  const noun = translate(
+    locale,
+    form === 'one' ? 'push.taskOne' : form === 'few' ? 'push.taskFew' : 'push.taskMany',
+  );
+  if (counts.older === 0) return translate(locale, 'push.summaryYesterday', { n: total, noun });
+  if (counts.yesterday === 0) return translate(locale, 'push.summaryOlder', { n: total, noun });
+  return translate(locale, 'push.summaryMixed', { n: total, noun, y: counts.yesterday });
+}
+
+export function summaryPushTitle(locale: Locale = DEFAULT_LOCALE): string {
+  return translate(locale, 'push.summaryTitle');
 }

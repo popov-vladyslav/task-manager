@@ -21,6 +21,7 @@ import {
   shortDate,
   shortTime,
 } from '../../theme';
+import { useT } from '../../lib/i18n';
 import { subtaskProgress } from '../../store/task-selectors';
 import { useTimerStore } from '../../store/timer';
 
@@ -47,6 +48,7 @@ function Badge({ icon, text, color }: { icon: ReactNode; text: string; color: st
 }
 
 function TaskCardBase({ task, context, onToggle, onOpenDetail, onDelete, onDrag }: Props) {
+  const tr = useT();
   const color = context?.color ?? colors.textMuted;
   const due = shortDate(task.dueAt);
   const overdue =
@@ -84,7 +86,7 @@ function TaskCardBase({ task, context, onToggle, onOpenDetail, onDelete, onDrag 
         style={[styles.actionBtn, { backgroundColor: colors.accentNow }]}
       >
         <Trash2 size={16} color={colors.bgSurface} />
-        <Text style={[styles.actionText, { color: colors.bgSurface }]}>Delete</Text>
+        <Text style={[styles.actionText, { color: colors.bgSurface }]}>{tr('common.delete')}</Text>
       </Pressable>
     </View>
   );
@@ -100,7 +102,7 @@ function TaskCardBase({ task, context, onToggle, onOpenDetail, onDelete, onDrag 
         onPress={toggle}
         hitSlop={8}
         accessibilityRole="checkbox"
-        accessibilityLabel={`Complete ${task.title}`}
+        accessibilityLabel={tr('tasks.card.completeTask', { title: task.title })}
         style={styles.checkbox}
       />
 
@@ -153,7 +155,7 @@ function TaskCardBase({ task, context, onToggle, onOpenDetail, onDelete, onDrag 
       <Pressable
         onPress={onPlay}
         hitSlop={6}
-        accessibilityLabel={`Start timer for ${task.title}`}
+        accessibilityLabel={tr('tasks.card.startTimerFor', { title: task.title })}
         style={styles.playBtn}
       >
         <Play

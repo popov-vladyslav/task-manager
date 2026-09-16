@@ -1,0 +1,22 @@
+export const contexts = {
+  'contexts.editor.emoji': 'Emoji',
+  'contexts.editor.namePlaceholder': 'Category name',
+  'contexts.editor.hideFromAll': 'Hide from All',
+  'contexts.editor.hideFromAllHint': 'Still listed in the drawer; tasks stay out of All.',
+  'contexts.editor.colour': 'COLOUR',
+  'contexts.editor.saveFailed': 'Could not save',
+  'contexts.editor.deleteFailed': 'Could not delete',
+  'contexts.menu.taskCountOne': '{n} task',
+  'contexts.menu.taskCount': '{n} tasks',
+  'contexts.menu.rename': 'Rename, colour & emoji',
+  'contexts.menu.showInAll': 'Show in All',
+  'contexts.menu.delete': 'Delete category',
+  'contexts.menu.deleteFailed': 'Could not delete category',
+  'contexts.screen.noOpenTasks': 'No open tasks',
+  'contexts.drawer.caption': 'CATEGORIES',
+  'contexts.drawer.newContext': 'New category',
+  'contexts.drawer.hiddenNote':
+    'Hidden categories stay listed here; their tasks are left out of All.',
+  'contexts.drawer.closeMenu': 'Close menu',
+  'contexts.menu.deleteBlocked': 'Open tasks still use this category — move or delete them first.',
+} as const;

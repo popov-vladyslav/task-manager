@@ -6,6 +6,7 @@ import { BottomSheet, SheetInput } from '../../components/bottom-sheet';
 import { Chip } from '../../components/chip';
 import { usePopoverAnchor } from '../../components/popover';
 import { haptics } from '../../lib/haptics';
+import { useT } from '../../lib/i18n';
 import { useTasksStore } from '../../store/tasks';
 import { useToastStore } from '../../store/toast';
 import { useTheme, webInputReset, type Theme } from '../../theme';
@@ -49,6 +50,7 @@ export function QuickCreateSheet({
   onOpenCard,
 }: QuickCreateSheetProps) {
   const t = useTheme();
+  const tr = useT();
   const styles = useMemo(() => makeStyles(t), [t]);
   const contexts = useTasksStore((s) => s.contexts);
   const activeContextId = useTasksStore((s) => s.activeContextId);
@@ -126,7 +128,7 @@ export function QuickCreateSheet({
       });
       haptics.success();
       if (!openCard)
-        useToastStore.getState().show({ title: 'Task created', message: title.trim() });
+        useToastStore.getState().show({ title: tr('toasts.taskCreated'), message: title.trim() });
       onClose();
       if (created) {
         onCreated?.(created.id);
@@ -149,7 +151,7 @@ export function QuickCreateSheet({
           style={styles.hint}
         >
           <ChevronUp size={16} color={t.colors.textFaint} strokeWidth={2.4} />
-          <Text style={styles.hintText}>Create and open the card</Text>
+          <Text style={styles.hintText}>{tr('when.create.hint')}</Text>
         </Pressable>
       ) : null}
 
@@ -157,7 +159,7 @@ export function QuickCreateSheet({
         ref={titleRef}
         value={title}
         onChangeText={setTitle}
-        placeholder="New task"
+        placeholder={tr('when.create.titlePlaceholder')}
         placeholderTextColor={t.colors.textMuted}
         autoFocus
         returnKeyType="done"
@@ -167,7 +169,7 @@ export function QuickCreateSheet({
 
       <View style={styles.chips}>
         <Chip
-          label={whenText.main ?? 'Due'}
+          label={whenText.main ?? tr('when.create.due')}
           icon={
             <Clock
               size={14}
@@ -179,7 +181,7 @@ export function QuickCreateSheet({
           onPress={openWhen}
         />
         <Chip
-          label={when.remindAt ? 'Reminder set' : 'Remind'}
+          label={when.remindAt ? tr('when.create.reminderSet') : tr('when.create.remind')}
           icon={
             <Bell
               size={14}
@@ -192,14 +194,18 @@ export function QuickCreateSheet({
         />
         <View ref={popover.ref} collapsable={false}>
           <Chip
-            label={context ? `${contextEmoji(context) ?? ''} ${context.label}`.trim() : 'Context'}
+            label={
+              context
+                ? `${contextEmoji(context) ?? ''} ${context.label}`.trim()
+                : tr('when.create.context')
+            }
             selected={!!context}
             tint={chipTint.context}
             onPress={openContextPopover}
           />
         </View>
         <Chip
-          label={whenText.sub ?? 'Repeat'}
+          label={whenText.sub ?? tr('when.row.repeat')}
           icon={
             <Repeat
               size={14}
@@ -217,7 +223,7 @@ export function QuickCreateSheet({
           ref={noteRef}
           value={note}
           onChangeText={setNote}
-          placeholder="Add a note…"
+          placeholder={tr('when.create.notePlaceholder')}
           placeholderTextColor={t.colors.textFaint}
           multiline
           style={[styles.note, webInputReset]}
@@ -238,13 +244,13 @@ export function QuickCreateSheet({
           style={styles.more}
         >
           <AlignLeft size={15} color={t.colors.textControl} strokeWidth={1.8} />
-          <Text style={styles.moreText}>Note</Text>
+          <Text style={styles.moreText}>{tr('when.create.note')}</Text>
         </Pressable>
         <Pressable
           onPress={() => create(false)}
           disabled={!canSend}
           accessibilityRole="button"
-          accessibilityLabel="Create task"
+          accessibilityLabel={tr('when.create.submit')}
           style={[styles.send, !canSend && styles.sendDisabled]}
         >
           <ArrowRight size={18} color={t.colors.bgBase} strokeWidth={2.4} />

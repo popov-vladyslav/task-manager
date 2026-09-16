@@ -11,6 +11,7 @@ import { usePathname } from 'expo-router';
 import { EyeOff, List, Plus } from 'lucide-react-native';
 import { contextEmoji, type Context } from '@task-manager/shared';
 import { haptics } from '../../lib/haptics';
+import { useT } from '../../lib/i18n';
 import { useTasksStore } from '../../store/tasks';
 import { useUiStore } from '../../store/ui';
 import { openCounts } from '../../store/task-selectors';
@@ -69,6 +70,7 @@ const MemoRow = memo(ContextRow);
 
 export function DrawerContent({ onNavigate }: { onNavigate?: () => void }) {
   const t = useTheme();
+  const tr = useT();
   const styles = useMemo(() => makeStyles(t), [t]);
   const contexts = useTasksStore((s) => s.contexts);
   const tasks = useTasksStore((s) => s.tasks);
@@ -109,18 +111,18 @@ export function DrawerContent({ onNavigate }: { onNavigate?: () => void }) {
         style={[styles.row, styles.allRow, activeContextId == null && styles.rowActive]}
       >
         <List size={16} color={t.colors.textPrimary} strokeWidth={1.9} />
-        <Text style={styles.label}>All</Text>
+        <Text style={styles.label}>{tr('common.all')}</Text>
         <Text style={styles.count}>{counts.all}</Text>
       </Pressable>
 
       <View style={styles.divider} />
 
       <View style={styles.caption}>
-        <Text style={styles.captionText}>CONTEXTS</Text>
+        <Text style={styles.captionText}>{tr('contexts.drawer.caption')}</Text>
         <Pressable
           onPress={() => openContextEditor(null)}
           accessibilityRole="button"
-          accessibilityLabel="New context"
+          accessibilityLabel={tr('contexts.drawer.newContext')}
           hitSlop={8}
           style={styles.captionAdd}
         >
@@ -144,9 +146,7 @@ export function DrawerContent({ onNavigate }: { onNavigate?: () => void }) {
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
         ListFooterComponent={
-          <Text style={styles.hiddenNote}>
-            Hidden contexts stay listed here; their tasks are left out of All.
-          </Text>
+          <Text style={styles.hiddenNote}>{tr('contexts.drawer.hiddenNote')}</Text>
         }
       />
     </View>
@@ -155,6 +155,7 @@ export function DrawerContent({ onNavigate }: { onNavigate?: () => void }) {
 
 export function Drawer() {
   const t = useTheme();
+  const tr = useT();
   const styles = useMemo(() => makeStyles(t), [t]);
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
@@ -216,7 +217,11 @@ export function Drawer() {
         </GestureDetector>
       ) : null}
       <Animated.View pointerEvents={open ? 'auto' : 'none'} style={[styles.scrim, scrimStyle]}>
-        <Pressable onPress={closeDrawer} accessibilityLabel="Close menu" style={styles.flex1} />
+        <Pressable
+          onPress={closeDrawer}
+          accessibilityLabel={tr('contexts.drawer.closeMenu')}
+          style={styles.flex1}
+        />
       </Animated.View>
       <GestureDetector gesture={panelPan}>
         <Animated.View

@@ -1,16 +1,12 @@
 import { useMemo } from 'react';
 import { Pressable, StyleSheet, Text } from 'react-native';
 import { Plus } from 'lucide-react-native';
+import { useT } from '../../lib/i18n';
 import { useTheme, type Theme } from '../../theme';
 
-export function AddTaskRow({
-  label = 'Add task…',
-  onPress,
-}: {
-  label?: string;
-  onPress: () => void;
-}) {
+export function AddTaskRow({ label, onPress }: { label?: string; onPress: () => void }) {
   const t = useTheme();
+  const tr = useT();
   const styles = useMemo(() => makeStyles(t), [t]);
   return (
     <Pressable
@@ -19,7 +15,7 @@ export function AddTaskRow({
       style={({ pressed }) => [styles.row, pressed && styles.pressed]}
     >
       <Plus size={16} color={t.colors.accentPrimary} strokeWidth={2.2} />
-      <Text style={styles.label}>{label}</Text>
+      <Text style={styles.label}>{label ?? tr('tasks.list.addTask')}</Text>
     </Pressable>
   );
 }

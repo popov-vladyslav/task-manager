@@ -2,6 +2,9 @@ import { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { AlignLeft, Clock, Play, Repeat } from 'lucide-react-native';
 import { formatTrackedShort, type Context, type Task } from '@task-manager/shared';
+import { INTL_TAG } from '@task-manager/shared';
+import { currentT, useT } from '../lib/i18n';
+import { useLocaleStore } from '../store/locale';
 import { useTheme, type Theme } from '../theme';
 
 interface TaskRowProps {
@@ -24,6 +27,7 @@ export function TaskRow({
   onPlay,
 }: TaskRowProps) {
   const t = useTheme();
+  const tr = useT();
   const styles = useMemo(() => makeStyles(t), [t]);
   const color = context?.color ?? t.colors.textMuted;
   const overdue = isOverdue(task);
@@ -78,7 +82,7 @@ export function TaskRow({
           onPress={onPlay}
           hitSlop={6}
           accessibilityRole="button"
-          accessibilityLabel="Start timer"
+          accessibilityLabel={tr('tasks.card.startTimer')}
           style={({ pressed }) => [styles.play, pressed && styles.pressed]}
         >
           <Play size={11} color={t.colors.textControl} fill={t.colors.textControl} />
@@ -94,19 +98,20 @@ function isOverdue(task: Task): boolean {
 }
 
 function dueLabel(task: Task): string {
-  if (!task.dueAt) return 'No deadline';
+  if (!task.dueAt) return currentT()('common.noDeadline');
   const d = new Date(task.dueAt);
   const now = new Date();
   const sameDay =
     d.getFullYear() === now.getFullYear() &&
     d.getMonth() === now.getMonth() &&
     d.getDate() === now.getDate();
-  const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  const intl = INTL_TAG[useLocaleStore.getState().locale];
+  const time = d.toLocaleTimeString(intl, { hour: 'numeric', minute: '2-digit' });
   if (sameDay) {
     const duration = task.durationMin ? ` · ${task.durationMin} min` : '';
-    return `Today, ${time}${duration}`;
+    return `${currentT()('common.today')}, ${time}${duration}`;
   }
-  const date = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  const date = d.toLocaleDateString(intl, { month: 'short', day: 'numeric' });
   const hasTime = d.getHours() !== 0 || d.getMinutes() !== 0;
   return hasTime ? `${date}, ${time}` : date;
 }

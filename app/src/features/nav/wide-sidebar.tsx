@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LogOut } from 'lucide-react-native';
+import { useT } from '../../lib/i18n';
 import { useAuthStore } from '../../store/auth';
 import { useTheme, type Theme } from '../../theme';
 import { DrawerContent } from './drawer';
@@ -9,6 +10,7 @@ import { SideNavLinks } from './nav-chrome';
 
 export function WideSidebar() {
   const t = useTheme();
+  const tr = useT();
   const styles = useMemo(() => makeStyles(t), [t]);
   const insets = useSafeAreaInsets();
   const inset = useMemo(
@@ -30,7 +32,7 @@ export function WideSidebar() {
           style={({ pressed }) => [styles.footerRow, pressed && styles.pressed]}
         >
           <LogOut size={16} color={t.colors.textMuted} strokeWidth={1.9} />
-          <Text style={styles.footerMuted}>Sign out</Text>
+          <Text style={styles.footerMuted}>{tr('nav.signOut')}</Text>
         </Pressable>
       </View>
     </View>

@@ -98,13 +98,13 @@ export async function updateContext(
   id: number,
   patch: UpdateContextInput,
 ): Promise<Context> {
-  if (Number.isNaN(id)) throw notFound('Context not found');
+  if (Number.isNaN(id)) throw notFound('Category not found');
   const [row] = await db
     .update(contexts)
     .set(patch)
     .where(and(ownedBy(contexts.userId, userId), eq(contexts.id, id)))
     .returning();
-  if (!row) throw notFound('Context not found');
+  if (!row) throw notFound('Category not found');
   return toContext(row);
 }
 
@@ -127,12 +127,12 @@ export async function reorderContexts(userId: string, ids: number[]): Promise<Co
 // (context_id → NULL) inside the delete. Tasks/rules have a nullable FK with no
 // cascade, so we must null them before dropping the row.
 export async function deleteContext(userId: string, id: number): Promise<void> {
-  if (Number.isNaN(id)) throw notFound('Context not found');
+  if (Number.isNaN(id)) throw notFound('Category not found');
   const [row] = await db
     .select({ id: contexts.id })
     .from(contexts)
     .where(and(ownedBy(contexts.userId, userId), eq(contexts.id, id)));
-  if (!row) throw notFound('Context not found');
+  if (!row) throw notFound('Category not found');
 
   const [{ openCount }] = await db
     .select({ openCount: sql<number>`count(*)::int` })
@@ -145,7 +145,9 @@ export async function deleteContext(userId: string, id: number): Promise<void> {
       ),
     );
   if (Number(openCount) > 0) {
-    throw conflict(`${openCount} open task(s) still use this context — move or delete them first.`);
+    throw conflict(
+      `${openCount} open task(s) still use this category — move or delete them first.`,
+    );
   }
 
   await db.transaction(async (tx) => {

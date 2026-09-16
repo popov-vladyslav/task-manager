@@ -1,4 +1,11 @@
-import { HOUR_H, SNAP_MIN, yToMinutes, snapMinutes, xToDayIndex, combineDayTime } from './calendar-dates';
+import {
+  HOUR_H,
+  SNAP_MIN,
+  yToMinutes,
+  snapMinutes,
+  xToDayIndex,
+  combineDayTime,
+} from './calendar-dates';
 
 // Maps a drop (gridX, gridY within the scroll content) to a snapped start Date.
 export function resolveDrop(

@@ -41,7 +41,14 @@ const DragRow = memo(function DragRow({
 // The list owns a local `data` copy that it reorders synchronously on drop, so
 // its internal indices never point past the array (the crash we saw on drag-off).
 // The store is updated in parallel to persist; when it re-emits, we re-sync.
-export function DraggableTaskList({ tasks, renderCard, onReorder, footer, empty, onRefresh }: Props) {
+export function DraggableTaskList({
+  tasks,
+  renderCard,
+  onReorder,
+  footer,
+  empty,
+  onRefresh,
+}: Props) {
   const [data, setData] = useState(tasks);
   useEffect(() => setData(tasks), [tasks]);
 

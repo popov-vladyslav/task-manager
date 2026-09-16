@@ -154,8 +154,10 @@ export const oauthProvider: OAuthServerProvider = {
   async exchangeAuthorizationCode(client, authorizationCode, _verifier, redirectUri) {
     const rec = codes.get(authorizationCode);
     if (!rec || rec.exp < Date.now()) throw new InvalidGrantError('Invalid or expired code');
-    if (rec.clientId !== client.client_id) throw new InvalidGrantError('Code was issued to another client');
-    if (redirectUri && rec.redirectUri !== redirectUri) throw new InvalidGrantError('redirect_uri mismatch');
+    if (rec.clientId !== client.client_id)
+      throw new InvalidGrantError('Code was issued to another client');
+    if (redirectUri && rec.redirectUri !== redirectUri)
+      throw new InvalidGrantError('redirect_uri mismatch');
     codes.delete(authorizationCode); // single use
     return issueTokens(client.client_id, rec.scopes ?? [], rec.userId, rec.tokenId);
   },

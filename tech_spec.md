@@ -176,6 +176,11 @@ PATCH  /api/tasks/:id/subtasks/:sid       { title?, done? } → Task
 DELETE /api/tasks/:id/subtasks/:sid       → 200 Task
 POST   /api/tasks/:id/subtasks/reorder    { ids: uuid[] } → Task; чужі/невідомі id пропускаються
 
+GET    /api/settings           → { notificationsEnabled, language: 'en'|'uk'|'pl'|'ru'|null }
+PATCH  /api/settings           { notificationsEnabled?, language? } → те саме; мова зберігається
+                               в settings key `language` і використовується для push-заголовків
+                               та ранкового підсумку (без мови → англійська)
+
 POST   /api/tasks/:id/photos   → DESCOPED, never implemented (see STATUS.md)
 DELETE /api/photos/:id         → DESCOPED, never implemented
 

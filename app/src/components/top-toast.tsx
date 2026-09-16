@@ -2,11 +2,12 @@ import { useEffect } from 'react';
 import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import Animated, { FadeInDown, FadeOutUp } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useT } from '../lib/i18n';
 import { TOAST_DURATION_MS, useToastStore } from '../store/toast';
 import { colors, radius } from '../theme';
 
-
 export function TopToast() {
+  const tr = useT();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const toast = useToastStore((s) => s.toast);
@@ -48,7 +49,7 @@ export function TopToast() {
             hitSlop={8}
             style={styles.undoBtn}
           >
-            <Text style={styles.undoText}>Undo</Text>
+            <Text style={styles.undoText}>{tr('common.undo')}</Text>
           </Pressable>
         ) : null}
       </View>
@@ -79,6 +80,11 @@ const styles = StyleSheet.create({
   textCol: { flex: 1, minWidth: 0 },
   title: { fontSize: 14, fontWeight: '600', color: colors.textPrimary },
   message: { fontSize: 12.5, color: colors.textSecondary, marginTop: 1 },
-  undoBtn: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 8, backgroundColor: colors.bgCard },
+  undoBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 8,
+    backgroundColor: colors.bgCard,
+  },
   undoText: { fontSize: 13, fontWeight: '700', color: colors.accentPrimary },
 });

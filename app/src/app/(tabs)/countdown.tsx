@@ -2,11 +2,13 @@ import { useMemo } from 'react';
 import { StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { Header } from '../../components/header';
 import { WideSidebar } from '../../features/nav/wide-sidebar';
+import { useT } from '../../lib/i18n';
 import { useUiStore } from '../../store/ui';
 import { useTheme, type Theme } from '../../theme';
 
 export default function CountdownRoute() {
   const t = useTheme();
+  const tr = useT();
   const styles = useMemo(() => makeStyles(t), [t]);
   const { width } = useWindowDimensions();
   const wide = width >= t.sizes.wideBreakpoint;
@@ -14,7 +16,7 @@ export default function CountdownRoute() {
 
   const body = (
     <View style={styles.body}>
-      <Text style={styles.text}>Countdowns arrive in a later phase.</Text>
+      <Text style={styles.text}>{tr('nav.countdownPlaceholder')}</Text>
     </View>
   );
 
@@ -24,7 +26,7 @@ export default function CountdownRoute() {
         <WideSidebar />
         <View style={styles.flex1}>
           <Header
-            title="Countdown"
+            title={tr('nav.countdown')}
             leftNode={null}
             right={<View style={styles.spacer} />}
             align="start"
@@ -38,7 +40,11 @@ export default function CountdownRoute() {
 
   return (
     <View style={styles.root}>
-      <Header title="Countdown" onLeftPress={openDrawer} right={<View style={styles.spacer} />} />
+      <Header
+        title={tr('nav.countdown')}
+        onLeftPress={openDrawer}
+        right={<View style={styles.spacer} />}
+      />
       {body}
     </View>
   );

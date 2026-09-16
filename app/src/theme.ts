@@ -1,4 +1,5 @@
-import { colors, radius, contextStripWidth, type Palette } from '@task-manager/shared';
+import { colors, radius, contextStripWidth, INTL_TAG, type Palette } from '@task-manager/shared';
+import { useLocaleStore } from './store/locale';
 
 export { colors, radius, contextStripWidth };
 export type { Palette };
@@ -38,25 +39,27 @@ export function useTheme(): Theme {
   return theme;
 }
 
+const intlTag = () => INTL_TAG[useLocaleStore.getState().locale];
+
 export function headerDate(d: Date = new Date()): string {
   // e.g. "TUE, JUL 15"
-  const s = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+  const s = d.toLocaleDateString(intlTag(), { weekday: 'short', month: 'short', day: 'numeric' });
   return s.toUpperCase();
 }
 
 export function shortDate(iso: string | null): string | null {
   if (!iso) return null;
-  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  return new Date(iso).toLocaleDateString(intlTag(), { month: 'short', day: 'numeric' });
 }
 
 export function shortTime(iso: string | null): string | null {
   if (!iso) return null;
-  return new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  return new Date(iso).toLocaleTimeString(intlTag(), { hour: 'numeric', minute: '2-digit' });
 }
 
 export function shortDateTime(iso: string | null): string | null {
   if (!iso) return null;
-  return new Date(iso).toLocaleString('en-US', {
+  return new Date(iso).toLocaleString(intlTag(), {
     month: 'short',
     day: 'numeric',
     hour: 'numeric',
@@ -69,5 +72,5 @@ export function nextInstanceLabel(date: string | null): string | null {
   if (!date) return null;
   const d = new Date(`${date}T00:00:00`);
   if (Number.isNaN(d.getTime())) return date;
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  return d.toLocaleDateString(intlTag(), { month: 'short', day: 'numeric' });
 }

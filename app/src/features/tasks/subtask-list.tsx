@@ -11,6 +11,7 @@ import { useReorderableDrag } from 'react-native-reorderable-list';
 import { Check, GripHorizontal } from 'lucide-react-native';
 import type { Subtask } from '@task-manager/shared';
 import { haptics } from '../../lib/haptics';
+import { useT } from '../../lib/i18n';
 import { useTheme, webInputReset, type Theme } from '../../theme';
 
 const isWeb = process.env.EXPO_OS === 'web';
@@ -37,6 +38,7 @@ interface SubtaskRowProps {
 
 function SubtaskRowBase({ subtask, onToggle, onRename, onDelete }: SubtaskRowProps) {
   const t = useTheme();
+  const tr = useT();
   const styles = useMemo(() => makeStyles(t), [t]);
   const drag = useReorderableDrag();
   const inputRef = useRef<TextInput>(null);
@@ -82,7 +84,7 @@ function SubtaskRowBase({ subtask, onToggle, onRename, onDelete }: SubtaskRowPro
         delayLongPress={120}
         hitSlop={10}
         accessibilityRole="button"
-        accessibilityLabel="Reorder"
+        accessibilityLabel={tr('tasks.subtask.reorder')}
         style={styles.grip}
       >
         <GripHorizontal size={16} color={t.colors.textMuted} strokeWidth={1.8} />
@@ -103,6 +105,7 @@ export const AddSubtaskRow = forwardRef<TextInput, AddSubtaskRowProps>(function 
   ref,
 ) {
   const t = useTheme();
+  const tr = useT();
   const styles = useMemo(() => makeStyles(t), [t]);
   const [title, setTitle] = useState('');
 
@@ -129,7 +132,7 @@ export const AddSubtaskRow = forwardRef<TextInput, AddSubtaskRowProps>(function 
         submitBehavior="submit"
         multiline
         scrollEnabled={false}
-        placeholder="New subtask"
+        placeholder={tr('tasks.subtask.newPlaceholder')}
         placeholderTextColor={t.colors.textFaint}
         style={[styles.text, webInputReset]}
       />

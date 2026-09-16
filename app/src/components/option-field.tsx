@@ -1,8 +1,8 @@
 import { forwardRef, useImperativeHandle, useMemo, type ReactNode } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Check } from 'lucide-react-native';
-import { Popover, usePopoverAnchor } from '../../components/popover';
-import { useTheme, type Theme } from '../../theme';
+import { Popover, usePopoverAnchor } from './popover';
+import { useTheme, type Theme } from '../theme';
 
 export interface OptionFieldHandle {
   open: () => void;

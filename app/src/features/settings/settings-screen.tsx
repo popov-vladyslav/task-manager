@@ -17,7 +17,11 @@ import { useRouter } from 'expo-router';
 import * as Updates from 'expo-updates';
 import { useUpdates } from 'expo-updates';
 import { ChevronRight, RefreshCw, Trash2 } from 'lucide-react-native';
+import { LOCALES, localeLabel, type Locale } from '@task-manager/shared';
+import { OptionField, type Option, type OptionFieldHandle } from '../../components/option-field';
 import { api, type McpTokenMetadata } from '../../lib/api';
+import { useIntlTag, useT } from '../../lib/i18n';
+import { useLocaleStore } from '../../store/locale';
 import { API_URL } from '../../lib/config';
 import { useRefreshOnFocus } from '../../lib/use-refresh-on-focus';
 import { colors, headerDate, monoFont, webInputReset, WIDE_BREAKPOINT } from '../../theme';
@@ -29,11 +33,13 @@ const isWeb = process.env.EXPO_OS === 'web';
 const isIOS = process.env.EXPO_OS === 'ios';
 
 export function SettingsScreen() {
+  const tr = useT();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const wide = width >= WIDE_BREAKPOINT;
   const sections = (
     <>
+      <LanguageSection />
       <NotificationsSection />
       <AccountSection />
       <McpTokenSection />
@@ -48,7 +54,7 @@ export function SettingsScreen() {
       <View style={styles.wideRoot}>
         <WideSidebar />
         <View style={[styles.wideMain, { paddingTop: insets.top + 24 }]}>
-          <Text style={styles.wideTitle}>Settings</Text>
+          <Text style={styles.wideTitle}>{tr('settings.title')}</Text>
           <ScrollView
             nativeID="settings-scroll-wide"
             showsVerticalScrollIndicator={false}
@@ -67,7 +73,7 @@ export function SettingsScreen() {
       <View style={[styles.flex1, { paddingTop: insets.top + 8 }]}>
         <View style={styles.mobileHeader}>
           <Text style={styles.mobileDate}>{headerDate()}</Text>
-          <Text style={styles.mobileTitle}>Settings</Text>
+          <Text style={styles.mobileTitle}>{tr('settings.title')}</Text>
         </View>
         <ScrollView
           nativeID="settings-scroll-mobile"
@@ -84,7 +90,43 @@ export function SettingsScreen() {
   );
 }
 
+const LANGUAGE_OPTIONS: Option<Locale>[] = LOCALES.map((l) => ({
+  value: l,
+  label: localeLabel(l),
+}));
+
+function LanguageSection() {
+  const t = useT();
+  const locale = useLocaleStore((s) => s.locale);
+  const setLocale = useLocaleStore((s) => s.setLocale);
+  const ref = useRef<OptionFieldHandle>(null);
+  return (
+    <View style={styles.mt28}>
+      <SectionLabel>{t('settings.language.section')}</SectionLabel>
+      <View style={styles.accountCard}>
+        <Pressable
+          onPress={() => ref.current?.open()}
+          accessibilityRole="button"
+          style={styles.notifRow}
+        >
+          <View style={styles.flex1}>
+            <Text style={styles.notifTitle}>{t('settings.language.title')}</Text>
+            <Text style={styles.notifSubtitle}>{t('settings.language.subtitle')}</Text>
+          </View>
+          <OptionField
+            ref={ref}
+            value={locale}
+            options={LANGUAGE_OPTIONS}
+            onChange={(l) => void setLocale(l)}
+          />
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
 function NotificationsSection() {
+  const tr = useT();
   // null until the server answers. No switch is rendered before then: any value
   // it could show — on or off — would be a claim about the account that was
   // never read, and the account default is ON, so an "off" placeholder is the
@@ -111,6 +153,7 @@ function NotificationsSection() {
       .then((s) => {
         if (!alive.current) return;
         setEnabled(s.notificationsEnabled);
+        useLocaleStore.getState().adoptServerLocale(s.language);
         setFailed(false);
       })
       .catch(() => {
@@ -138,19 +181,19 @@ function NotificationsSection() {
 
   return (
     <View style={styles.mt28}>
-      <SectionLabel>NOTIFICATIONS</SectionLabel>
+      <SectionLabel>{tr('settings.notifications.section')}</SectionLabel>
       <View style={styles.accountCard}>
         <View style={styles.notifRow}>
           <View style={styles.flex1}>
-            <Text style={styles.notifTitle}>Push notifications</Text>
+            <Text style={styles.notifTitle}>{tr('settings.notifications.title')}</Text>
             <Text style={styles.notifSubtitle}>
               {/* Only when there is no switch to look at. A failed *refresh*
                   after a good load leaves the last known value on screen and
                   still operable, so an error line there would contradict a
                   control that works. */}
               {failed && enabled === null
-                ? 'Couldn’t load this setting. It retries when you reopen Settings.'
-                : 'Reminders, due times and the morning summary.'}
+                ? tr('settings.notifications.loadFailed')
+                : tr('settings.notifications.subtitle')}
             </Text>
           </View>
           {enabled === null ? null : (
@@ -168,6 +211,7 @@ function NotificationsSection() {
 }
 
 function AccountSection() {
+  const tr = useT();
   const router = useRouter();
   const [email, setEmail] = useState<string | null>(null);
 
@@ -200,12 +244,12 @@ function AccountSection() {
 
   return (
     <View style={styles.mt28}>
-      <SectionLabel>ACCOUNT</SectionLabel>
+      <SectionLabel>{tr('settings.account.section')}</SectionLabel>
       <View style={styles.accountCard}>
         {email ? (
           <>
             <View style={styles.accountEmailRow}>
-              <Text style={styles.accountEmailLabel}>Signed in as</Text>
+              <Text style={styles.accountEmailLabel}>{tr('settings.account.signedInAs')}</Text>
               <Text numberOfLines={1} style={styles.accountEmail}>
                 {email}
               </Text>
@@ -214,12 +258,12 @@ function AccountSection() {
           </>
         ) : null}
         <Pressable onPress={signOut} style={styles.accountSignOutRow}>
-          <Text style={styles.accountSignOutText}>Sign out</Text>
+          <Text style={styles.accountSignOutText}>{tr('settings.account.signOut')}</Text>
           <ChevronRight size={16} color={colors.textFaint} />
         </Pressable>
         <View style={styles.accountDivider} />
         <Pressable onPress={signOutEverywhere} style={styles.accountSignOutRow}>
-          <Text style={styles.accountSignOutText}>Sign out all devices</Text>
+          <Text style={styles.accountSignOutText}>{tr('settings.account.signOutAll')}</Text>
           <ChevronRight size={16} color={colors.textFaint} />
         </Pressable>
       </View>
@@ -227,9 +271,9 @@ function AccountSection() {
   );
 }
 
-function formatStamp(iso: string): string {
+function formatStamp(iso: string, intlTag: string): string {
   const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString();
+  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString(intlTag);
 }
 
 // The MCP token is emailed and never rendered here — the app has no way to show
@@ -243,19 +287,20 @@ const MCP_URL = `${API_URL.replace(/\/$/, '')}/mcp`;
 // renamed every few months, and an email is frozen the moment it is sent. This
 // screen ships with the app and can be corrected in an OTA update.
 function HowToConnect() {
+  const tr = useT();
   const [open, setOpen] = useState(false);
 
   return (
     <View style={styles.howBlock}>
       <Pressable onPress={() => setOpen((v) => !v)} style={styles.howToggle}>
         <ChevronRight size={14} color={colors.textFaint} />
-        <Text style={styles.howToggleText}>How to connect</Text>
+        <Text style={styles.howToggleText}>{tr('settings.mcp.howToConnect')}</Text>
       </Pressable>
 
       {open ? (
         <View style={styles.howBody}>
           <Text style={styles.howLabel}>Claude (claude.ai)</Text>
-          <Text style={styles.howStep}>Settings → Connectors → Add custom connector</Text>
+          <Text style={styles.howStep}>{tr('settings.mcp.howClaudeStep')}</Text>
 
           <Text style={styles.howLabel}>Claude Code</Text>
           <Text selectable style={styles.howStep}>
@@ -263,12 +308,9 @@ function HowToConnect() {
           </Text>
 
           <Text style={styles.howLabel}>ChatGPT</Text>
-          <Text style={styles.howStep}>Settings → Connectors → Add</Text>
+          <Text style={styles.howStep}>{tr('settings.mcp.howChatGptStep')}</Text>
 
-          <Text style={styles.howNote}>
-            Any client that supports HTTP MCP with a bearer token will work. Menu names change
-            between app versions — look for “connectors” or “MCP servers”.
-          </Text>
+          <Text style={styles.howNote}>{tr('settings.mcp.howNote')}</Text>
         </View>
       ) : null}
     </View>
@@ -276,6 +318,8 @@ function HowToConnect() {
 }
 
 function McpTokenSection() {
+  const tr = useT();
+  const intlTag = useIntlTag();
   const [meta, setMeta] = useState<McpTokenMetadata | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -303,9 +347,9 @@ function McpTokenSection() {
     setNote(null);
     try {
       setMeta(await api.issueMcpToken());
-      setNote('Sent to your email address.');
+      setNote(tr('settings.mcp.sent'));
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not create a token');
+      setError(e instanceof Error ? e.message : tr('settings.mcp.issueFailed'));
     } finally {
       setBusy(false);
     }
@@ -319,9 +363,9 @@ function McpTokenSection() {
     try {
       await api.revokeMcpToken();
       setMeta(null);
-      setNote('Token revoked.');
+      setNote(tr('settings.mcp.revoked'));
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not revoke');
+      setError(e instanceof Error ? e.message : tr('settings.mcp.revokeFailed'));
     } finally {
       setBusy(false);
     }
@@ -329,25 +373,26 @@ function McpTokenSection() {
 
   return (
     <View style={styles.mt28}>
-      <SectionLabel>AI ASSISTANT (MCP)</SectionLabel>
+      <SectionLabel>{tr('settings.mcp.section')}</SectionLabel>
       <View style={styles.accountCard}>
         <View style={styles.mcpBody}>
-          <Text style={styles.mcpBlurb}>
-            Connect your own AI assistant to your tasks. The token is sent to your email and is
-            never shown here — if you lose it, generate a new one.
-          </Text>
+          <Text style={styles.mcpBlurb}>{tr('settings.mcp.blurb')}</Text>
 
           {!loaded ? (
             <ActivityIndicator color={colors.textFaint} />
           ) : meta ? (
             <>
-              <Text style={styles.mcpMeta}>Created {formatStamp(meta.createdAt)}</Text>
               <Text style={styles.mcpMeta}>
-                {meta.lastUsedAt ? `Last used ${formatStamp(meta.lastUsedAt)}` : 'Never used'}
+                {tr('settings.mcp.created', { date: formatStamp(meta.createdAt, intlTag) })}
+              </Text>
+              <Text style={styles.mcpMeta}>
+                {meta.lastUsedAt
+                  ? tr('settings.mcp.lastUsed', { date: formatStamp(meta.lastUsedAt, intlTag) })
+                  : tr('settings.mcp.neverUsed')}
               </Text>
             </>
           ) : (
-            <Text style={styles.mcpMeta}>No token yet.</Text>
+            <Text style={styles.mcpMeta}>{tr('settings.mcp.noToken')}</Text>
           )}
 
           {note ? <Text style={styles.mcpNote}>{note}</Text> : null}
@@ -357,19 +402,17 @@ function McpTokenSection() {
             <Pressable onPress={issue} disabled={busy} style={styles.mcpPrimaryBtn}>
               <RefreshCw size={13} color={colors.bgSurface} />
               <Text style={styles.mcpPrimaryBtnText}>
-                {meta ? 'Regenerate and email' : 'Email me a token'}
+                {meta ? tr('settings.mcp.regenerate') : tr('settings.mcp.issue')}
               </Text>
             </Pressable>
             {meta ? (
               <Pressable onPress={revoke} disabled={busy} style={styles.mcpRevokeBtn}>
-                <Text style={styles.mcpRevokeBtnText}>Revoke</Text>
+                <Text style={styles.mcpRevokeBtnText}>{tr('settings.mcp.revoke')}</Text>
               </Pressable>
             ) : null}
           </View>
 
-          {meta ? (
-            <Text style={styles.mcpWarn}>Regenerating stops the current token working.</Text>
-          ) : null}
+          {meta ? <Text style={styles.mcpWarn}>{tr('settings.mcp.regenerateWarning')}</Text> : null}
 
           <HowToConnect />
         </View>
@@ -379,32 +422,26 @@ function McpTokenSection() {
 }
 
 function DangerSection() {
+  const tr = useT();
   const [modal, setModal] = useState(false);
   const [deleteModal, setDeleteModal] = useState(false);
   return (
     <View style={styles.mt28}>
-      <SectionLabel>DANGER ZONE</SectionLabel>
+      <SectionLabel>{tr('settings.danger.section')}</SectionLabel>
       <View style={styles.dangerCard}>
-        <Text style={styles.dangerTitle}>Reset all data</Text>
-        <Text style={styles.dangerText}>
-          Permanently deletes all tasks, recurring rules and timers. Your contexts and sign-in are
-          kept. This cannot be undone.
-        </Text>
+        <Text style={styles.dangerTitle}>{tr('settings.danger.resetTitle')}</Text>
+        <Text style={styles.dangerText}>{tr('settings.danger.resetText')}</Text>
         <Pressable onPress={() => setModal(true)} style={styles.dangerBtn}>
           <Trash2 size={13} color={colors.accentNow} />
-          <Text style={styles.dangerBtnText}>Reset…</Text>
+          <Text style={styles.dangerBtnText}>{tr('settings.danger.resetButton')}</Text>
         </Pressable>
       </View>
       <View style={styles.dangerCard}>
-        <Text style={styles.dangerTitle}>Delete account</Text>
-        <Text style={styles.dangerText}>
-          Permanently deletes your account and everything in it — tasks, contexts, recurring rules,
-          tracked time, notes and any MCP token. You are signed out on every device. This cannot be
-          undone.
-        </Text>
+        <Text style={styles.dangerTitle}>{tr('settings.danger.deleteTitle')}</Text>
+        <Text style={styles.dangerText}>{tr('settings.danger.deleteText')}</Text>
         <Pressable onPress={() => setDeleteModal(true)} style={styles.dangerBtn}>
           <Trash2 size={13} color={colors.accentNow} />
-          <Text style={styles.dangerBtnText}>Delete account…</Text>
+          <Text style={styles.dangerBtnText}>{tr('settings.danger.deleteButton')}</Text>
         </Pressable>
       </View>
       {modal ? <ResetModal onClose={() => setModal(false)} /> : null}
@@ -415,7 +452,20 @@ function DangerSection() {
 
 // Same type-to-confirm friction as the reset flow, with a harsher word and a
 // harsher outcome: this one ends the account, not just its contents.
+function ConfirmHint({ body, word }: { body: string; word: string }) {
+  const tr = useT();
+  const [before, after] = tr('settings.danger.typeToConfirm').split('{word}');
+  return (
+    <Text style={styles.resetBody}>
+      {body} {before}
+      <Text style={styles.resetBodyEmphasis}>{word}</Text>
+      {after}
+    </Text>
+  );
+}
+
 function DeleteAccountModal({ onClose }: { onClose: () => void }) {
+  const tr = useT();
   const router = useRouter();
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
@@ -433,7 +483,7 @@ function DeleteAccountModal({ onClose }: { onClose: () => void }) {
       await useAuthStore.getState().signOut();
       router.replace('/sign-in');
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not delete the account');
+      setError(e instanceof Error ? e.message : tr('settings.danger.deleteFailed'));
       setBusy(false);
     }
   };
@@ -443,11 +493,8 @@ function DeleteAccountModal({ onClose }: { onClose: () => void }) {
       <KeyboardAvoidingView behavior={isIOS ? 'padding' : undefined} style={styles.flex1}>
         <Pressable onPress={onClose} style={styles.resetOverlay}>
           <Pressable onPress={(e) => e.stopPropagation?.()} style={styles.resetCard}>
-            <Text style={styles.resetTitle}>Delete account</Text>
-            <Text style={styles.resetBody}>
-              This permanently deletes your account and all of its data. It cannot be undone. Type{' '}
-              <Text style={styles.resetBodyEmphasis}>DELETE</Text> to confirm.
-            </Text>
+            <Text style={styles.resetTitle}>{tr('settings.danger.deleteTitle')}</Text>
+            <ConfirmHint body={tr('settings.danger.deleteModalBody')} word="DELETE" />
             <TextInput
               value={text}
               onChangeText={setText}
@@ -461,7 +508,7 @@ function DeleteAccountModal({ onClose }: { onClose: () => void }) {
             {error ? <Text style={styles.resetErrorText}>{error}</Text> : null}
             <View style={styles.resetActions}>
               <Pressable onPress={onClose} disabled={busy} style={styles.resetCancel}>
-                <Text style={styles.resetCancelText}>Cancel</Text>
+                <Text style={styles.resetCancelText}>{tr('common.cancel')}</Text>
               </Pressable>
               <Pressable
                 onPress={doDelete}
@@ -480,7 +527,7 @@ function DeleteAccountModal({ onClose }: { onClose: () => void }) {
                       { color: ok ? colors.bgSurface : colors.textMuted },
                     ]}
                   >
-                    Delete account
+                    {tr('settings.danger.deleteTitle')}
                   </Text>
                 )}
               </Pressable>
@@ -494,6 +541,7 @@ function DeleteAccountModal({ onClose }: { onClose: () => void }) {
 
 // Type-RESET-to-confirm — maximum friction for the irreversible action.
 function ResetModal({ onClose }: { onClose: () => void }) {
+  const tr = useT();
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -507,7 +555,7 @@ function ResetModal({ onClose }: { onClose: () => void }) {
       await useTasksStore.getState().resetData();
       onClose();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not reset');
+      setError(e instanceof Error ? e.message : tr('settings.danger.resetFailed'));
       setBusy(false);
     }
   };
@@ -517,11 +565,8 @@ function ResetModal({ onClose }: { onClose: () => void }) {
       <KeyboardAvoidingView behavior={isIOS ? 'padding' : undefined} style={styles.flex1}>
         <Pressable onPress={onClose} style={styles.resetOverlay}>
           <Pressable onPress={(e) => e.stopPropagation?.()} style={styles.resetCard}>
-            <Text style={styles.resetTitle}>Reset all data</Text>
-            <Text style={styles.resetBody}>
-              This permanently deletes all tasks, recurring rules and timers. Your contexts and
-              sign-in are kept. Type <Text style={styles.resetBodyEmphasis}>RESET</Text> to confirm.
-            </Text>
+            <Text style={styles.resetTitle}>{tr('settings.danger.resetTitle')}</Text>
+            <ConfirmHint body={tr('settings.danger.resetModalBody')} word="RESET" />
             <TextInput
               value={text}
               onChangeText={setText}
@@ -535,7 +580,7 @@ function ResetModal({ onClose }: { onClose: () => void }) {
             {error ? <Text style={styles.resetErrorText}>{error}</Text> : null}
             <View style={styles.resetActions}>
               <Pressable onPress={onClose} disabled={busy} style={styles.resetCancel}>
-                <Text style={styles.resetCancelText}>Cancel</Text>
+                <Text style={styles.resetCancelText}>{tr('common.cancel')}</Text>
               </Pressable>
               <Pressable
                 onPress={doReset}
@@ -554,7 +599,7 @@ function ResetModal({ onClose }: { onClose: () => void }) {
                       { color: ok ? colors.bgSurface : colors.textMuted },
                     ]}
                   >
-                    Reset
+                    {tr('settings.danger.resetConfirm')}
                   </Text>
                 )}
               </Pressable>
@@ -569,6 +614,8 @@ function ResetModal({ onClose }: { onClose: () => void }) {
 // Diagnostic for the OTA update system: which bundle is live (embedded build vs an
 // OTA), its channel/runtime, plus a manual check and a restart-to-apply control.
 function UpdatesSection() {
+  const tr = useT();
+  const intlTag = useIntlTag();
   const {
     currentlyRunning,
     isUpdatePending,
@@ -590,7 +637,7 @@ function UpdatesSection() {
   const r = currentlyRunning;
   const busy = isChecking || isDownloading;
   const lastChecked = lastCheckForUpdateTimeSinceRestart
-    ? lastCheckForUpdateTimeSinceRestart.toLocaleTimeString([], {
+    ? lastCheckForUpdateTimeSinceRestart.toLocaleTimeString(intlTag, {
         hour: 'numeric',
         minute: '2-digit',
       })
@@ -598,31 +645,41 @@ function UpdatesSection() {
 
   return (
     <View style={styles.mt28}>
-      <SectionLabel>UPDATES</SectionLabel>
+      <SectionLabel>{tr('settings.updates.section')}</SectionLabel>
       <View style={styles.accountCard}>
         {!Updates.isEnabled ? (
-          <Text style={styles.updatesNote}>
-            Over-the-air updates run only in release / preview builds — not in Expo Go or a dev
-            client.
-          </Text>
+          <Text style={styles.updatesNote}>{tr('settings.updates.disabled')}</Text>
         ) : (
           <>
-            <DiagRow label="Running" value={r.isEmbeddedLaunch ? 'Embedded build' : 'OTA update'} />
-            <DiagRow label="Channel" value={r.channel ?? '—'} />
-            <DiagRow label="Runtime" value={r.runtimeVersion ?? '—'} mono />
-            <DiagRow label="Update ID" value={r.updateId ? r.updateId.slice(0, 8) : '—'} mono />
-            {lastChecked ? <DiagRow label="Last checked" value={lastChecked} /> : null}
+            <DiagRow
+              label={tr('settings.updates.running')}
+              value={
+                r.isEmbeddedLaunch ? tr('settings.updates.embedded') : tr('settings.updates.ota')
+              }
+            />
+            <DiagRow label={tr('settings.updates.channel')} value={r.channel ?? '—'} />
+            <DiagRow label={tr('settings.updates.runtime')} value={r.runtimeVersion ?? '—'} mono />
+            <DiagRow
+              label={tr('settings.updates.updateId')}
+              value={r.updateId ? r.updateId.slice(0, 8) : '—'}
+              mono
+            />
+            {lastChecked ? (
+              <DiagRow label={tr('settings.updates.lastChecked')} value={lastChecked} />
+            ) : null}
             {isUpdatePending ? (
               <Pressable onPress={apply} disabled={isRestarting} style={styles.updatesApplyRow}>
                 <RefreshCw size={15} color={colors.bgBase} />
                 <Text style={styles.updatesApplyText}>
-                  {isRestarting ? 'Restarting…' : 'Update ready — restart to apply'}
+                  {isRestarting
+                    ? tr('settings.updates.restarting')
+                    : tr('settings.updates.readyRestart')}
                 </Text>
               </Pressable>
             ) : (
               <Pressable onPress={check} disabled={busy} style={styles.updatesCheckRow}>
                 <Text style={styles.updatesCheckText}>
-                  {busy ? 'Checking…' : 'Check for updates'}
+                  {busy ? tr('settings.updates.checking') : tr('settings.updates.check')}
                 </Text>
                 {busy ? (
                   <ActivityIndicator size="small" color={colors.textMuted} />

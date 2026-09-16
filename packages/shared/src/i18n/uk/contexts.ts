@@ -1,0 +1,25 @@
+import type { Dictionary } from '../types';
+
+export const contexts: Pick<Dictionary, keyof typeof import('../en/contexts').contexts> = {
+  'contexts.editor.emoji': 'Емодзі',
+  'contexts.editor.namePlaceholder': 'Назва категорії',
+  'contexts.editor.hideFromAll': 'Приховати з «Усі»',
+  'contexts.editor.hideFromAllHint': 'Залишається в меню; задачі не показуються в «Усі».',
+  'contexts.editor.colour': 'КОЛІР',
+  'contexts.editor.saveFailed': 'Не вдалося зберегти',
+  'contexts.editor.deleteFailed': 'Не вдалося видалити',
+  'contexts.menu.taskCountOne': '{n} задача',
+  'contexts.menu.taskCount': 'Задач: {n}',
+  'contexts.menu.rename': 'Назва, колір та емодзі',
+  'contexts.menu.showInAll': 'Показувати в «Усі»',
+  'contexts.menu.delete': 'Видалити категорію',
+  'contexts.menu.deleteFailed': 'Не вдалося видалити категорію',
+  'contexts.screen.noOpenTasks': 'Немає відкритих задач',
+  'contexts.drawer.caption': 'КАТЕГОРІЇ',
+  'contexts.drawer.newContext': 'Нова категорія',
+  'contexts.drawer.hiddenNote':
+    'Приховані категорії залишаються тут; їхні задачі не входять до «Усі».',
+  'contexts.drawer.closeMenu': 'Закрити меню',
+  'contexts.menu.deleteBlocked':
+    'Відкриті задачі ще використовують цю категорію — перенесіть або видаліть їх.',
+};
