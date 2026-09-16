@@ -1,71 +1,34 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { colors, monoFont } from '../../theme';
+import { forwardRef } from 'react';
+import { OptionField, type OptionFieldHandle } from './option-field';
 
-// Duration presets (minutes) for a scheduled task's calendar block. Chips work
-// identically on native and web (no DateTimePicker), so this lives in one file
-// imported by both date-fields-section variants. Shown only when a deadline is
-// set — a task with a deadline always has a duration (defaults to 30).
-const PRESETS = [15, 30, 45, 60, 90, 120];
-const DEFAULT_DURATION_MIN = 30;
+const STEP = 15;
+const MAX_MIN = 480;
+const OPTIONS = Array.from({ length: MAX_MIN / STEP }, (_, i) => (i + 1) * STEP);
 
-export function DurationField({
-  value,
-  onChange,
-}: {
-  value: number | null;
-  onChange: (min: number) => void;
-}) {
-  const active = value ?? DEFAULT_DURATION_MIN;
-  return (
-    <View>
-      <Text style={styles.label}>Duration</Text>
-      <View style={styles.row}>
-        {PRESETS.map((m) => {
-          const on = active === m;
-          return (
-            <Pressable
-              key={m}
-              onPress={() => onChange(m)}
-              style={[
-                styles.chip,
-                {
-                  backgroundColor: on ? colors.bgElevated : colors.bgCard,
-                  borderColor: on ? colors.borderStrong : colors.borderSubtle,
-                },
-              ]}
-            >
-              <Text
-                style={[styles.chipText, { color: on ? colors.textPrimary : colors.textSecondary }]}
-              >
-                {m < 60
-                  ? `${m}m`
-                  : m % 60 === 0
-                    ? `${m / 60}h`
-                    : `${Math.floor(m / 60)}h ${m % 60}m`}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </View>
-    </View>
-  );
+export type DurationFieldHandle = OptionFieldHandle;
+
+export function formatDuration(minutes: number): string {
+  if (minutes < 60) return `${minutes} min`;
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return m === 0 ? `${h} h` : `${h} h ${m} min`;
 }
 
-const styles = StyleSheet.create({
-  label: {
-    fontFamily: monoFont,
-    fontSize: 10.5,
-    letterSpacing: 1,
-    textTransform: 'uppercase',
-    color: colors.textMuted,
-    marginBottom: 8,
-  },
-  row: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  chip: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 999,
-    borderWidth: 1,
-  },
-  chipText: { fontSize: 12, fontWeight: '500' },
+const DURATION_OPTIONS = OPTIONS.map((m) => ({ value: m, label: formatDuration(m) }));
+
+export const DurationField = forwardRef<
+  DurationFieldHandle,
+  { value: number; onChange: (min: number) => void }
+>(function DurationField({ value, onChange }, ref) {
+  return (
+    <OptionField
+      ref={ref}
+      value={value}
+      label={formatDuration(value)}
+      options={DURATION_OPTIONS}
+      onChange={onChange}
+      width={180}
+      listHeight={288}
+    />
+  );
 });

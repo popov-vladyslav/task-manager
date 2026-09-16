@@ -1,14 +1,15 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Bell, Clock, Repeat, Timer } from 'lucide-react-native';
-import type { RecurrenceInput } from '@task-manager/shared';
+import { DEFAULT_DURATION_MIN, type RecurrenceInput } from '@task-manager/shared';
 import { BottomSheet } from '../../components/bottom-sheet';
 import { Chip } from '../../components/chip';
 import { useTheme, type Theme } from '../../theme';
 import { addDays, sameDay, startOfDay, startOfWeek } from '../calendar/calendar-dates';
 import { CalendarGrid } from './calendar-grid';
-import { DurationField } from './duration-field';
-import { TimeField } from './time-field';
+import { DurationField, type DurationFieldHandle } from './duration-field';
+import { OptionField, type Option, type OptionFieldHandle } from './option-field';
+import { TimeField, type TimeFieldHandle } from './time-field';
 
 const WEEKDAYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
 const WEEK_ORDER = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const;
@@ -22,18 +23,18 @@ const DAY_LABEL: Record<string, string> = {
   sun: 'S',
 };
 type RecKind = 'none' | 'daily' | 'weekly' | 'monthly';
-const REC_OPTIONS: { k: RecKind; label: string }[] = [
-  { k: 'none', label: 'No repeat' },
-  { k: 'daily', label: 'Daily' },
-  { k: 'weekly', label: 'Weekly' },
-  { k: 'monthly', label: 'Monthly' },
+const REC_OPTIONS: Option<RecKind>[] = [
+  { value: 'none', label: 'No repeat' },
+  { value: 'daily', label: 'Daily' },
+  { value: 'weekly', label: 'Weekly' },
+  { value: 'monthly', label: 'Monthly' },
 ];
-const REMINDER_OPTIONS: { v: number | null; label: string }[] = [
-  { v: null, label: 'None' },
-  { v: 0, label: 'At time' },
-  { v: 30, label: '30 min before' },
-  { v: 60, label: '1 h before' },
-  { v: 1440, label: '1 day before' },
+const REMINDER_OPTIONS: Option<number | null>[] = [
+  { value: null, label: 'None' },
+  { value: 0, label: 'At time' },
+  { value: 30, label: '30 min before' },
+  { value: 60, label: '1 h before' },
+  { value: 1440, label: '1 day before' },
 ];
 const DEFAULT_TIME_MIN = 12 * 60;
 
@@ -119,7 +120,10 @@ export function WhenSheet({ open, value, onClose, onSave }: WhenSheetProps) {
   const [reminder, setReminder] = useState<number | null>(null);
   const [kind, setKind] = useState<RecKind>('none');
   const [days, setDays] = useState<string[]>([]);
-  const [expanded, setExpanded] = useState<'duration' | 'reminder' | 'repeat' | null>(null);
+  const timeRef = useRef<TimeFieldHandle>(null);
+  const durationRef = useRef<DurationFieldHandle>(null);
+  const reminderRef = useRef<OptionFieldHandle>(null);
+  const repeatRef = useRef<OptionFieldHandle>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -130,7 +134,6 @@ export function WhenSheet({ open, value, onClose, onSave }: WhenSheetProps) {
     setReminder(reminderOffset(value.dueAt, value.remindAt));
     setKind(recKind(value.recurrenceRule));
     setDays(weeklyDays(value.recurrenceRule));
-    setExpanded(null);
   }, [open, value]);
 
   const today = startOfDay(new Date());
@@ -173,21 +176,45 @@ export function WhenSheet({ open, value, onClose, onSave }: WhenSheetProps) {
             : { rule: `monthly:${base.getDate()}` };
     onSave({
       dueAt: due ? due.toISOString() : null,
-      durationMin: due ? (duration ?? 30) : null,
+      durationMin: due ? (duration ?? DEFAULT_DURATION_MIN) : null,
       remindAt,
       recurrence,
     });
   };
 
-  const toggle = (k: typeof expanded) => setExpanded((e) => (e === k ? null : k));
   const reminderLabel =
-    REMINDER_OPTIONS.find((o) => o.v === reminder)?.label ?? `${reminder} min before`;
+    REMINDER_OPTIONS.find((o) => o.value === reminder)?.label ?? `${reminder} min before`;
   const repeatLabel =
     kind === 'none'
       ? 'Never'
       : kind === 'weekly'
         ? `Weekly, ${days.map((d) => DAY_LABEL[d]).join('')}`
-        : (REC_OPTIONS.find((o) => o.k === kind)?.label ?? 'Never');
+        : (REC_OPTIONS.find((o) => o.value === kind)?.label ?? 'Never');
+
+  const pickKind = (k: RecKind) => {
+    setKind(k);
+    if (k === 'weekly' && days.length === 0) setDays([WEEKDAYS[(day ?? today).getDay()]]);
+  };
+
+  const weekdayPicker =
+    kind === 'weekly' ? (
+      <View style={styles.weekRow}>
+        {WEEK_ORDER.map((d) => {
+          const on = days.includes(d);
+          return (
+            <Pressable
+              key={d}
+              onPress={() => toggleWeekday(d)}
+              accessibilityRole="button"
+              accessibilityState={{ selected: on }}
+              style={[styles.weekday, on && styles.weekdayOn]}
+            >
+              <Text style={[styles.weekdayText, on && styles.weekdayTextOn]}>{DAY_LABEL[d]}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
+    ) : null;
 
   return (
     <BottomSheet open={open} onClose={onClose}>
@@ -214,84 +241,67 @@ export function WhenSheet({ open, value, onClose, onSave }: WhenSheetProps) {
           label="Time"
           value="—"
           control={
-            day ? <TimeField minutes={minutes ?? DEFAULT_TIME_MIN} onChange={setMinutes} /> : null
+            day ? (
+              <TimeField
+                ref={timeRef}
+                minutes={minutes ?? DEFAULT_TIME_MIN}
+                onChange={setMinutes}
+              />
+            ) : null
           }
+          onPress={day ? () => timeRef.current?.open() : undefined}
         />
         <Row
           icon={<Timer size={15} color={t.colors.textSecondary} strokeWidth={1.8} />}
           label="Duration"
-          value={day ? `${duration ?? 30} min` : '—'}
-          onPress={() => day && toggle('duration')}
+          value="—"
+          control={
+            day ? (
+              <DurationField
+                ref={durationRef}
+                value={duration ?? DEFAULT_DURATION_MIN}
+                onChange={setDuration}
+              />
+            ) : null
+          }
+          onPress={day ? () => durationRef.current?.open() : undefined}
         />
-        {expanded === 'duration' && day ? (
-          <View style={styles.expand}>
-            <DurationField value={duration} onChange={setDuration} />
-          </View>
-        ) : null}
         <Row
           icon={<Bell size={15} color={t.colors.textSecondary} strokeWidth={1.8} />}
           label="Reminder"
-          value={day ? reminderLabel : '—'}
-          onPress={() => day && toggle('reminder')}
-        />
-        {expanded === 'reminder' && day ? (
-          <View style={styles.expandChips}>
-            {REMINDER_OPTIONS.map((o) => (
-              <Chip
-                key={o.label}
-                label={o.label}
-                selected={reminder === o.v}
-                onPress={() => setReminder(o.v)}
+          value="—"
+          control={
+            day ? (
+              <OptionField
+                ref={reminderRef}
+                value={reminder}
+                label={reminderLabel}
+                options={REMINDER_OPTIONS}
+                onChange={setReminder}
               />
-            ))}
-          </View>
-        ) : null}
+            ) : null
+          }
+          onPress={day ? () => reminderRef.current?.open() : undefined}
+        />
         <Row
           icon={<Repeat size={15} color={t.colors.textSecondary} strokeWidth={1.8} />}
           label="Repeat"
-          value={repeatLabel}
-          onPress={() => toggle('repeat')}
+          value="—"
+          control={
+            <OptionField
+              ref={repeatRef}
+              value={kind}
+              label={repeatLabel}
+              options={REC_OPTIONS}
+              onChange={pickKind}
+              closeOnPick={(k) => k !== 'weekly'}
+              footer={weekdayPicker}
+              width={260}
+            />
+          }
+          onPress={() => repeatRef.current?.open()}
           last
         />
-        {expanded === 'repeat' ? (
-          <View style={styles.expand}>
-            <View style={styles.expandChips}>
-              {REC_OPTIONS.map((o) => (
-                <Chip
-                  key={o.k}
-                  label={o.label}
-                  selected={kind === o.k}
-                  onPress={() => {
-                    setKind(o.k);
-                    if (o.k === 'weekly' && days.length === 0) {
-                      setDays([WEEKDAYS[(day ?? today).getDay()]]);
-                    }
-                  }}
-                />
-              ))}
-            </View>
-            {kind === 'weekly' ? (
-              <View style={styles.weekRow}>
-                {WEEK_ORDER.map((d) => {
-                  const on = days.includes(d);
-                  return (
-                    <Pressable
-                      key={d}
-                      onPress={() => toggleWeekday(d)}
-                      accessibilityRole="button"
-                      accessibilityState={{ selected: on }}
-                      style={[styles.weekday, on && styles.weekdayOn]}
-                    >
-                      <Text style={[styles.weekdayText, on && styles.weekdayTextOn]}>
-                        {DAY_LABEL[d]}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-            ) : null}
-          </View>
-        ) : null}
       </View>
 
       <View style={styles.actions}>
@@ -323,16 +333,22 @@ function Row({
 }) {
   const t = useTheme();
   const styles = useMemo(() => makeStyles(t), [t]);
-  return (
-    <Pressable
-      onPress={onPress}
-      disabled={!onPress}
-      accessibilityRole="button"
-      style={[styles.row, last && styles.rowLast]}
-    >
+  const rowStyle = [styles.row, last && styles.rowLast];
+  const inner = (
+    <>
       <View style={styles.rowIcon}>{icon}</View>
       <Text style={styles.rowLabel}>{label}</Text>
       {control ?? <Text style={styles.rowValue}>{value}</Text>}
+    </>
+  );
+  if (!onPress) return <View style={rowStyle}>{inner}</View>;
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole={control ? undefined : 'button'}
+      style={rowStyle}
+    >
+      {inner}
     </Pressable>
   );
 }
@@ -354,13 +370,20 @@ const makeStyles = (t: Theme) =>
     rowIcon: { width: 20, alignItems: 'center' },
     rowLabel: { flex: 1, fontSize: 13.5, fontWeight: '500', color: t.colors.textControl },
     rowValue: { fontSize: 13.5, fontWeight: '700', color: t.colors.textPrimary },
-    expand: { paddingVertical: 10, gap: 10 },
-    expandChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 7, paddingVertical: 8 },
-    weekRow: { flexDirection: 'row', gap: 8 },
+    weekRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-around',
+      paddingHorizontal: 0,
+      paddingTop: 10,
+      paddingBottom: 4,
+      borderTopWidth: 1,
+      borderColor: t.colors.borderPopover,
+      marginTop: 6,
+    },
     weekday: {
-      width: 32,
-      height: 32,
-      borderRadius: 16,
+      width: 28,
+      height: 28,
+      borderRadius: 14,
       alignItems: 'center',
       justifyContent: 'center',
       backgroundColor: t.colors.bgCard,

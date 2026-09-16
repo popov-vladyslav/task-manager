@@ -1,6 +1,10 @@
-import { useMemo } from 'react';
+import { forwardRef, useImperativeHandle, useMemo, useRef } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { useTheme, type Theme } from '../../theme';
+
+export interface TimeFieldHandle {
+  open: () => void;
+}
 
 interface TimeFieldProps {
   minutes: number | null;
@@ -15,21 +19,28 @@ export function formatMinutes(minutes: number | null): string {
   return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
 }
 
-export function TimeField({ minutes, onChange }: TimeFieldProps) {
+export const TimeField = forwardRef<TimeFieldHandle, TimeFieldProps>(function TimeField(
+  { minutes, onChange },
+  ref,
+) {
   const t = useTheme();
   const styles = useMemo(() => makeStyles(t), [t]);
+  const inputRef = useRef<HTMLInputElement>(null);
+  useImperativeHandle(ref, () => ({ open: () => inputRef.current?.focus() }));
   const inputStyle = useMemo(
     () =>
       ({
         background: 'transparent',
         border: 'none',
         outline: 'none',
+        padding: 0,
         color: t.colors.accentPrimary,
         fontFamily: t.fonts.mono,
         fontSize: 13.5,
         fontWeight: 700,
+        textAlign: 'right',
         colorScheme: 'dark',
-        cursor: 'pointer',
+        cursor: 'text',
       }) as const,
     [t],
   );
@@ -37,8 +48,10 @@ export function TimeField({ minutes, onChange }: TimeFieldProps) {
   return (
     <View style={styles.wrap}>
       <input
+        ref={inputRef}
         type="time"
         value={value}
+        step={300}
         aria-label="Time"
         onChange={(e) => {
           const [h, m] = e.target.value.split(':').map(Number);
@@ -48,6 +61,6 @@ export function TimeField({ minutes, onChange }: TimeFieldProps) {
       />
     </View>
   );
-}
+});
 
 const makeStyles = (_t: Theme) => StyleSheet.create({ wrap: { paddingVertical: 2 } });

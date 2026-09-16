@@ -315,7 +315,7 @@ export function TaskCardScreen({ taskId, onClose, compact = false }: TaskCardScr
               style={styles.when}
             >
               <View style={styles.whenIcon}>
-                <CalendarDays size={13} color={t.colors.textSecondary} strokeWidth={1.8} />
+                <CalendarDays size={12} color={t.colors.textSecondary} strokeWidth={1.8} />
               </View>
               <View style={styles.flex1}>
                 <View style={styles.whenMainRow}>
@@ -456,7 +456,7 @@ const makeStyles = (t: Theme, compact: boolean) =>
       width: 22,
       height: 22,
       borderRadius: 7,
-      borderWidth: 1.5,
+      borderWidth: 2,
       borderColor: t.colors.borderStrong,
       alignItems: 'center',
       justifyContent: 'center',
@@ -466,7 +466,7 @@ const makeStyles = (t: Theme, compact: boolean) =>
     whenEmpty: { color: t.colors.textMuted },
     whenSubRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 3 },
     whenSub: { fontSize: 12.5, color: t.colors.textSecondary },
-    titleRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, marginTop: 4 },
+    titleRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 4 },
     check: {
       width: 22,
       height: 22,
@@ -475,14 +475,14 @@ const makeStyles = (t: Theme, compact: boolean) =>
       borderColor: t.colors.borderStrong,
       alignItems: 'center',
       justifyContent: 'center',
-      marginTop: 4,
+      marginTop: 0,
     },
     checkDone: { backgroundColor: t.colors.accentPrimary, borderColor: t.colors.accentPrimary },
     title: {
       flex: 1,
       fontSize: compact ? 19 : 22,
       fontWeight: '700',
-      lineHeight: compact ? 25 : 29,
+      lineHeight: compact ? 24 : 28,
       letterSpacing: -0.2,
       color: t.colors.textPrimary,
       padding: 0,
