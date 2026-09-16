@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Keyboard, Pressable, StyleSheet, Text, View, type TextInput } from 'react-native';
 import { AlignLeft, ArrowRight, Bell, ChevronUp, Clock, Repeat } from 'lucide-react-native';
 import { contextEmoji } from '@task-manager/shared';
 import { BottomSheet, SheetInput } from '../../components/bottom-sheet';
@@ -27,6 +27,19 @@ interface QuickCreateSheetProps {
 }
 
 const EMPTY_WHEN: WhenPatch = { dueAt: null, durationMin: null, remindAt: null, recurrence: null };
+const SHEET_DISMISS_MS = 300;
+
+function afterKeyboardHidden(run: () => void) {
+  if (!Keyboard.isVisible()) {
+    run();
+    return;
+  }
+  const sub = Keyboard.addListener('keyboardDidHide', () => {
+    sub.remove();
+    run();
+  });
+  Keyboard.dismiss();
+}
 
 export function QuickCreateSheet({
   open,
@@ -49,6 +62,32 @@ export function QuickCreateSheet({
   const [whenOpen, setWhenOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const popover = usePopoverAnchor();
+  const titleRef = useRef<TextInput>(null);
+  const noteRef = useRef<TextInput>(null);
+  const focusNoteOnShow = useRef(false);
+  useEffect(() => {
+    if (showNote && focusNoteOnShow.current) {
+      focusNoteOnShow.current = false;
+      noteRef.current?.focus();
+    }
+  }, [showNote]);
+
+  const focusTitle = (delay = 0) => {
+    setTimeout(() => titleRef.current?.focus(), delay);
+  };
+  const openWhen = () => {
+    Keyboard.dismiss();
+    setWhenOpen(true);
+  };
+  const closeWhen = () => {
+    setWhenOpen(false);
+    focusTitle(SHEET_DISMISS_MS);
+  };
+  const openContextPopover = () => afterKeyboardHidden(popover.open);
+  const closeContextPopover = () => {
+    popover.close();
+    focusTitle();
+  };
 
   useEffect(() => {
     if (!open) return;
@@ -115,6 +154,7 @@ export function QuickCreateSheet({
       ) : null}
 
       <SheetInput
+        ref={titleRef}
         value={title}
         onChangeText={setTitle}
         placeholder="New task"
@@ -136,7 +176,7 @@ export function QuickCreateSheet({
             />
           }
           selected={!!when.dueAt}
-          onPress={() => setWhenOpen(true)}
+          onPress={openWhen}
         />
         <Chip
           label={when.remindAt ? 'Reminder set' : 'Remind'}
@@ -148,14 +188,14 @@ export function QuickCreateSheet({
             />
           }
           selected={!!when.remindAt}
-          onPress={() => setWhenOpen(true)}
+          onPress={openWhen}
         />
         <View ref={popover.ref} collapsable={false}>
           <Chip
             label={context ? `${contextEmoji(context) ?? ''} ${context.label}`.trim() : 'Context'}
             selected={!!context}
             tint={chipTint.context}
-            onPress={popover.open}
+            onPress={openContextPopover}
           />
         </View>
         <Chip
@@ -168,12 +208,13 @@ export function QuickCreateSheet({
             />
           }
           selected={!!when.recurrence}
-          onPress={() => setWhenOpen(true)}
+          onPress={openWhen}
         />
       </View>
 
       {showNote ? (
         <SheetInput
+          ref={noteRef}
           value={note}
           onChangeText={setNote}
           placeholder="Add a note…"
@@ -185,7 +226,14 @@ export function QuickCreateSheet({
 
       <View style={styles.foot}>
         <Pressable
-          onPress={() => setShowNote((v) => !v)}
+          onPress={() => {
+            if (showNote) {
+              noteRef.current?.focus();
+              return;
+            }
+            focusNoteOnShow.current = true;
+            setShowNote(true);
+          }}
           accessibilityRole="button"
           style={styles.more}
         >
@@ -207,7 +255,7 @@ export function QuickCreateSheet({
         anchor={popover.anchor}
         selectedId={contextId}
         onSelect={setContextId}
-        onClose={popover.close}
+        onClose={closeContextPopover}
       />
       <WhenSheet
         open={whenOpen}
@@ -217,10 +265,10 @@ export function QuickCreateSheet({
           remindAt: when.remindAt,
           recurrenceRule: when.recurrence?.rule ?? null,
         }}
-        onClose={() => setWhenOpen(false)}
+        onClose={closeWhen}
         onSave={(patch) => {
-          setWhenOpen(false);
           setWhen(patch);
+          closeWhen();
         }}
       />
     </BottomSheet>

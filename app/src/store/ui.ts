@@ -18,8 +18,7 @@ export const useUiStore = create<UiState>((set) => ({
   contextMenuOpen: false,
   openDrawer: () => set({ drawerOpen: true }),
   closeDrawer: () => set({ drawerOpen: false }),
-  openContextEditor: (id) =>
-    set({ contextEditorId: id, drawerOpen: false, contextMenuOpen: false }),
+  openContextEditor: (id) => set({ contextEditorId: id, contextMenuOpen: false }),
   closeContextEditor: () => set({ contextEditorId: undefined }),
   openContextMenu: () => set({ contextMenuOpen: true }),
   closeContextMenu: () => set({ contextMenuOpen: false }),

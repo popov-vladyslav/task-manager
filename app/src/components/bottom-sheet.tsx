@@ -24,7 +24,9 @@ const isWeb = process.env.EXPO_OS === 'web';
 // BottomSheetTextInput coordinates the keyboard with the sheet on native, but on
 // web it calls TextInput.State.currentlyFocusedInput (missing in react-native-web)
 // and crashes — so use a plain TextInput inside the sheet on web.
-export const SheetInput: ComponentType<TextInputProps> = isWeb ? TextInput : BottomSheetTextInput;
+export const SheetInput = (isWeb ? TextInput : BottomSheetTextInput) as ComponentType<
+  TextInputProps & { ref?: React.Ref<TextInput> }
+>;
 
 interface BottomSheetProps {
   open: boolean;

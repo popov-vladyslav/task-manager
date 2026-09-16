@@ -21,7 +21,7 @@ const createSchema = z.object({
   color: hexColor,
   slug: z.string().optional(),
   excludeFromAll: z.boolean().optional(),
-  emoji: emojiSchema.optional(),
+  emoji: emojiSchema.nullish(),
 });
 
 const updateSchema = z.object({

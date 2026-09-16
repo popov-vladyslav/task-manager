@@ -153,7 +153,12 @@ export const useTasksStore = create<TasksState>((set, get) => ({
   },
 
   async createContext(label, color, excludeFromAll, emoji) {
-    const created = await api.createContext({ label, color, excludeFromAll, emoji });
+    const created = await api.createContext({
+      label,
+      color,
+      excludeFromAll,
+      emoji: emoji ?? undefined,
+    });
     set({ contexts: [...get().contexts, created].sort((a, b) => a.sortOrder - b.sortOrder) });
   },
 

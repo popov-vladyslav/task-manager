@@ -28,6 +28,9 @@ export function ContextEditorSheet() {
   );
 }
 
+const webCaretHidden: object | undefined =
+  process.env.EXPO_OS === 'web' ? { caretColor: 'transparent' } : undefined;
+
 function ContextEditorForm({ context, onClose }: { context?: Context; onClose: () => void }) {
   const t = useTheme();
   const styles = useMemo(() => makeStyles(t), [t]);
@@ -41,6 +44,7 @@ function ContextEditorForm({ context, onClose }: { context?: Context; onClose: (
   const [excludeFromAll, setExcludeFromAll] = useState(context?.excludeFromAll ?? false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [emojiFocused, setEmojiFocused] = useState(false);
 
   const canSave = label.trim().length > 0 && !busy;
   const derived = nearestEmoji(color) ?? '';
@@ -97,11 +101,15 @@ function ContextEditorForm({ context, onClose }: { context?: Context; onClose: (
           <SheetInput
             value={emoji}
             onChangeText={(v) => setEmoji(firstGrapheme(v))}
-            placeholder={derived}
+            onFocus={() => setEmojiFocused(true)}
+            onBlur={() => setEmojiFocused(false)}
+            placeholder={emojiFocused ? '' : derived}
             placeholderTextColor={t.colors.textMuted}
             maxLength={EMOJI_MAX_LENGTH}
+            caretHidden
+            selectionColor="transparent"
             accessibilityLabel="Emoji"
-            style={[styles.emojiInput, webInputReset]}
+            style={[styles.emojiInput, webInputReset, webCaretHidden]}
           />
         </View>
         <SheetInput
