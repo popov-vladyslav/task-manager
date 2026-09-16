@@ -3,12 +3,14 @@ import type {
   CalendarData,
   Context,
   CreateContextInput,
+  CreateSubtaskInput,
   CreateTaskInput,
   MorningSummary,
   ReorderInput,
   Task,
   TimeEntry,
   UpdateContextInput,
+  UpdateSubtaskInput,
   UpdateTaskInput,
 } from '@task-manager/shared';
 import { API_URL } from './config';
@@ -103,6 +105,14 @@ export const api = {
     request<Task>(`/api/tasks/${id}/reorder`, { method: 'POST', body: input }),
   snoozeTask: (id: string, minutes: number) =>
     request<Task>(`/api/tasks/${id}/snooze`, { method: 'POST', body: { minutes } }),
+  addSubtask: (taskId: string, input: CreateSubtaskInput) =>
+    request<Task>(`/api/tasks/${taskId}/subtasks`, { method: 'POST', body: input }),
+  updateSubtask: (taskId: string, id: string, patch: UpdateSubtaskInput) =>
+    request<Task>(`/api/tasks/${taskId}/subtasks/${id}`, { method: 'PATCH', body: patch }),
+  deleteSubtask: (taskId: string, id: string) =>
+    request<Task>(`/api/tasks/${taskId}/subtasks/${id}`, { method: 'DELETE' }),
+  reorderSubtasks: (taskId: string, ids: string[]) =>
+    request<Task>(`/api/tasks/${taskId}/subtasks/reorder`, { method: 'POST', body: { ids } }),
   registerPush: (token: string, device?: string) =>
     request<{ ok: boolean }>('/api/push/register', { method: 'POST', body: { token, device } }),
   getActiveTimer: () => request<ActiveTimer | null>('/api/timer'),

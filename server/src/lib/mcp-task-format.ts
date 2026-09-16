@@ -41,5 +41,8 @@ export function fmtTask(t: Task, contextLabel?: string): string {
   if (t.status !== 'active') bits.push(t.status);
   const lines = [bits.join(' ')];
   if (t.note) lines.push(`    note: ${clip(t.note, NOTE_MAX)}`);
+  for (const s of t.subtasks) {
+    lines.push(`    [${s.done ? 'x' : ' '}] ${clip(s.title, NOTE_MAX)} [${s.id}]`);
+  }
   return lines.join('\n');
 }

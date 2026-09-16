@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { and, eq, isNull } from 'drizzle-orm';
 import { closePool, mcpCall, resetDb, startTestServer, type TestServer } from './harness';
 import { db } from '../db/client';
-import { contexts, loginCodes, tasks, timeEntries, users } from '../db/schema';
+import { contexts, loginCodes, subtasks, tasks, timeEntries, users } from '../db/schema';
 import { hashToken } from '../lib/tokens';
 
 let server: TestServer;
@@ -22,6 +22,7 @@ let bob: Account;
 let bobSlug: string;
 let bobCtxId: number;
 let bobTaskId: string;
+let bobSubtaskId: string;
 
 async function signUp(email: string): Promise<Account> {
   const code = `code-${email}`;
@@ -88,6 +89,18 @@ before(async () => {
   assert.ok(task, "Bob's task should exist");
   bobTaskId = task.id;
 
+  const withStep = await mcpCall(server.baseUrl, bob.mcpToken, 'add_subtask', {
+    id: bobTaskId,
+    title: 'bob step',
+  });
+  assert.ok(withStep.text.includes('[ ] bob step ['), 'add_subtask should print the checklist');
+  const [sub] = await db
+    .select({ id: subtasks.id })
+    .from(subtasks)
+    .where(eq(subtasks.taskId, bobTaskId));
+  assert.ok(sub, "Bob's subtask should exist");
+  bobSubtaskId = sub.id;
+
   // list_contexts must agree with the row we captured.
   const listed = await mcpCall(server.baseUrl, bob.mcpToken, 'list_contexts');
   assert.ok(listed.text.includes(bobSlug), 'list_contexts should show the slug we captured');
@@ -111,6 +124,21 @@ function cases(): { tool: string; args: Record<string, unknown>; successPhrase: 
       successPhrase: 'Note updated',
     },
     { tool: 'start_timer', args: { id: bobTaskId }, successPhrase: 'Timer started' },
+    {
+      tool: 'add_subtask',
+      args: { id: bobTaskId, title: 'injected step' },
+      successPhrase: 'Subtask added',
+    },
+    {
+      tool: 'update_subtask',
+      args: { subtask_id: bobSubtaskId, done: true },
+      successPhrase: 'Subtask updated',
+    },
+    {
+      tool: 'delete_subtask',
+      args: { subtask_id: bobSubtaskId },
+      successPhrase: 'Subtask deleted',
+    },
     {
       tool: 'update_context',
       args: { slug: bobSlug, label: 'pwned' },
@@ -147,6 +175,10 @@ test("nothing of Bob's moved in the database", async () => {
   assert.equal(task.trackedSec, 0);
 
   assert.equal(task.note, null, "a note was injected onto Bob's task");
+
+  const subs = await db.select().from(subtasks).where(eq(subtasks.taskId, bobTaskId));
+  assert.equal(subs.length, 1, "a subtask was added to or removed from Bob's task");
+  assert.equal(subs[0].done, false, "Bob's subtask was ticked by another account");
 
   const [ctx] = await db
     .select({ label: contexts.label })

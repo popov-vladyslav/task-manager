@@ -60,6 +60,19 @@ CREATE TABLE tasks (
 );
 CREATE INDEX idx_tasks_open ON tasks (status, context_id) WHERE status != 'done';
 
+-- 0015 (ADR 0007): checklist items owned by a task. No dates, reminders,
+-- timers or contexts — never listed as tasks anywhere.
+CREATE TABLE subtasks (
+  id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id    uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  task_id    uuid NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+  title      text NOT NULL,
+  done       boolean NOT NULL DEFAULT false,
+  sort_order integer NOT NULL DEFAULT 0,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX idx_subtasks_task ON subtasks (task_id, sort_order);
+
 CREATE TABLE recurrence_rules (
   id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   title         text NOT NULL,               -- шаблон назви: 'Іпотека — {month}'
@@ -157,6 +170,12 @@ PATCH  /api/tasks/:id          (будь-які поля вкл. note (nullable)
 DELETE /api/tasks/:id
 POST   /api/tasks/:id/reorder  { after_id?, before_id?, scope: 'global'|'context' }
 
+# Subtasks (0015, ADR 0007). Кожен запис повертає батьківський Task з subtasks[] (відсортовані по sort_order).
+POST   /api/tasks/:id/subtasks            { title } → 201 Task
+PATCH  /api/tasks/:id/subtasks/:sid       { title?, done? } → Task
+DELETE /api/tasks/:id/subtasks/:sid       → 200 Task
+POST   /api/tasks/:id/subtasks/reorder    { ids: uuid[] } → Task; чужі/невідомі id пропускаються
+
 POST   /api/tasks/:id/photos   → DESCOPED, never implemented (see STATUS.md)
 DELETE /api/photos/:id         → DESCOPED, never implemented
 
@@ -193,6 +212,9 @@ create_task     { title, context?, due_at?, remind_at?, duration_min?,
 update_task     { id | title_match, title?, context?, due_at?, remind_at?,
                   duration_min?, status?, recurrence?, note? (null очищає) }
 append_note     { id | title_match, text }       → дописує до note через порожній рядок
+add_subtask     { id | title_match, title }      → чекліст-пункт; у відповідях під задачею
+update_subtask  { subtask_id, title?, done? }      друкується `    [x] title [subtask_id]`
+delete_subtask  { subtask_id }                     (ADR 0007; підзадачі — не задачі)
                                                 -- title_match: пошук по назві, щоб
 complete_task   { id | title_match }               я міг "закрий задачу про іпотеку"
 delete_task     { id | title_match }

@@ -1,9 +1,8 @@
 import { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { LogOut, Plus } from 'lucide-react-native';
+import { LogOut } from 'lucide-react-native';
 import { useAuthStore } from '../../store/auth';
-import { useUiStore } from '../../store/ui';
 import { useTheme, type Theme } from '../../theme';
 import { DrawerContent } from './drawer';
 import { SideNavLinks } from './nav-chrome';
@@ -12,7 +11,6 @@ export function WideSidebar() {
   const t = useTheme();
   const styles = useMemo(() => makeStyles(t), [t]);
   const insets = useSafeAreaInsets();
-  const openContextEditor = useUiStore((s) => s.openContextEditor);
   const inset = useMemo(
     () => StyleSheet.create({ root: { paddingTop: insets.top + 16 } }),
     [insets.top],
@@ -23,17 +21,9 @@ export function WideSidebar() {
         <SideNavLinks />
       </View>
       <View style={styles.flex1}>
-        <DrawerContent showFooter={false} />
+        <DrawerContent />
       </View>
       <View style={styles.footer}>
-        <Pressable
-          onPress={() => openContextEditor(null)}
-          accessibilityRole="button"
-          style={({ pressed }) => [styles.footerRow, pressed && styles.pressed]}
-        >
-          <Plus size={16} color={t.colors.accentPrimary} strokeWidth={2.2} />
-          <Text style={styles.footerAccent}>New context</Text>
-        </Pressable>
         <Pressable
           onPress={() => useAuthStore.getState().signOut()}
           accessibilityRole="button"
@@ -72,7 +62,6 @@ const makeStyles = (t: Theme) =>
       paddingHorizontal: 12,
       paddingVertical: 10,
     },
-    footerAccent: { fontSize: 13.5, fontWeight: '600', color: t.colors.accentPrimary },
     footerMuted: { fontSize: 13.5, fontWeight: '500', color: t.colors.textSecondary },
     pressed: { opacity: 0.7 },
   });

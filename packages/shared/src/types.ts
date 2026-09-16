@@ -48,8 +48,27 @@ export interface Task {
   createdAt: string;
   createdVia: CreatedVia;
   note: string | null;
+  subtasks: Subtask[];
   // Derived fields for the list/detail UI (populated by the service layer):
   nextInstance: string | null; // computed from the recurrence rule, when recurring
+}
+
+export interface Subtask {
+  id: string;
+  taskId: string;
+  title: string;
+  done: boolean;
+  sortOrder: number;
+  createdAt: string;
+}
+
+export interface CreateSubtaskInput {
+  title: string;
+}
+
+export interface UpdateSubtaskInput {
+  title?: string;
+  done?: boolean;
 }
 
 export interface RecurrenceInput {

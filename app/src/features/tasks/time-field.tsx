@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text } from 'react-native';
 import DateTimePicker, {
   type DateTimePickerChangeEvent,
 } from '@react-native-community/datetimepicker';
@@ -29,27 +29,30 @@ export function TimeField({ minutes, onChange }: TimeFieldProps) {
     onChange(d.getHours() * 60 + d.getMinutes());
   };
 
+  if (!isAndroid) {
+    return (
+      <DateTimePicker
+        value={value}
+        mode="time"
+        display="compact"
+        themeVariant="dark"
+        accentColor={t.colors.accentPrimary}
+        onValueChange={onPick}
+      />
+    );
+  }
+
   return (
-    <View>
+    <>
       <Pressable
-        onPress={() => setOpen((o) => !o)}
+        onPress={() => setOpen(true)}
         accessibilityRole="button"
         accessibilityLabel="Time"
         style={styles.value}
       >
         <Text style={styles.valueText}>{formatMinutes(minutes)}</Text>
       </Pressable>
-      {open && !isAndroid ? (
-        <DateTimePicker
-          value={value}
-          mode="time"
-          display="spinner"
-          themeVariant="dark"
-          style={styles.picker}
-          onValueChange={onPick}
-        />
-      ) : null}
-      {open && isAndroid ? (
+      {open ? (
         <DateTimePicker
           value={value}
           mode="time"
@@ -57,7 +60,7 @@ export function TimeField({ minutes, onChange }: TimeFieldProps) {
           onDismiss={() => setOpen(false)}
         />
       ) : null}
-    </View>
+    </>
   );
 }
 
@@ -70,5 +73,4 @@ const makeStyles = (t: Theme) =>
       fontWeight: '700',
       color: t.colors.accentPrimary,
     },
-    picker: { alignSelf: 'stretch', height: 160 },
   });

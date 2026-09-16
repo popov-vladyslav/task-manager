@@ -66,13 +66,7 @@ function ContextRow({
 
 const MemoRow = memo(ContextRow);
 
-export function DrawerContent({
-  onNavigate,
-  showFooter = true,
-}: {
-  onNavigate?: () => void;
-  showFooter?: boolean;
-}) {
+export function DrawerContent({ onNavigate }: { onNavigate?: () => void }) {
   const t = useTheme();
   const styles = useMemo(() => makeStyles(t), [t]);
   const contexts = useTasksStore((s) => s.contexts);
@@ -153,19 +147,6 @@ export function DrawerContent({
           </Text>
         }
       />
-
-      {showFooter ? (
-        <View style={styles.footer}>
-          <Pressable
-            onPress={() => openContextEditor(null)}
-            accessibilityRole="button"
-            style={({ pressed }) => [styles.newContext, pressed && styles.pressed]}
-          >
-            <Plus size={15} color={t.colors.accentPrimary} strokeWidth={2.4} />
-            <Text style={styles.newContextText}>New context</Text>
-          </Pressable>
-        </View>
-      ) : null}
     </View>
   );
 }
@@ -333,20 +314,4 @@ const makeStyles = (t: Theme) =>
       lineHeight: 16,
       color: t.colors.textFaint,
     },
-    footer: {
-      paddingHorizontal: 8,
-      paddingTop: 6,
-      paddingBottom: 10,
-      borderTopWidth: 1,
-      borderColor: t.colors.borderSubtle,
-    },
-    newContext: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 11,
-      padding: 10,
-      borderRadius: 10,
-    },
-    newContextText: { fontSize: 14.5, fontWeight: '600', color: t.colors.accentPrimary },
-    pressed: { opacity: 0.8 },
   });

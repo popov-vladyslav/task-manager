@@ -8,7 +8,7 @@ import { useTheme, type Theme } from '../../theme';
 import { addDays, sameDay, startOfDay, startOfWeek } from '../calendar/calendar-dates';
 import { CalendarGrid } from './calendar-grid';
 import { DurationField } from './duration-field';
-import { formatMinutes, TimeField } from './time-field';
+import { TimeField } from './time-field';
 
 const WEEKDAYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
 const WEEK_ORDER = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const;
@@ -119,9 +119,7 @@ export function WhenSheet({ open, value, onClose, onSave }: WhenSheetProps) {
   const [reminder, setReminder] = useState<number | null>(null);
   const [kind, setKind] = useState<RecKind>('none');
   const [days, setDays] = useState<string[]>([]);
-  const [expanded, setExpanded] = useState<'time' | 'duration' | 'reminder' | 'repeat' | null>(
-    null,
-  );
+  const [expanded, setExpanded] = useState<'duration' | 'reminder' | 'repeat' | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -214,13 +212,11 @@ export function WhenSheet({ open, value, onClose, onSave }: WhenSheetProps) {
         <Row
           icon={<Clock size={15} color={t.colors.textSecondary} strokeWidth={1.8} />}
           label="Time"
-          value={day ? formatMinutes(minutes ?? DEFAULT_TIME_MIN) : '—'}
-          accent
-          onPress={() => day && toggle('time')}
+          value="—"
+          control={
+            day ? <TimeField minutes={minutes ?? DEFAULT_TIME_MIN} onChange={setMinutes} /> : null
+          }
         />
-        {expanded === 'time' && day ? (
-          <TimeField minutes={minutes ?? DEFAULT_TIME_MIN} onChange={setMinutes} />
-        ) : null}
         <Row
           icon={<Timer size={15} color={t.colors.textSecondary} strokeWidth={1.8} />}
           label="Duration"
@@ -314,15 +310,15 @@ function Row({
   icon,
   label,
   value,
-  accent,
+  control,
   onPress,
   last,
 }: {
   icon: React.ReactNode;
   label: string;
   value: string;
-  accent?: boolean;
-  onPress: () => void;
+  control?: React.ReactNode;
+  onPress?: () => void;
   last?: boolean;
 }) {
   const t = useTheme();
@@ -330,12 +326,13 @@ function Row({
   return (
     <Pressable
       onPress={onPress}
+      disabled={!onPress}
       accessibilityRole="button"
       style={[styles.row, last && styles.rowLast]}
     >
       <View style={styles.rowIcon}>{icon}</View>
       <Text style={styles.rowLabel}>{label}</Text>
-      <Text style={[styles.rowValue, accent && styles.rowValueAccent]}>{value}</Text>
+      {control ?? <Text style={styles.rowValue}>{value}</Text>}
     </Pressable>
   );
 }
@@ -357,7 +354,6 @@ const makeStyles = (t: Theme) =>
     rowIcon: { width: 20, alignItems: 'center' },
     rowLabel: { flex: 1, fontSize: 13.5, fontWeight: '500', color: t.colors.textControl },
     rowValue: { fontSize: 13.5, fontWeight: '700', color: t.colors.textPrimary },
-    rowValueAccent: { fontFamily: t.fonts.mono, color: t.colors.accentPrimary },
     expand: { paddingVertical: 10, gap: 10 },
     expandChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 7, paddingVertical: 8 },
     weekRow: { flexDirection: 'row', gap: 8 },
