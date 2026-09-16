@@ -7,6 +7,7 @@ import ReorderableList, {
   useReorderableDrag,
 } from 'react-native-reorderable-list';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { usePathname } from 'expo-router';
 import { EyeOff, List, Plus } from 'lucide-react-native';
 import { contextEmoji, type Context } from '@task-manager/shared';
 import { haptics } from '../../lib/haptics';
@@ -160,6 +161,7 @@ export function Drawer() {
   const open = useUiStore((s) => s.drawerOpen);
   const openDrawer = useUiStore((s) => s.openDrawer);
   const closeDrawer = useUiStore((s) => s.closeDrawer);
+  const onTasksTab = usePathname() === '/';
 
   const x = useSharedValue(-WIDTH);
   const dragStart = useSharedValue(-WIDTH);
@@ -208,7 +210,7 @@ export function Drawer() {
 
   return (
     <>
-      {!open ? (
+      {!open && onTasksTab ? (
         <GestureDetector gesture={edgePan}>
           <View style={[styles.edge, inset.edge]} />
         </GestureDetector>
