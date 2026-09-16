@@ -4,6 +4,7 @@ import { contextEmoji, EMOJI_MAX_LENGTH, isSingleGrapheme } from '@task-manager/
 import type { Context, Task, UpdateContextInput } from '@task-manager/shared';
 import * as tasksSvc from '../services/tasks';
 import * as contextsSvc from '../services/contexts';
+import * as subtasksSvc from '../services/subtasks';
 import * as timerSvc from '../services/timer';
 import { ruleFromSpec } from '../lib/recurrence';
 import { fmtTask } from '../lib/mcp-task-format';
@@ -424,6 +425,61 @@ export function buildMcpServer(userId: string): McpServer {
       const updated = await tasksSvc.appendNote(userId, r.task.id, body);
       logWrite('append_note', { id: updated.id });
       return text(`Note updated: ${fmtTask(updated)}`);
+    },
+  );
+
+  reg(
+    'add_subtask',
+    {
+      description:
+        'Add a checklist item (subtask) to a task, by id or title_match. Subtasks are plain checklist lines: no dates, reminders or timers. They are printed under the task as "[ ] title [subtask id]".',
+      inputSchema: {
+        id: z.string().optional(),
+        title_match: z.string().optional(),
+        title: z.string().min(1),
+      },
+    },
+    async ({ id, title_match, title }) => {
+      const r = await resolveTask(userId, id, title_match);
+      if (!r.task) return text(unresolvedText(r.candidates, title_match));
+      const updated = await subtasksSvc.addSubtask(userId, r.task.id, title);
+      logWrite('add_subtask', { taskId: updated.id });
+      return text(`Subtask added: ${fmtTask(updated)}`);
+    },
+  );
+
+  reg(
+    'update_subtask',
+    {
+      description:
+        'Tick, untick or rename a subtask by its subtask id (the id in brackets on its "[ ]" line). Set done: true to complete it.',
+      inputSchema: {
+        subtask_id: z.string().min(1),
+        title: z.string().min(1).optional(),
+        done: z.boolean().optional(),
+      },
+    },
+    async ({ subtask_id, title, done }) => {
+      const taskId = await subtasksSvc.parentTaskId(userId, subtask_id);
+      if (!taskId) return text('Subtask not found.');
+      const updated = await subtasksSvc.updateSubtask(userId, taskId, subtask_id, { title, done });
+      logWrite('update_subtask', { taskId, subtaskId: subtask_id });
+      return text(`Subtask updated: ${fmtTask(updated)}`);
+    },
+  );
+
+  reg(
+    'delete_subtask',
+    {
+      description: 'Delete a subtask by its subtask id.',
+      inputSchema: { subtask_id: z.string().min(1) },
+    },
+    async ({ subtask_id }) => {
+      const taskId = await subtasksSvc.parentTaskId(userId, subtask_id);
+      if (!taskId) return text('Subtask not found.');
+      const updated = await subtasksSvc.deleteSubtask(userId, taskId, subtask_id);
+      logWrite('delete_subtask', { taskId, subtaskId: subtask_id });
+      return text(`Subtask deleted: ${fmtTask(updated)}`);
     },
   );
 

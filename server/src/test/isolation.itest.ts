@@ -9,7 +9,15 @@ import assert from 'node:assert/strict';
 import { eq } from 'drizzle-orm';
 import { closePool, resetDb, startTestServer, type TestServer } from './harness';
 import { db } from '../db/client';
-import { contexts, loginCodes, pushTokens, recurrenceRules, tasks, users } from '../db/schema';
+import {
+  contexts,
+  loginCodes,
+  pushTokens,
+  recurrenceRules,
+  subtasks,
+  tasks,
+  users,
+} from '../db/schema';
 import { hashToken } from '../lib/tokens';
 
 let server: TestServer;
@@ -196,6 +204,98 @@ test('A cannot update, complete, delete, snooze or reorder B’s task', async ()
   assert.ok(row, "B's task must still exist");
   assert.equal(row.title, "Bob's secret task", 'unchanged');
   assert.equal(row.status, 'active', 'not completed by A');
+});
+
+test('A cannot add, update, delete or reorder subtasks on B’s task', async () => {
+  const taskId = await bobsTaskId();
+  const added = (await (
+    await fetch(`${server.baseUrl}/api/tasks/${taskId}/subtasks`, {
+      method: 'POST',
+      headers: bob.headers,
+      body: JSON.stringify({ title: 'bob step' }),
+    })
+  ).json()) as { subtasks: { id: string; title: string; done: boolean }[] };
+  const sid = added.subtasks[0].id;
+
+  const attempts: [string, RequestInit][] = [
+    [`/api/tasks/${taskId}/subtasks`, { method: 'POST', body: JSON.stringify({ title: 'x' }) }],
+    [
+      `/api/tasks/${taskId}/subtasks/${sid}`,
+      { method: 'PATCH', body: JSON.stringify({ done: true }) },
+    ],
+    [`/api/tasks/${taskId}/subtasks/${sid}`, { method: 'DELETE' }],
+    [
+      `/api/tasks/${taskId}/subtasks/reorder`,
+      { method: 'POST', body: JSON.stringify({ ids: [sid] }) },
+    ],
+  ];
+  for (const [path, init] of attempts) {
+    const res = await fetch(`${server.baseUrl}${path}`, { ...init, headers: alice.headers });
+    assert.equal(res.status, 404, `${init.method} ${path} should be refused`);
+  }
+
+  const [row] = await db.select().from(subtasks).where(eq(subtasks.id, sid));
+  assert.ok(row, "B's subtask must still exist");
+  assert.equal(row.done, false, 'not ticked by A');
+});
+
+test('B round-trips a subtask: add, tick, reorder, delete', async () => {
+  const taskId = await bobsTaskId();
+  const post = (title: string) =>
+    fetch(`${server.baseUrl}/api/tasks/${taskId}/subtasks`, {
+      method: 'POST',
+      headers: bob.headers,
+      body: JSON.stringify({ title }),
+    });
+  await post('first');
+  const second = (await (await post('second')).json()) as {
+    subtasks: { id: string; title: string; done: boolean; sortOrder: number }[];
+  };
+  assert.deepEqual(
+    second.subtasks.map((s) => s.title),
+    ['first', 'second'],
+  );
+  const [a, b] = second.subtasks;
+
+  const ticked = (await (
+    await fetch(`${server.baseUrl}/api/tasks/${taskId}/subtasks/${a.id}`, {
+      method: 'PATCH',
+      headers: bob.headers,
+      body: JSON.stringify({ done: true }),
+    })
+  ).json()) as { subtasks: { id: string; done: boolean }[] };
+  assert.equal(ticked.subtasks.find((s) => s.id === a.id)?.done, true);
+
+  const reordered = (await (
+    await fetch(`${server.baseUrl}/api/tasks/${taskId}/subtasks/reorder`, {
+      method: 'POST',
+      headers: bob.headers,
+      body: JSON.stringify({ ids: [b.id, a.id] }),
+    })
+  ).json()) as { subtasks: { id: string }[] };
+  assert.deepEqual(
+    reordered.subtasks.map((s) => s.id),
+    [b.id, a.id],
+  );
+
+  const deleted = (await (
+    await fetch(`${server.baseUrl}/api/tasks/${taskId}/subtasks/${a.id}`, {
+      method: 'DELETE',
+      headers: bob.headers,
+    })
+  ).json()) as { subtasks: { id: string }[] };
+  assert.deepEqual(
+    deleted.subtasks.map((s) => s.id),
+    [b.id],
+  );
+
+  const listed = (await (
+    await fetch(`${server.baseUrl}/api/tasks`, { headers: bob.headers })
+  ).json()) as { id: string; subtasks: { id: string }[] }[];
+  assert.deepEqual(
+    listed.find((t) => t.id === taskId)?.subtasks.map((s) => s.id),
+    [b.id],
+  );
 });
 
 // The cross-user foreign key the Challenge flagged: owning the row you write is
@@ -415,6 +515,10 @@ test('every /api route requires authentication', async () => {
     ['DELETE', '/api/tasks/x'],
     ['POST', '/api/tasks/x/reorder'],
     ['POST', '/api/tasks/x/snooze'],
+    ['POST', '/api/tasks/x/subtasks'],
+    ['PATCH', '/api/tasks/x/subtasks/y'],
+    ['DELETE', '/api/tasks/x/subtasks/y'],
+    ['POST', '/api/tasks/x/subtasks/reorder'],
     ['GET', '/api/timer'],
     ['POST', '/api/timer/start'],
     ['POST', '/api/timer/stop'],

@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import type { TaskStatus } from '@task-manager/shared';
 import * as svc from '../services/tasks';
+import * as subtasksSvc from '../services/subtasks';
 import { requireUserId } from '../middleware/auth';
 import { isValidRule } from '../lib/recurrence';
 
@@ -80,6 +81,38 @@ router.post('/:id/reorder', async (req, res) => {
 router.post('/:id/snooze', async (req, res) => {
   const { minutes } = z.object({ minutes: z.number().int().positive() }).parse(req.body);
   res.json(await svc.snoozeTask(requireUserId(req), req.params.id, minutes));
+});
+
+const subtaskCreateSchema = z.object({ title: z.string().min(1) });
+const subtaskUpdateSchema = z.object({
+  title: z.string().min(1).optional(),
+  done: z.boolean().optional(),
+});
+const subtaskReorderSchema = z.object({ ids: z.array(z.uuid()) });
+
+router.post('/:id/subtasks', async (req, res) => {
+  const { title } = subtaskCreateSchema.parse(req.body);
+  res.status(201).json(await subtasksSvc.addSubtask(requireUserId(req), req.params.id, title));
+});
+
+router.post('/:id/subtasks/reorder', async (req, res) => {
+  const { ids } = subtaskReorderSchema.parse(req.body);
+  res.json(await subtasksSvc.reorderSubtasks(requireUserId(req), req.params.id, ids));
+});
+
+router.patch('/:id/subtasks/:sid', async (req, res) => {
+  res.json(
+    await subtasksSvc.updateSubtask(
+      requireUserId(req),
+      req.params.id,
+      req.params.sid,
+      subtaskUpdateSchema.parse(req.body),
+    ),
+  );
+});
+
+router.delete('/:id/subtasks/:sid', async (req, res) => {
+  res.json(await subtasksSvc.deleteSubtask(requireUserId(req), req.params.id, req.params.sid));
 });
 
 export default router;

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { forwardRef, useImperativeHandle, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import DateTimePicker, {
   type DateTimePickerChangeEvent,
@@ -6,6 +6,13 @@ import DateTimePicker, {
 import { useTheme, type Theme } from '../../theme';
 
 const isAndroid = process.env.EXPO_OS === 'android';
+const PICKER_WIDTH = 96;
+const PICKER_HEIGHT = 34;
+const TEXT_HEIGHT = 18;
+
+export interface TimeFieldHandle {
+  open: () => void;
+}
 
 interface TimeFieldProps {
   minutes: number | null;
@@ -18,48 +25,64 @@ export function formatMinutes(minutes: number | null): string {
   return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
 }
 
-export function TimeField({ minutes, onChange }: TimeFieldProps) {
+export const TimeField = forwardRef<TimeFieldHandle, TimeFieldProps>(function TimeField(
+  { minutes, onChange },
+  ref,
+) {
   const t = useTheme();
   const styles = useMemo(() => makeStyles(t), [t]);
-  const [open, setOpen] = useState(false);
+  const [dialogOpen, setDialogOpen] = useState(false);
   const value = new Date(2000, 0, 1, Math.floor((minutes ?? 540) / 60), (minutes ?? 540) % 60);
 
+  useImperativeHandle(ref, () => ({
+    open: () => {
+      if (isAndroid) setDialogOpen(true);
+    },
+  }));
+
   const onPick = (_e: DateTimePickerChangeEvent, d: Date) => {
-    if (isAndroid) setOpen(false);
+    if (isAndroid) setDialogOpen(false);
     onChange(d.getHours() * 60 + d.getMinutes());
   };
 
+  if (isAndroid) {
+    return (
+      <>
+        <Pressable
+          onPress={() => setDialogOpen(true)}
+          accessibilityRole="button"
+          accessibilityLabel="Time"
+          style={styles.value}
+        >
+          <Text style={styles.valueText}>{formatMinutes(minutes)}</Text>
+        </Pressable>
+        {dialogOpen ? (
+          <DateTimePicker
+            value={value}
+            mode="time"
+            onValueChange={onPick}
+            onDismiss={() => setDialogOpen(false)}
+          />
+        ) : null}
+      </>
+    );
+  }
+
   return (
-    <View>
-      <Pressable
-        onPress={() => setOpen((o) => !o)}
-        accessibilityRole="button"
-        accessibilityLabel="Time"
-        style={styles.value}
-      >
-        <Text style={styles.valueText}>{formatMinutes(minutes)}</Text>
-      </Pressable>
-      {open && !isAndroid ? (
-        <DateTimePicker
-          value={value}
-          mode="time"
-          display="spinner"
-          themeVariant="dark"
-          style={styles.picker}
-          onValueChange={onPick}
-        />
-      ) : null}
-      {open && isAndroid ? (
-        <DateTimePicker
-          value={value}
-          mode="time"
-          onValueChange={onPick}
-          onDismiss={() => setOpen(false)}
-        />
-      ) : null}
+    <View style={styles.native}>
+      <Text style={styles.valueText}>{formatMinutes(minutes)}</Text>
+      <DateTimePicker
+        value={value}
+        mode="time"
+        display="compact"
+        themeVariant="dark"
+        accentColor={t.colors.accentPrimary}
+        style={styles.overlay}
+        onValueChange={onPick}
+      />
     </View>
   );
-}
+});
 
 const makeStyles = (t: Theme) =>
   StyleSheet.create({
@@ -70,5 +93,18 @@ const makeStyles = (t: Theme) =>
       fontWeight: '700',
       color: t.colors.accentPrimary,
     },
-    picker: { alignSelf: 'stretch', height: 160 },
+    native: {
+      width: PICKER_WIDTH,
+      height: TEXT_HEIGHT,
+      alignItems: 'flex-end',
+      justifyContent: 'center',
+    },
+    overlay: {
+      position: 'absolute',
+      top: (TEXT_HEIGHT - PICKER_HEIGHT) / 2,
+      right: 0,
+      width: PICKER_WIDTH,
+      height: PICKER_HEIGHT,
+      opacity: 0.02,
+    },
   });

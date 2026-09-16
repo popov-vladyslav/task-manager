@@ -16,6 +16,7 @@ const OWNED_TABLES = [
   'contexts',
   'recurrence_rules',
   'tasks',
+  'subtasks',
   'comments',
   'time_entries',
   'notification_log',

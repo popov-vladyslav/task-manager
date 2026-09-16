@@ -1,7 +1,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { AlignLeft, Bell, Check, MoreHorizontal, Play, Repeat, Trash2 } from 'lucide-react-native';
-import { formatTrackedShort } from '@task-manager/shared';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import ReorderableList, { type ReorderableListReorderEvent } from 'react-native-reorderable-list';
+import {
+  AlignLeft,
+  Bell,
+  CalendarDays,
+  Check,
+  ListChecks,
+  MoreHorizontal,
+  Play,
+  Repeat,
+  Trash2,
+} from 'lucide-react-native';
+import { formatTrackedShort, type Subtask } from '@task-manager/shared';
 import { Header } from '../../components/header';
 import { IconButton } from '../../components/icon-button';
 import { Popover, usePopoverAnchor } from '../../components/popover';
@@ -11,6 +22,7 @@ import { useTimerStore } from '../../store/timer';
 import { useToastStore } from '../../store/toast';
 import { useTheme, webInputReset, type Theme } from '../../theme';
 import { ContextPopover } from './context-popover';
+import { AddSubtaskRow, DRAG_GUTTER, SubtaskRow } from './subtask-list';
 import { describeWhen, WhenSheet } from './when-sheet';
 
 const isWeb = process.env.EXPO_OS === 'web';
@@ -35,6 +47,10 @@ export function TaskCardScreen({ taskId, onClose, compact = false }: TaskCardScr
   const undoRemove = useTasksStore((s) => s.undoRemove);
   const toggleComplete = useTasksStore((s) => s.toggleComplete);
   const uncomplete = useTasksStore((s) => s.uncomplete);
+  const addSubtask = useTasksStore((s) => s.addSubtask);
+  const updateSubtask = useTasksStore((s) => s.updateSubtask);
+  const deleteSubtask = useTasksStore((s) => s.deleteSubtask);
+  const reorderSubtasks = useTasksStore((s) => s.reorderSubtasks);
   const openTimer = useTimerStore((s) => s.open);
 
   const popover = usePopoverAnchor();
@@ -44,6 +60,7 @@ export function TaskCardScreen({ taskId, onClose, compact = false }: TaskCardScr
   const [note, setNote] = useState(task?.note ?? '');
   const [titleHeight, setTitleHeight] = useState<number>();
   const noteRef = useRef<TextInput>(null);
+  const addRef = useRef<TextInput>(null);
 
   const fetched = useRef(false);
   useEffect(() => {
@@ -71,6 +88,71 @@ export function TaskCardScreen({ taskId, onClose, compact = false }: TaskCardScr
     [task],
   );
   const tracked = task ? formatTrackedShort(task.trackedSec) : null;
+  const subtasks = useMemo(() => task?.subtasks ?? [], [task?.subtasks]);
+  const [subs, setSubs] = useState(subtasks);
+  useEffect(() => setSubs(subtasks), [subtasks]);
+
+  const [noteOpen, setNoteOpen] = useState(!!task?.note);
+  const [addOpen, setAddOpen] = useState(subtasks.length > 0);
+  const focusNote = useRef(false);
+  const focusAdd = useRef(false);
+  useEffect(() => {
+    if (task?.note) setNoteOpen(true);
+  }, [task?.note]);
+  useEffect(() => {
+    if (subtasks.length > 0) setAddOpen(true);
+  }, [subtasks.length]);
+  useEffect(() => {
+    if (noteOpen && focusNote.current) {
+      focusNote.current = false;
+      noteRef.current?.focus();
+    }
+  }, [noteOpen]);
+  useEffect(() => {
+    if (addOpen && focusAdd.current) {
+      focusAdd.current = false;
+      addRef.current?.focus();
+    }
+  }, [addOpen]);
+  const revealNote = () => {
+    focusNote.current = true;
+    if (noteOpen) noteRef.current?.focus();
+    else setNoteOpen(true);
+  };
+  const revealAdd = () => {
+    focusAdd.current = true;
+    if (addOpen) addRef.current?.focus();
+    else setAddOpen(true);
+  };
+
+  const onToggleSubtask = useCallback(
+    (s: Subtask) => {
+      haptics.select();
+      updateSubtask(s.taskId, s.id, { done: !s.done });
+    },
+    [updateSubtask],
+  );
+  const onRenameSubtask = useCallback(
+    (s: Subtask, next: string) => updateSubtask(s.taskId, s.id, { title: next }),
+    [updateSubtask],
+  );
+  const onDeleteSubtask = useCallback(
+    (s: Subtask) => deleteSubtask(s.taskId, s.id),
+    [deleteSubtask],
+  );
+  const onReorderSubtasks = ({ from, to }: ReorderableListReorderEvent) => {
+    if (!task || from === to) return;
+    const order = [...subs];
+    if (from < 0 || to < 0 || from >= order.length || to >= order.length) return;
+    const [moved] = order.splice(from, 1);
+    order.splice(to, 0, moved);
+    setSubs(order);
+    haptics.impact('medium');
+    reorderSubtasks(
+      task.id,
+      order.map((s) => s.id),
+    );
+  };
 
   const commitTitle = useCallback(() => {
     if (!task) return;
@@ -83,6 +165,7 @@ export function TaskCardScreen({ taskId, onClose, compact = false }: TaskCardScr
     if (!task) return;
     const next = note.trim() || null;
     if (next !== (task.note ?? null)) patchTask(task.id, { note: next });
+    if (!next) setNoteOpen(false);
   }, [task, note, patchTask]);
 
   const toggle = () => {
@@ -149,76 +232,125 @@ export function TaskCardScreen({ taskId, onClose, compact = false }: TaskCardScr
         horizontalPadding={compact ? 16 : 12}
       />
 
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        <Pressable onPress={() => setWhenOpen(true)} accessibilityRole="button" style={styles.when}>
-          <View style={styles.whenIcon}>
-            <Bell
-              size={14}
-              color={task.remindAt ? t.colors.accentPrimary : t.colors.textMuted}
-              strokeWidth={1.8}
-            />
-          </View>
-          <View style={styles.flex1}>
-            <Text style={[styles.whenMain, !when.main && styles.whenEmpty]}>
-              {when.main ?? 'No deadline'}
-            </Text>
-            {when.sub ? (
-              <View style={styles.whenSubRow}>
-                <Text style={styles.whenSub}>{when.sub}</Text>
-                <Repeat size={13} color={t.colors.textSecondary} strokeWidth={1.8} />
-              </View>
-            ) : null}
-          </View>
-        </Pressable>
-
-        <View style={styles.titleRow}>
-          <Pressable
-            onPress={toggle}
-            hitSlop={8}
-            accessibilityRole="checkbox"
-            accessibilityState={{ checked: done }}
-            style={[styles.check, done && styles.checkDone]}
-          >
-            {done ? <Check size={14} color={t.colors.bgBase} strokeWidth={3} /> : null}
-          </Pressable>
-          <TextInput
-            value={title}
-            onChangeText={setTitle}
-            onBlur={commitTitle}
-            onSubmitEditing={commitTitle}
-            submitBehavior="blurAndSubmit"
-            multiline
-            numberOfLines={isWeb ? 1 : undefined}
-            scrollEnabled={false}
-            onContentSizeChange={(e) => setTitleHeight(e.nativeEvent.contentSize.height)}
-            style={[
-              styles.title,
-              done && styles.titleDone,
-              titleHeight ? { height: titleHeight } : null,
-              webInputReset,
-            ]}
+      <ReorderableList
+        data={subs}
+        keyExtractor={(s, i) => s?.id ?? `i${i}`}
+        onReorder={onReorderSubtasks}
+        renderItem={({ item }) => (
+          <SubtaskRow
+            subtask={item}
+            onToggle={onToggleSubtask}
+            onRename={onRenameSubtask}
+            onDelete={onDeleteSubtask}
           />
-        </View>
+        )}
+        contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+        ListFooterComponent={
+          addOpen ? (
+            <AddSubtaskRow
+              ref={addRef}
+              onAdd={(title) =>
+                addSubtask(task.id, title).catch(() =>
+                  useToastStore.getState().show({ title: 'Couldn’t add subtask', message: title }),
+                )
+              }
+              onDismiss={() => {
+                if (subs.length === 0) setAddOpen(false);
+              }}
+            />
+          ) : null
+        }
+        ListHeaderComponent={
+          <View style={styles.headerInset}>
+            <View style={styles.titleRow}>
+              <Pressable
+                onPress={toggle}
+                hitSlop={8}
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: done }}
+                style={[styles.check, done && styles.checkDone]}
+              >
+                {done ? <Check size={14} color={t.colors.bgBase} strokeWidth={3} /> : null}
+              </Pressable>
+              <TextInput
+                value={title}
+                onChangeText={setTitle}
+                onBlur={commitTitle}
+                onSubmitEditing={commitTitle}
+                submitBehavior="blurAndSubmit"
+                multiline
+                numberOfLines={isWeb ? 1 : undefined}
+                scrollEnabled={false}
+                onContentSizeChange={(e) => setTitleHeight(e.nativeEvent.contentSize.height)}
+                style={[
+                  styles.title,
+                  done && styles.titleDone,
+                  titleHeight ? { height: titleHeight } : null,
+                  webInputReset,
+                ]}
+              />
+            </View>
 
-        <TextInput
-          ref={noteRef}
-          value={note}
-          onChangeText={setNote}
-          onBlur={commitNote}
-          multiline
-          placeholder="Add a note…"
-          placeholderTextColor={t.colors.textFaint}
-          scrollEnabled={false}
-          style={[styles.note, webInputReset]}
-        />
-      </ScrollView>
+            {noteOpen ? (
+              <TextInput
+                ref={noteRef}
+                value={note}
+                onChangeText={setNote}
+                onBlur={commitNote}
+                multiline
+                placeholder="Add a note…"
+                placeholderTextColor={t.colors.textFaint}
+                scrollEnabled={false}
+                style={[styles.note, webInputReset]}
+              />
+            ) : null}
+
+            <View style={styles.divider} />
+
+            <Pressable
+              onPress={() => setWhenOpen(true)}
+              accessibilityRole="button"
+              style={styles.when}
+            >
+              <View style={styles.whenIcon}>
+                <CalendarDays size={12} color={t.colors.textSecondary} strokeWidth={1.8} />
+              </View>
+              <View style={styles.flex1}>
+                <View style={styles.whenMainRow}>
+                  <Text style={[styles.whenMain, !when.main && styles.whenEmpty]}>
+                    {when.main ?? 'No deadline'}
+                  </Text>
+                  {task.remindAt ? (
+                    <Bell size={13} color={t.colors.accentPrimary} strokeWidth={1.8} />
+                  ) : null}
+                </View>
+                {when.sub ? (
+                  <View style={styles.whenSubRow}>
+                    <Text style={styles.whenSub}>{when.sub}</Text>
+                    <Repeat size={12} color={t.colors.textSecondary} strokeWidth={1.8} />
+                  </View>
+                ) : null}
+              </View>
+            </Pressable>
+
+            {subs.length > 0 || addOpen ? <View style={styles.divider} /> : null}
+          </View>
+        }
+      />
 
       <View style={styles.toolbar}>
         <View style={styles.tools}>
           <ToolButton
             label="Note"
-            onPress={() => noteRef.current?.focus()}
+            onPress={revealNote}
             icon={<AlignLeft size={18} color={t.colors.textControl} strokeWidth={1.9} />}
+          />
+          <ToolButton
+            label="Subtask"
+            onPress={revealAdd}
+            icon={<ListChecks size={18} color={t.colors.textControl} strokeWidth={1.8} />}
           />
           <ToolButton
             label="Reminder"
@@ -312,27 +444,29 @@ const makeStyles = (t: Theme, compact: boolean) =>
     },
     spacer: { width: 38, height: 38 },
     missing: { padding: 24, color: t.colors.textMuted },
+    headerInset: { paddingHorizontal: DRAG_GUTTER },
     content: {
-      paddingHorizontal: compact ? 22 : 18,
+      paddingHorizontal: (compact ? 22 : 18) - DRAG_GUTTER,
       paddingTop: 6,
       paddingBottom: compact ? 16 : 24,
     },
-    when: { flexDirection: 'row', alignItems: 'flex-start', gap: 11 },
+    divider: { height: 1, backgroundColor: t.colors.borderSubtle, marginVertical: 18 },
+    when: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
     whenIcon: {
-      width: 26,
-      height: 26,
-      borderRadius: 8,
-      borderWidth: 1,
+      width: 22,
+      height: 22,
+      borderRadius: 7,
+      borderWidth: 2,
       borderColor: t.colors.borderStrong,
       alignItems: 'center',
       justifyContent: 'center',
-      marginTop: 1,
     },
-    whenMain: { fontSize: 15, fontWeight: '600', color: t.colors.accentPrimary },
+    whenMainRow: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 22 },
+    whenMain: { fontSize: 14, fontWeight: '600', color: t.colors.accentPrimary },
     whenEmpty: { color: t.colors.textMuted },
-    whenSubRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 },
+    whenSubRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 3 },
     whenSub: { fontSize: 12.5, color: t.colors.textSecondary },
-    titleRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, marginTop: 20 },
+    titleRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 4 },
     check: {
       width: 22,
       height: 22,
@@ -341,14 +475,14 @@ const makeStyles = (t: Theme, compact: boolean) =>
       borderColor: t.colors.borderStrong,
       alignItems: 'center',
       justifyContent: 'center',
-      marginTop: 4,
+      marginTop: 0,
     },
     checkDone: { backgroundColor: t.colors.accentPrimary, borderColor: t.colors.accentPrimary },
     title: {
       flex: 1,
       fontSize: compact ? 19 : 22,
       fontWeight: '700',
-      lineHeight: compact ? 25 : 29,
+      lineHeight: compact ? 24 : 28,
       letterSpacing: -0.2,
       color: t.colors.textPrimary,
       padding: 0,

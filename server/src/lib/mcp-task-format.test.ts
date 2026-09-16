@@ -20,6 +20,7 @@ const BASE: Task = {
   createdAt: '2026-07-30T10:00:00.000Z',
   createdVia: 'app',
   note: null,
+  subtasks: [],
   nextInstance: null,
 };
 
@@ -55,4 +56,27 @@ test('a note renders as a continuation line, whitespace collapsed and clipped at
   const long = fmtTask({ ...BASE, note: 'x'.repeat(250) });
   assert.equal(long.split('\n')[1], `    note: ${'x'.repeat(200)}…`);
   assert.equal(fmtTask({ ...BASE, note: null }).includes('note:'), false);
+});
+
+test('subtasks render as checkbox lines with their ids, after the note', () => {
+  const sub = (id: string, title: string, done: boolean) => ({
+    id,
+    taskId: BASE.id,
+    title,
+    done,
+    sortOrder: 0,
+    createdAt: BASE.createdAt,
+  });
+  const out = fmtTask({
+    ...BASE,
+    note: 'ctx',
+    subtasks: [sub('s1', 'first', true), sub('s2', 'second', false)],
+  });
+  assert.deepEqual(out.split('\n').slice(1), [
+    '    note: ctx',
+    '    [x] first [s1]',
+    '    [ ] second [s2]',
+  ]);
+  assert.equal(fmtTask(BASE).includes('['), true);
+  assert.equal(fmtTask(BASE).split('\n').length, 1);
 });

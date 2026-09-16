@@ -10,6 +10,12 @@ export function isInAll(task: Task, excluded: Set<number>): boolean {
   return task.contextId == null || !excluded.has(task.contextId);
 }
 
+export function subtaskProgress(task: Task): { done: number; total: number } | null {
+  const subs = task.subtasks ?? [];
+  if (subs.length === 0) return null;
+  return { done: subs.filter((s) => s.done).length, total: subs.length };
+}
+
 export function openCounts(tasks: Task[], contexts: Context[]): Record<string, number> {
   const excluded = excludedContextIds(contexts);
   const counts: Record<string, number> = { all: 0 };

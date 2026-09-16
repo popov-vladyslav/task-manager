@@ -5,6 +5,7 @@ import { tasks } from '../db/schema';
 import { ownedBy } from '../db/scope';
 import { toTask } from '../db/mappers';
 import { bucketOverdue, startOfLocalDay } from '../lib/morning-summary';
+import { subtasksByTask } from './subtasks-read';
 
 // Unfinished work from before today, split into yesterday's leftovers and the
 // older pile. ORDINARY TASKS ONLY: `recurrence_id IS NULL` excludes every
@@ -32,11 +33,16 @@ export async function getMorningSummary(
     )
     .orderBy(asc(tasks.dueAt));
 
+  const subs = await subtasksByTask(
+    userId,
+    rows.map((r) => r.task.id),
+  );
   const overdue = rows.map((r) =>
     toTask(r.task, {
       // Ordinary tasks only, so there is never a recurrence rule to report.
       nextInstance: null,
       recurrenceRule: null,
+      subtasks: subs.get(r.task.id) ?? [],
     }),
   );
 

@@ -43,6 +43,7 @@ function sample(id: string, title: string, patch: Partial<Task>): Task {
     createdAt: hourAgo,
     createdVia: 'app',
     note: null,
+    subtasks: [],
     nextInstance: null,
     ...patch,
   };

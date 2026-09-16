@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Platform, StyleSheet } from 'react-native';
+import { Appearance, Platform, StyleSheet } from 'react-native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import * as ScreenOrientation from 'expo-screen-orientation';
@@ -23,6 +23,7 @@ import { OtaUpdater } from '../features/updates/ota-updater';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 SystemUI.setBackgroundColorAsync(colors.bgBase).catch(() => {});
+if (process.env.EXPO_OS !== 'web') Appearance.setColorScheme('dark');
 
 // react-native-web turns showsVerticalScrollIndicator={false} into `scrollbar-width`
 // only, which Safari and Chrome <121 ignore — they need a ::-webkit-scrollbar rule,

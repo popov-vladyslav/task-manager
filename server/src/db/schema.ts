@@ -11,6 +11,7 @@ import {
   date,
   jsonb,
   primaryKey,
+  index,
 } from 'drizzle-orm/pg-core';
 
 // Drizzle schema for type-safe queries. The authoritative DDL lives in
@@ -119,6 +120,24 @@ export const tasks = pgTable('tasks', {
     .default('app'),
   note: text('note'),
 });
+
+export const subtasks = pgTable(
+  'subtasks',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    taskId: uuid('task_id')
+      .notNull()
+      .references(() => tasks.id, { onDelete: 'cascade' }),
+    title: text('title').notNull(),
+    done: boolean('done').notNull().default(false),
+    sortOrder: integer('sort_order').notNull().default(0),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('idx_subtasks_task').on(t.taskId, t.sortOrder)],
+);
 
 export const comments = pgTable('comments', {
   id: uuid('id').primaryKey().defaultRandom(),

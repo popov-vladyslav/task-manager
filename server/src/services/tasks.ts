@@ -16,6 +16,7 @@ import { nextInstance as computeNext } from '../lib/recurrence';
 import { badRequest, notFound } from '../lib/errors';
 import { parseWhen } from '../lib/when';
 import { invalidateReminderClocks } from './reminder-clock';
+import { subtasksByTask } from './subtasks-read';
 
 // A task may only point at a context its own owner holds. Without this, a
 // crafted contextId would attach one user's task to another user's context —
@@ -68,11 +69,18 @@ type Row = {
   rule: string | null;
 };
 
-function rowToTask(r: Row): Task {
-  return toTask(r.task, {
-    nextInstance: r.rule ? computeNext(r.rule) : null,
-    recurrenceRule: r.rule,
-  });
+async function rowsToTasks(userId: string, rows: Row[]): Promise<Task[]> {
+  const subs = await subtasksByTask(
+    userId,
+    rows.map((r) => r.task.id),
+  );
+  return rows.map((r) =>
+    toTask(r.task, {
+      nextInstance: r.rule ? computeNext(r.rule) : null,
+      recurrenceRule: r.rule,
+      subtasks: subs.get(r.task.id) ?? [],
+    }),
+  );
 }
 
 export async function listTasks(userId: string, filter: ListFilter): Promise<Task[]> {
@@ -97,7 +105,7 @@ export async function listTasks(userId: string, filter: ListFilter): Promise<Tas
     .where(and(...conds))
     .orderBy(asc(order), asc(tasks.createdAt));
 
-  return rows.map(rowToTask);
+  return rowsToTasks(userId, rows);
 }
 
 export async function getTask(userId: string, id: string): Promise<Task> {
@@ -107,7 +115,8 @@ export async function getTask(userId: string, id: string): Promise<Task> {
     .leftJoin(recurrenceRules, eq(tasks.recurrenceId, recurrenceRules.id))
     .where(and(ownedBy(tasks.userId, userId), eq(tasks.id, id)));
   if (!rows[0]) throw notFound('Task not found');
-  return rowToTask(rows[0]);
+  const [task] = await rowsToTasks(userId, [rows[0]]);
+  return task;
 }
 
 // Fuzzy title search over open tasks — used by MCP `title_match`.
@@ -124,7 +133,7 @@ export async function searchOpenTasks(userId: string, query: string): Promise<Ta
       ),
     )
     .orderBy(asc(tasks.sortGlobal));
-  return rows.map(rowToTask);
+  return rowsToTasks(userId, rows);
 }
 
 // Open tasks due today or overdue (Europe/Warsaw — the server runs in TZ).

@@ -3,8 +3,10 @@ import type {
   Context,
   RecurrenceInput,
   ReorderScope,
+  Subtask,
   Task,
   UpdateContextInput,
+  UpdateSubtaskInput,
 } from '@task-manager/shared';
 import { api } from '../lib/api';
 import { TOAST_DURATION_MS, useToastStore } from './toast';
@@ -73,7 +75,17 @@ interface TasksState {
     scope: ReorderScope,
   ) => Promise<void>;
   requestOpenTask: (id: string | null) => void;
+  addSubtask: (taskId: string, title: string) => Promise<void>;
+  updateSubtask: (taskId: string, id: string, patch: UpdateSubtaskInput) => Promise<void>;
+  deleteSubtask: (taskId: string, id: string) => Promise<void>;
+  reorderSubtasks: (taskId: string, ids: string[]) => Promise<void>;
 }
+
+const replaceIn = (list: Task[], updated: Task) =>
+  list.map((t) => (t.id === updated.id ? updated : t));
+
+const mapSubtasks = (list: Task[], taskId: string, fn: (subs: Subtask[]) => Subtask[]) =>
+  list.map((t) => (t.id === taskId ? { ...t, subtasks: fn(t.subtasks ?? []) } : t));
 
 export const useTasksStore = create<TasksState>((set, get) => ({
   contexts: [],
@@ -249,6 +261,68 @@ export const useTasksStore = create<TasksState>((set, get) => ({
 
   requestOpenTask(id) {
     set({ pendingOpenTaskId: id });
+  },
+
+  async addSubtask(taskId, title) {
+    const updated = await api.addSubtask(taskId, { title });
+    set({ tasks: replaceIn(get().tasks, updated), completed: replaceIn(get().completed, updated) });
+  },
+
+  async updateSubtask(taskId, id, patch) {
+    const prev = { tasks: get().tasks, completed: get().completed };
+    const apply = (subs: Subtask[]) => subs.map((s) => (s.id === id ? { ...s, ...patch } : s));
+    set({
+      tasks: mapSubtasks(prev.tasks, taskId, apply),
+      completed: mapSubtasks(prev.completed, taskId, apply),
+    });
+    try {
+      const updated = await api.updateSubtask(taskId, id, patch);
+      set({
+        tasks: replaceIn(get().tasks, updated),
+        completed: replaceIn(get().completed, updated),
+      });
+    } catch {
+      set(prev);
+    }
+  },
+
+  async deleteSubtask(taskId, id) {
+    const prev = { tasks: get().tasks, completed: get().completed };
+    const apply = (subs: Subtask[]) => subs.filter((s) => s.id !== id);
+    set({
+      tasks: mapSubtasks(prev.tasks, taskId, apply),
+      completed: mapSubtasks(prev.completed, taskId, apply),
+    });
+    try {
+      const updated = await api.deleteSubtask(taskId, id);
+      set({
+        tasks: replaceIn(get().tasks, updated),
+        completed: replaceIn(get().completed, updated),
+      });
+    } catch {
+      set(prev);
+    }
+  },
+
+  async reorderSubtasks(taskId, ids) {
+    const position = new Map(ids.map((id, i) => [id, i]));
+    const apply = (subs: Subtask[]) =>
+      subs
+        .map((s) => ({ ...s, sortOrder: position.get(s.id) ?? s.sortOrder }))
+        .sort((a, b) => a.sortOrder - b.sortOrder);
+    set({
+      tasks: mapSubtasks(get().tasks, taskId, apply),
+      completed: mapSubtasks(get().completed, taskId, apply),
+    });
+    try {
+      const updated = await api.reorderSubtasks(taskId, ids);
+      set({
+        tasks: replaceIn(get().tasks, updated),
+        completed: replaceIn(get().completed, updated),
+      });
+    } catch {
+      get().load();
+    }
   },
 
   async reorder(id, afterId, beforeId, scope) {
