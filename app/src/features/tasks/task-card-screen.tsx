@@ -18,12 +18,11 @@ import { IconButton } from '../../components/icon-button';
 import { Popover, usePopoverAnchor } from '../../components/popover';
 import { haptics } from '../../lib/haptics';
 import { useTasksStore } from '../../store/tasks';
-import { subtaskProgress } from '../../store/task-selectors';
 import { useTimerStore } from '../../store/timer';
 import { useToastStore } from '../../store/toast';
 import { useTheme, webInputReset, type Theme } from '../../theme';
 import { ContextPopover } from './context-popover';
-import { AddSubtaskRow, SubtaskCaption, SubtaskRow } from './subtask-list';
+import { AddSubtaskRow, DRAG_GUTTER, SubtaskRow } from './subtask-list';
 import { describeWhen, WhenSheet } from './when-sheet';
 
 const isWeb = process.env.EXPO_OS === 'web';
@@ -89,7 +88,42 @@ export function TaskCardScreen({ taskId, onClose, compact = false }: TaskCardScr
     [task],
   );
   const tracked = task ? formatTrackedShort(task.trackedSec) : null;
-  const progress = task ? subtaskProgress(task) : null;
+  const subtasks = useMemo(() => task?.subtasks ?? [], [task?.subtasks]);
+  const [subs, setSubs] = useState(subtasks);
+  useEffect(() => setSubs(subtasks), [subtasks]);
+
+  const [noteOpen, setNoteOpen] = useState(!!task?.note);
+  const [addOpen, setAddOpen] = useState(subtasks.length > 0);
+  const focusNote = useRef(false);
+  const focusAdd = useRef(false);
+  useEffect(() => {
+    if (task?.note) setNoteOpen(true);
+  }, [task?.note]);
+  useEffect(() => {
+    if (subtasks.length > 0) setAddOpen(true);
+  }, [subtasks.length]);
+  useEffect(() => {
+    if (noteOpen && focusNote.current) {
+      focusNote.current = false;
+      noteRef.current?.focus();
+    }
+  }, [noteOpen]);
+  useEffect(() => {
+    if (addOpen && focusAdd.current) {
+      focusAdd.current = false;
+      addRef.current?.focus();
+    }
+  }, [addOpen]);
+  const revealNote = () => {
+    focusNote.current = true;
+    if (noteOpen) noteRef.current?.focus();
+    else setNoteOpen(true);
+  };
+  const revealAdd = () => {
+    focusAdd.current = true;
+    if (addOpen) addRef.current?.focus();
+    else setAddOpen(true);
+  };
 
   const onToggleSubtask = useCallback(
     (s: Subtask) => {
@@ -108,11 +142,16 @@ export function TaskCardScreen({ taskId, onClose, compact = false }: TaskCardScr
   );
   const onReorderSubtasks = ({ from, to }: ReorderableListReorderEvent) => {
     if (!task || from === to) return;
-    const order = (task.subtasks ?? []).map((s) => s.id);
+    const order = [...subs];
+    if (from < 0 || to < 0 || from >= order.length || to >= order.length) return;
     const [moved] = order.splice(from, 1);
     order.splice(to, 0, moved);
+    setSubs(order);
     haptics.impact('medium');
-    reorderSubtasks(task.id, order);
+    reorderSubtasks(
+      task.id,
+      order.map((s) => s.id),
+    );
   };
 
   const commitTitle = useCallback(() => {
@@ -126,6 +165,7 @@ export function TaskCardScreen({ taskId, onClose, compact = false }: TaskCardScr
     if (!task) return;
     const next = note.trim() || null;
     if (next !== (task.note ?? null)) patchTask(task.id, { note: next });
+    if (!next) setNoteOpen(false);
   }, [task, note, patchTask]);
 
   const toggle = () => {
@@ -193,8 +233,8 @@ export function TaskCardScreen({ taskId, onClose, compact = false }: TaskCardScr
       />
 
       <ReorderableList
-        data={task.subtasks ?? []}
-        keyExtractor={(s) => s.id}
+        data={subs}
+        keyExtractor={(s, i) => s?.id ?? `i${i}`}
         onReorder={onReorderSubtasks}
         renderItem={({ item }) => (
           <SubtaskRow
@@ -208,17 +248,22 @@ export function TaskCardScreen({ taskId, onClose, compact = false }: TaskCardScr
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
         ListFooterComponent={
-          <AddSubtaskRow
-            ref={addRef}
-            onAdd={(title) =>
-              addSubtask(task.id, title).catch(() =>
-                useToastStore.getState().show({ title: 'Couldn’t add subtask', message: title }),
-              )
-            }
-          />
+          addOpen ? (
+            <AddSubtaskRow
+              ref={addRef}
+              onAdd={(title) =>
+                addSubtask(task.id, title).catch(() =>
+                  useToastStore.getState().show({ title: 'Couldn’t add subtask', message: title }),
+                )
+              }
+              onDismiss={() => {
+                if (subs.length === 0) setAddOpen(false);
+              }}
+            />
+          ) : null
         }
         ListHeaderComponent={
-          <View>
+          <View style={styles.headerInset}>
             <View style={styles.titleRow}>
               <Pressable
                 onPress={toggle}
@@ -248,17 +293,19 @@ export function TaskCardScreen({ taskId, onClose, compact = false }: TaskCardScr
               />
             </View>
 
-            <TextInput
-              ref={noteRef}
-              value={note}
-              onChangeText={setNote}
-              onBlur={commitNote}
-              multiline
-              placeholder="Add a note…"
-              placeholderTextColor={t.colors.textFaint}
-              scrollEnabled={false}
-              style={[styles.note, webInputReset]}
-            />
+            {noteOpen ? (
+              <TextInput
+                ref={noteRef}
+                value={note}
+                onChangeText={setNote}
+                onBlur={commitNote}
+                multiline
+                placeholder="Add a note…"
+                placeholderTextColor={t.colors.textFaint}
+                scrollEnabled={false}
+                style={[styles.note, webInputReset]}
+              />
+            ) : null}
 
             <View style={styles.divider} />
 
@@ -288,11 +335,7 @@ export function TaskCardScreen({ taskId, onClose, compact = false }: TaskCardScr
               </View>
             </Pressable>
 
-            {progress ? (
-              <SubtaskCaption done={progress.done} total={progress.total} />
-            ) : (
-              <View style={styles.subsGap} />
-            )}
+            {subs.length > 0 || addOpen ? <View style={styles.divider} /> : null}
           </View>
         }
       />
@@ -301,12 +344,12 @@ export function TaskCardScreen({ taskId, onClose, compact = false }: TaskCardScr
         <View style={styles.tools}>
           <ToolButton
             label="Note"
-            onPress={() => noteRef.current?.focus()}
+            onPress={revealNote}
             icon={<AlignLeft size={18} color={t.colors.textControl} strokeWidth={1.9} />}
           />
           <ToolButton
             label="Subtask"
-            onPress={() => addRef.current?.focus()}
+            onPress={revealAdd}
             icon={<ListChecks size={18} color={t.colors.textControl} strokeWidth={1.8} />}
           />
           <ToolButton
@@ -401,13 +444,13 @@ const makeStyles = (t: Theme, compact: boolean) =>
     },
     spacer: { width: 38, height: 38 },
     missing: { padding: 24, color: t.colors.textMuted },
+    headerInset: { paddingHorizontal: DRAG_GUTTER },
     content: {
-      paddingHorizontal: compact ? 22 : 18,
+      paddingHorizontal: (compact ? 22 : 18) - DRAG_GUTTER,
       paddingTop: 6,
       paddingBottom: compact ? 16 : 24,
     },
     divider: { height: 1, backgroundColor: t.colors.borderSubtle, marginVertical: 18 },
-    subsGap: { height: 18 },
     when: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
     whenIcon: {
       width: 22,
