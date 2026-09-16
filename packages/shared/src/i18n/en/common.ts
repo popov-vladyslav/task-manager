@@ -19,7 +19,7 @@ export const common = {
   'common.edit': 'Edit',
   'common.retry': 'Retry',
   'common.ok': 'OK',
-  'common.all': 'All',
+  'common.all': 'All tasks',
   'common.task': 'Task',
   'common.tasks': 'Tasks',
   'common.min': 'min',

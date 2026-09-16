@@ -21,7 +21,7 @@ export const common: Pick<Dictionary, keyof typeof import('../en/common').common
   'common.edit': 'Edytuj',
   'common.retry': 'Ponów',
   'common.ok': 'OK',
-  'common.all': 'Wszystkie',
+  'common.all': 'Wszystkie zadania',
   'common.task': 'Zadanie',
   'common.tasks': 'Zadania',
   'common.min': 'min',

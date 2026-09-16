@@ -24,7 +24,7 @@ import { useIntlTag, useT } from '../../lib/i18n';
 import { useLocaleStore } from '../../store/locale';
 import { API_URL } from '../../lib/config';
 import { useRefreshOnFocus } from '../../lib/use-refresh-on-focus';
-import { colors, headerDate, monoFont, webInputReset, WIDE_BREAKPOINT } from '../../theme';
+import { colors, monoFont, webInputReset, WIDE_BREAKPOINT } from '../../theme';
 import { useTasksStore } from '../../store/tasks';
 import { useAuthStore } from '../../store/auth';
 import { WideSidebar } from '../nav/wide-sidebar';
@@ -72,7 +72,6 @@ export function SettingsScreen() {
     <KeyboardAvoidingView behavior={isIOS ? 'padding' : undefined} style={styles.mobileRoot}>
       <View style={[styles.flex1, { paddingTop: insets.top + 8 }]}>
         <View style={styles.mobileHeader}>
-          <Text style={styles.mobileDate}>{headerDate()}</Text>
           <Text style={styles.mobileTitle}>{tr('settings.title')}</Text>
         </View>
         <ScrollView
@@ -723,13 +722,7 @@ const styles = StyleSheet.create({
   },
   wideScrollContent: { paddingBottom: 40 },
   mobileRoot: { flex: 1, backgroundColor: colors.bgSurface },
-  mobileHeader: { paddingHorizontal: 20, paddingBottom: 12 },
-  mobileDate: {
-    fontFamily: monoFont,
-    fontSize: 10.5,
-    letterSpacing: 1.5,
-    color: colors.textMuted,
-  },
+  mobileHeader: { paddingHorizontal: 20 },
   mobileTitle: {
     fontSize: 22,
     fontWeight: '600',

@@ -41,12 +41,6 @@ export function useTheme(): Theme {
 
 const intlTag = () => INTL_TAG[useLocaleStore.getState().locale];
 
-export function headerDate(d: Date = new Date()): string {
-  // e.g. "TUE, JUL 15"
-  const s = d.toLocaleDateString(intlTag(), { weekday: 'short', month: 'short', day: 'numeric' });
-  return s.toUpperCase();
-}
-
 export function shortDate(iso: string | null): string | null {
   if (!iso) return null;
   return new Date(iso).toLocaleDateString(intlTag(), { month: 'short', day: 'numeric' });
