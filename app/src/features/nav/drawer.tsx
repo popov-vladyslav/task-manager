@@ -91,6 +91,7 @@ export function DrawerContent({ onNavigate }: { onNavigate?: () => void }) {
   const handleReorder = ({ from, to }: ReorderableListReorderEvent) => {
     if (from === to) return;
     const order = [...data];
+    if (from < 0 || to < 0 || from >= order.length || to >= order.length) return;
     const [moved] = order.splice(from, 1);
     order.splice(to, 0, moved);
     setData(order);
@@ -128,7 +129,7 @@ export function DrawerContent({ onNavigate }: { onNavigate?: () => void }) {
 
       <ReorderableList
         data={data}
-        keyExtractor={(c) => String(c.id)}
+        keyExtractor={(c, i) => (c ? String(c.id) : `i${i}`)}
         onReorder={handleReorder}
         renderItem={({ item }) => (
           <MemoRow
@@ -257,6 +258,7 @@ const makeStyles = (t: Theme) =>
       padding: 10,
       borderRadius: 10,
       marginHorizontal: 8,
+      marginBottom: 1,
     },
     allRow: { marginTop: 8 },
     rowActive: { backgroundColor: t.colors.bgControl },
@@ -306,7 +308,7 @@ const makeStyles = (t: Theme) =>
       justifyContent: 'center',
     },
     list: { flex: 1 },
-    listContent: { gap: 1, paddingBottom: 8 },
+    listContent: { paddingBottom: 8 },
     hiddenNote: {
       paddingHorizontal: 20,
       paddingTop: 10,
