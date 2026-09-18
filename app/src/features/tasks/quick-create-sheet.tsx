@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Keyboard, Pressable, StyleSheet, Text, View, type TextInput } from 'react-native';
 import { AlignLeft, ArrowRight, Bell, ChevronUp, Clock, Repeat } from 'lucide-react-native';
-import { contextEmoji } from '@task-manager/shared';
+import { ContextMark } from '../../components/context-mark';
 import { BottomSheet, SheetInput } from '../../components/bottom-sheet';
 import { Chip } from '../../components/chip';
 import { usePopoverAnchor } from '../../components/popover';
@@ -17,7 +17,6 @@ export interface QuickCreateInitial {
   dueAt?: string | null;
   durationMin?: number | null;
   contextId?: number | null;
-  sectionId?: string | null;
 }
 
 interface QuickCreateSheetProps {
@@ -61,7 +60,6 @@ export function QuickCreateSheet({
   const [note, setNote] = useState('');
   const [showNote, setShowNote] = useState(false);
   const [contextId, setContextId] = useState<number | null>(null);
-  const initialContextId = initial?.contextId !== undefined ? initial.contextId : activeContextId;
   const [when, setWhen] = useState<WhenPatch>(EMPTY_WHEN);
   const [whenOpen, setWhenOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -127,8 +125,6 @@ export function QuickCreateSheet({
         durationMin: when.durationMin,
         recurrence: when.recurrence,
         note: note.trim() || null,
-        sectionId:
-          contextId != null && contextId === initialContextId ? (initial?.sectionId ?? null) : null,
       });
       haptics.success();
       if (!openCard)
@@ -198,10 +194,11 @@ export function QuickCreateSheet({
         />
         <View ref={popover.ref} collapsable={false}>
           <Chip
-            label={
-              context
-                ? `${contextEmoji(context) ?? ''} ${context.label}`.trim()
-                : tr('when.create.context')
+            label={context ? context.label : tr('when.create.context')}
+            icon={
+              context ? (
+                <ContextMark emoji={context.emoji} color={context.color} size={12} />
+              ) : undefined
             }
             selected={!!context}
             tint={chipTint.context}

@@ -35,12 +35,11 @@ CREATE TABLE contexts (
   id          serial PRIMARY KEY,
   slug        text UNIQUE NOT NULL,          -- 'work', 'home'
   label       text NOT NULL,
-  color       text NOT NULL,                 -- '#5B8DEF'
+  color       text NOT NULL,                 -- '#5597E9'; palette = contextPalette (15 hues), 0020 remapped old palette colours
   sort_order  int  NOT NULL DEFAULT 0,
   archived    boolean NOT NULL DEFAULT false,
   exclude_from_all boolean NOT NULL DEFAULT false, -- 0004: hidden from "All"
-  emoji       text,                             -- 0013: nullable; fallback derived from color
-  sections_enabled boolean NOT NULL DEFAULT false -- 0018: show section chips on this category
+  emoji       text                              -- 0013: nullable; fallback derived from color
 );
 
 CREATE TABLE tasks (
@@ -57,23 +56,9 @@ CREATE TABLE tasks (
   completed_at  timestamptz,
   created_at    timestamptz NOT NULL DEFAULT now(),
   created_via   text CHECK (created_via IN ('app','mcp')) DEFAULT 'app',
-  note          text,                        -- 0014: nullable; replaces comments (ADR 0006)
-  section_id    uuid REFERENCES sections(id) ON DELETE SET NULL, -- 0017: NULL = "Unsorted"
-  sort_section  real NOT NULL DEFAULT 0      -- 0017: fractional order inside a section
+  note          text                         -- 0014: nullable; replaces comments (ADR 0006)
 );
 CREATE INDEX idx_tasks_open ON tasks (status, context_id) WHERE status != 'done';
-
--- 0017 (ADR 0008): sections inside a category. No default row — tasks with
--- section_id NULL are the "Unsorted" chip. Names unique per context (service-enforced).
-CREATE TABLE sections (
-  id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id    uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  context_id integer NOT NULL REFERENCES contexts(id) ON DELETE CASCADE,
-  name       text NOT NULL,
-  sort       real NOT NULL DEFAULT 0,        -- fractional indexing (lib/frac-index.ts)
-  created_at timestamptz NOT NULL DEFAULT now()
-);
-CREATE INDEX idx_sections_context ON sections (context_id, sort);
 
 -- 0015 (ADR 0007): checklist items owned by a task. No dates, reminders,
 -- timers or contexts — never listed as tasks anywhere.
@@ -100,7 +85,9 @@ CREATE TABLE recurrence_rules (
   last_spawned  date                         -- захист від дублів
 );
 
--- comments: replaced by tasks.note (ADR 0006); the table is dropped by a later contracting migration (0016) after the comment-free code is verified on prod
+-- comments: replaced by tasks.note (ADR 0006); table dropped in 0019.
+-- sections (0017: table + tasks.section_id + tasks.sort_section; 0018: contexts.sections_enabled):
+-- the feature was removed on 2026-09-18; all of it dropped in 0019.
 
 -- DESCOPED (see STATUS.md): photos were never implemented; the table was dropped
 -- in migration 0008 and `photosCount` removed from the Task contract.
@@ -175,26 +162,17 @@ POST   /auth/pin               { pin }   → { jwt }        (PIN задаєть�
 POST   /auth/refresh           { refresh } → { jwt }
 
 GET    /api/contexts
-POST   /api/contexts           { label, color, slug?, excludeFromAll?, emoji?, sectionsEnabled? }
-PATCH  /api/contexts/:id       { label?, color?, archived?, excludeFromAll?, emoji? (nullable, один графем), sectionsEnabled? }
+POST   /api/contexts           { label, color, slug?, excludeFromAll?, emoji? }
+PATCH  /api/contexts/:id       { label?, color?, archived?, excludeFromAll?, emoji? (nullable, один графем) }
 POST   /api/contexts/reorder   { ids: number[] } → повний список; чужі id пропускаються
 
 GET    /api/tasks?context=&status=          (сортовано по sort_*)
+GET    /api/tasks/completed-counts       → { [contextId | 'none']: n } — кількість задач зі status='done' по контекстах
+                                          (без завантаження списку; app ховає "Показати виконані", якщо 0)
 POST   /api/tasks              { title, contextId?, dueAt?, remindAt?, durationMin?, recurrence?, note? }
 PATCH  /api/tasks/:id          (будь-які поля вкл. note (nullable); { completed: true } → complete-логіка)
 DELETE /api/tasks/:id
 POST   /api/tasks/:id/reorder  { after_id?, before_id?, scope: 'global'|'context' }
-
-# Sections (0017, ADR 0008). Порядок — fractional index (`sort`); імена унікальні в межах категорії (409).
-GET    /api/contexts/:id/sections         → Section[]
-POST   /api/contexts/:id/sections         { name } → 201 Section
-GET    /api/sections                      → усі секції користувача
-PATCH  /api/sections/:id                  { name } → Section
-POST   /api/sections/:id/reorder          { afterId?, beforeId? } → Section
-DELETE /api/sections/:id                  → 204; задачі секції переходять у першу (за sort) з решти секцій, або section_id = NULL якщо секцій не лишилось
-# Задачі з section_id = NULL показуються у першій секції контексту. Увімкнення sections_enabled створює першу секцію, якщо жодної немає.
-# Задачі: POST/PATCH /api/tasks приймають sectionId (має належати контексту задачі, інакше 400);
-# зміна contextId без sectionId скидає секцію; reorder scope 'section' впорядковує sort_section.
 
 # Subtasks (0015, ADR 0007). Кожен запис повертає батьківський Task з subtasks[] (відсортовані по sort_order).
 POST   /api/tasks/:id/subtasks            { title } → 201 Task
@@ -249,19 +227,14 @@ delete_subtask  { subtask_id }                     (ADR 0007; підзадачі
                                                 -- title_match: пошук по назві, щоб
 complete_task   { id | title_match }               я міг "закрий задачу про іпотеку"
 delete_task     { id | title_match }
-list_sections   { context }                       → рядок на секцію: `<name> [<id>]`
-                                                  -- create_task / update_task приймають section
-                                                  -- (ім'я або id у межах контексту; невідоме ім'я
-                                                  -- створюється; null знімає секцію); у відповідях
-                                                  -- задача друкує `    section: <name>`
 list_tasks      { context?, status?, due_before?, overdue? }
 get_today       {} → задачі на сьогодні + рутина + активний таймер
 add_routine     { title, time_hint? }
 start_timer     { task: id|title_match }
 stop_timer      {}
 list_contexts   {}                                → рядок на контекст: `<emoji> <slug> — <label> (<color>)`
-create_context  { label, color (#RRGGBB), emoji?, exclude_from_all?, sections_enabled? }
-update_context  { slug, label?, color?, emoji? (null очищає), exclude_from_all?, sections_enabled? }
+create_context  { label, color (#RRGGBB), emoji?, exclude_from_all? }
+update_context  { slug, label?, color?, emoji? (null очищає), exclude_from_all? }
 delete_context  { slug }
 ```
 

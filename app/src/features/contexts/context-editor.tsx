@@ -5,10 +5,10 @@ import {
   contextPalette,
   EMOJI_MAX_LENGTH,
   firstGrapheme,
-  nearestEmoji,
   type Context,
 } from '@task-manager/shared';
 import { BottomSheet, SheetInput } from '../../components/bottom-sheet';
+import { ConfirmDialog } from '../../components/confirm-dialog';
 import { Toggle } from '../../components/toggle';
 import { ApiError } from '../../lib/api';
 import { useT } from '../../lib/i18n';
@@ -49,13 +49,14 @@ function ContextEditorForm({ context, onClose }: { context?: Context; onClose: (
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [emojiFocused, setEmojiFocused] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const canSave = label.trim().length > 0 && !busy;
-  const derived = nearestEmoji(color) ?? '';
   const dynamic = useMemo(
     () =>
       StyleSheet.create({
         emojiBox: { backgroundColor: `${color}26` },
+        emojiDot: { backgroundColor: color },
         save: { backgroundColor: canSave ? t.colors.accentPrimary : t.colors.bgElevated },
         saveText: { color: canSave ? t.colors.bgBase : t.colors.textMuted },
       }),
@@ -91,8 +92,10 @@ function ContextEditorForm({ context, onClose }: { context?: Context; onClose: (
     setError(null);
     try {
       await deleteContext(context.id);
+      setConfirmDelete(false);
       onClose();
     } catch (e) {
+      setConfirmDelete(false);
       setError(
         e instanceof ApiError && e.status === 409
           ? tr('contexts.menu.deleteBlocked')
@@ -108,13 +111,14 @@ function ContextEditorForm({ context, onClose }: { context?: Context; onClose: (
     <View style={styles.form}>
       <View style={styles.row}>
         <View style={[styles.emojiBox, dynamic.emojiBox]}>
+          {!emoji && !emojiFocused ? (
+            <View pointerEvents="none" style={[styles.emojiDot, dynamic.emojiDot]} />
+          ) : null}
           <SheetInput
             value={emoji}
             onChangeText={(v) => setEmoji(firstGrapheme(v))}
             onFocus={() => setEmojiFocused(true)}
             onBlur={() => setEmojiFocused(false)}
-            placeholder={emojiFocused ? '' : derived}
-            placeholderTextColor={t.colors.textMuted}
             maxLength={EMOJI_MAX_LENGTH}
             caretHidden
             selectionColor="transparent"
@@ -169,7 +173,14 @@ function ContextEditorForm({ context, onClose }: { context?: Context; onClose: (
 
       <View style={styles.row}>
         {context ? (
-          <Pressable onPress={remove} disabled={busy} style={styles.remove}>
+          <Pressable
+            onPress={() => {
+              setError(null);
+              setConfirmDelete(true);
+            }}
+            disabled={busy}
+            style={styles.remove}
+          >
             <Trash2 size={15} color={t.colors.accentNow} />
             <Text style={styles.removeText}>{tr('common.delete')}</Text>
           </Pressable>
@@ -183,6 +194,19 @@ function ContextEditorForm({ context, onClose }: { context?: Context; onClose: (
           )}
         </Pressable>
       </View>
+
+      {context ? (
+        <ConfirmDialog
+          open={confirmDelete}
+          title={tr('contexts.menu.delete')}
+          message={tr('contexts.menu.deleteConfirm', { name: context.label })}
+          confirmLabel={tr('common.delete')}
+          danger
+          busy={busy}
+          onConfirm={remove}
+          onCancel={() => setConfirmDelete(false)}
+        />
+      ) : null}
     </View>
   );
 }
@@ -199,6 +223,7 @@ const makeStyles = (t: Theme) =>
       alignItems: 'center',
       justifyContent: 'center',
     },
+    emojiDot: { position: 'absolute', width: 18, height: 18, borderRadius: 9 },
     emojiInput: {
       width: 40,
       height: 40,

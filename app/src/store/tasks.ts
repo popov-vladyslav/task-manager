@@ -3,7 +3,6 @@ import type {
   Context,
   RecurrenceInput,
   ReorderScope,
-  Section,
   Subtask,
   Task,
   UpdateContextInput,
@@ -31,9 +30,9 @@ export function isPendingDelete(id: string): boolean {
 
 interface TasksState {
   contexts: Context[];
-  sections: Section[];
   tasks: Task[]; // all open tasks (status != done), unfiltered
   completed: Task[]; // done tasks, loaded lazily for the "Show completed" section
+  completedCounts: Record<string, number> | null;
   activeContextId: number | null; // null = "All"
   loading: boolean;
   hydrated: boolean;
@@ -51,7 +50,6 @@ interface TasksState {
     color: string,
     excludeFromAll?: boolean,
     emoji?: string | null,
-    sectionsEnabled?: boolean,
   ) => Promise<void>;
   updateContext: (id: number, patch: UpdateContextInput) => Promise<void>;
   reorderContexts: (ids: number[]) => Promise<void>;
@@ -66,7 +64,6 @@ interface TasksState {
       durationMin?: number | null;
       note?: string | null;
       recurrence?: RecurrenceInput | null;
-      sectionId?: string | null;
     },
   ) => Promise<Task | null>;
   toggleComplete: (task: Task) => Promise<void>;
@@ -84,27 +81,28 @@ interface TasksState {
   updateSubtask: (taskId: string, id: string, patch: UpdateSubtaskInput) => Promise<void>;
   deleteSubtask: (taskId: string, id: string) => Promise<void>;
   reorderSubtasks: (taskId: string, ids: string[]) => Promise<void>;
-  createSection: (contextId: number, name: string) => Promise<Section>;
-  renameSection: (id: string, name: string) => Promise<void>;
-  reorderSection: (id: string, afterId: string | null, beforeId: string | null) => Promise<void>;
-  deleteSection: (id: string) => Promise<void>;
-  moveTaskToSection: (taskId: string, sectionId: string | null) => Promise<void>;
 }
-
-const sortSections = (list: Section[]) =>
-  [...list].sort((a, b) => a.contextId - b.contextId || a.sort - b.sort);
 
 const replaceIn = (list: Task[], updated: Task) =>
   list.map((t) => (t.id === updated.id ? updated : t));
+
+export const countKey = (contextId: number | null) =>
+  contextId == null ? 'none' : String(contextId);
+
+const bump = (counts: Record<string, number> | null, contextId: number | null, delta: number) => {
+  if (!counts) return counts;
+  const key = countKey(contextId);
+  return { ...counts, [key]: Math.max(0, (counts[key] ?? 0) + delta) };
+};
 
 const mapSubtasks = (list: Task[], taskId: string, fn: (subs: Subtask[]) => Subtask[]) =>
   list.map((t) => (t.id === taskId ? { ...t, subtasks: fn(t.subtasks ?? []) } : t));
 
 export const useTasksStore = create<TasksState>((set, get) => ({
   contexts: [],
-  sections: [],
   tasks: [],
   completed: [],
+  completedCounts: null,
   activeContextId: null,
   loading: false,
   hydrated: false,
@@ -121,16 +119,16 @@ export const useTasksStore = create<TasksState>((set, get) => ({
     if (!opts?.silent) set({ loading: true, error: null });
     inFlightLoad = (async () => {
       try {
-        const [contexts, tasks, sections] = await Promise.all([
+        const [contexts, tasks, completedCounts] = await Promise.all([
           api.listContexts(),
           api.listTasks(),
-          api.listSections().catch(() => [] as Section[]),
+          api.completedCounts().catch(() => null),
         ]);
         const open = pendingDeletes.size ? tasks.filter((t) => !pendingDeletes.has(t.id)) : tasks;
         set({
           contexts,
-          sections: sortSections(sections),
           tasks: open,
+          completedCounts,
           loading: false,
           hydrated: true,
           lastLoadedAt: Date.now(),
@@ -158,7 +156,10 @@ export const useTasksStore = create<TasksState>((set, get) => ({
   async loadCompleted() {
     try {
       const completed = await api.listTasks({ status: 'done' });
-      set({ completed });
+      const counts: Record<string, number> = {};
+      for (const t of completed)
+        counts[countKey(t.contextId)] = (counts[countKey(t.contextId)] ?? 0) + 1;
+      set({ completed, completedCounts: counts });
     } catch {
       /* ignore — the section just stays empty */
     }
@@ -166,13 +167,16 @@ export const useTasksStore = create<TasksState>((set, get) => ({
 
   async uncomplete(task) {
     // Optimistic: move it out of the completed list back into the open list.
-    const { completed, tasks } = get();
-    set({ completed: completed.filter((t) => t.id !== task.id) });
+    const { completed, tasks, completedCounts } = get();
+    set({
+      completed: completed.filter((t) => t.id !== task.id),
+      completedCounts: bump(completedCounts, task.contextId, -1),
+    });
     try {
       const updated = await api.updateTask(task.id, { status: 'active' });
       set({ tasks: [updated, ...get().tasks] });
     } catch {
-      set({ completed, tasks }); // rollback
+      set({ completed, tasks, completedCounts }); // rollback
     }
   },
 
@@ -180,12 +184,11 @@ export const useTasksStore = create<TasksState>((set, get) => ({
     set({ activeContextId: id });
   },
 
-  async createContext(label, color, excludeFromAll, emoji, sectionsEnabled) {
+  async createContext(label, color, excludeFromAll, emoji) {
     const created = await api.createContext({
       label,
       color,
       excludeFromAll,
-      sectionsEnabled,
       emoji: emoji ?? undefined,
     });
     set({ contexts: [...get().contexts, created].sort((a, b) => a.sortOrder - b.sortOrder) });
@@ -216,9 +219,12 @@ export const useTasksStore = create<TasksState>((set, get) => ({
     await api.deleteContext(id);
     set({
       contexts: get().contexts.filter((c) => c.id !== id),
-      sections: get().sections.filter((s) => s.contextId !== id),
       activeContextId: get().activeContextId === id ? null : get().activeContextId,
     });
+    api
+      .completedCounts()
+      .then((completedCounts) => set({ completedCounts }))
+      .catch(() => {});
   },
 
   async resetData() {
@@ -240,7 +246,6 @@ export const useTasksStore = create<TasksState>((set, get) => ({
       durationMin: extra?.durationMin ?? undefined,
       note: extra?.note ?? undefined,
       recurrence: extra?.recurrence ?? undefined,
-      sectionId: extra?.sectionId ?? undefined,
     });
     set({ tasks: [created, ...get().tasks] });
     return created;
@@ -251,21 +256,28 @@ export const useTasksStore = create<TasksState>((set, get) => ({
     // completed section has been loaded) surfaces it there.
     const prev = get().tasks;
     const prevCompleted = get().completed;
+    const prevCounts = get().completedCounts;
     set({
       tasks: prev.filter((t) => t.id !== task.id),
       completed: [{ ...task, status: 'done' }, ...prevCompleted],
+      completedCounts: bump(prevCounts, task.contextId, 1),
     });
     try {
       await api.updateTask(task.id, { completed: true });
     } catch {
-      set({ tasks: prev, completed: prevCompleted }); // rollback
+      set({ tasks: prev, completed: prevCompleted, completedCounts: prevCounts }); // rollback
     }
   },
 
   async patchTask(id, patch) {
+    const before = get().tasks.find((t) => t.id === id) ?? get().completed.find((t) => t.id === id);
     const updated = await api.updateTask(id, patch);
     const done = updated.status === 'done';
+    let counts = get().completedCounts;
+    if (before?.status === 'done') counts = bump(counts, before.contextId, -1);
+    if (done) counts = bump(counts, updated.contextId, 1);
     set({
+      completedCounts: counts,
       tasks: done
         ? get().tasks.filter((t) => t.id !== id)
         : get().tasks.some((t) => t.id === id)
@@ -286,11 +298,17 @@ export const useTasksStore = create<TasksState>((set, get) => ({
     set({
       tasks: get().tasks.filter((t) => t.id !== id),
       completed: get().completed.filter((t) => t.id !== id),
+      completedCounts: wasDone
+        ? bump(get().completedCounts, task.contextId, -1)
+        : get().completedCounts,
     });
     const restore = () => {
       if (wasDone) {
         if (!get().completed.some((t) => t.id === id))
-          set({ completed: [task, ...get().completed] });
+          set({
+            completed: [task, ...get().completed],
+            completedCounts: bump(get().completedCounts, task.contextId, 1),
+          });
       } else if (!get().tasks.some((t) => t.id === id)) {
         set({ tasks: [task, ...get().tasks] });
       }
@@ -315,6 +333,8 @@ export const useTasksStore = create<TasksState>((set, get) => ({
     pendingDeletes.delete(id);
     const list = pending.task.status === 'done' ? 'completed' : 'tasks';
     if (!get()[list].some((t) => t.id === id)) set({ [list]: [pending.task, ...get()[list]] });
+    if (list === 'completed')
+      set({ completedCounts: bump(get().completedCounts, pending.task.contextId, 1) });
   },
 
   requestOpenTask(id) {
@@ -359,74 +379,6 @@ export const useTasksStore = create<TasksState>((set, get) => ({
       });
     } catch {
       set(prev);
-    }
-  },
-
-  async createSection(contextId, name) {
-    const created = await api.createSection(contextId, { name });
-    set({ sections: sortSections([...get().sections, created]) });
-    return created;
-  },
-
-  async renameSection(id, name) {
-    const prev = get().sections;
-    set({ sections: prev.map((s) => (s.id === id ? { ...s, name } : s)) });
-    try {
-      const updated = await api.renameSection(id, name);
-      set({ sections: get().sections.map((s) => (s.id === id ? updated : s)) });
-    } catch (e) {
-      set({ sections: prev });
-      throw e;
-    }
-  },
-
-  async reorderSection(id, afterId, beforeId) {
-    const prev = get().sections;
-    const sortOf = (sid: string | null) =>
-      sid ? (prev.find((s) => s.id === sid)?.sort ?? null) : null;
-    const a = sortOf(afterId);
-    const b = sortOf(beforeId);
-    const sort = a == null && b == null ? 0 : a == null ? b! - 1 : b == null ? a + 1 : (a + b) / 2;
-    set({ sections: sortSections(prev.map((s) => (s.id === id ? { ...s, sort } : s))) });
-    try {
-      const updated = await api.reorderSection(id, { afterId, beforeId });
-      set({ sections: sortSections(get().sections.map((s) => (s.id === id ? updated : s))) });
-    } catch {
-      get().load();
-    }
-  },
-
-  async deleteSection(id) {
-    const prev = { sections: get().sections, tasks: get().tasks, completed: get().completed };
-    const gone = prev.sections.find((s) => s.id === id);
-    const target = gone
-      ? (sortSections(prev.sections).find((s) => s.contextId === gone.contextId && s.id !== id)
-          ?.id ?? null)
-      : null;
-    const clear = (list: Task[]) =>
-      list.map((t) => (t.sectionId === id ? { ...t, sectionId: target } : t));
-    set({
-      sections: prev.sections.filter((s) => s.id !== id),
-      tasks: clear(prev.tasks),
-      completed: clear(prev.completed),
-    });
-    try {
-      await api.deleteSection(id);
-    } catch (e) {
-      set(prev);
-      throw e;
-    }
-  },
-
-  async moveTaskToSection(taskId, sectionId) {
-    const prev = { tasks: get().tasks, completed: get().completed };
-    const apply = (list: Task[]) => list.map((t) => (t.id === taskId ? { ...t, sectionId } : t));
-    set({ tasks: apply(prev.tasks), completed: apply(prev.completed) });
-    try {
-      await get().patchTask(taskId, { sectionId });
-    } catch (e) {
-      set(prev);
-      throw e;
     }
   },
 

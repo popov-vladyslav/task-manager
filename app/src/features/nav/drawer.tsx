@@ -9,7 +9,8 @@ import ReorderableList, {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { usePathname } from 'expo-router';
 import { EyeOff, List, Plus } from 'lucide-react-native';
-import { contextEmoji, type Context } from '@task-manager/shared';
+import type { Context } from '@task-manager/shared';
+import { ContextMark } from '../../components/context-mark';
 import { haptics } from '../../lib/haptics';
 import { useT } from '../../lib/i18n';
 import { useTasksStore } from '../../store/tasks';
@@ -53,7 +54,7 @@ function ContextRow({
       style={[styles.row, active && styles.rowActive, context.excludeFromAll && styles.rowMuted]}
     >
       <View style={[styles.emojiBox, tint.emoji]}>
-        <Text style={styles.emoji}>{contextEmoji(context) ?? ''}</Text>
+        <ContextMark emoji={context.emoji} color={context.color} size={13} />
       </View>
       <Text style={[styles.label, context.excludeFromAll && styles.labelMuted]} numberOfLines={1}>
         {context.label}
@@ -285,7 +286,6 @@ const makeStyles = (t: Theme) =>
       alignItems: 'center',
       justifyContent: 'center',
     },
-    emoji: { fontSize: 13 },
     divider: {
       height: 1,
       backgroundColor: t.colors.borderSubtle,

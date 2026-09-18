@@ -51,11 +51,9 @@ export function Chip({ label, count, icon, selected = false, tint, onPress }: Ch
 export function AddChip({
   onPress,
   accessibilityLabel,
-  label,
 }: {
   onPress?: () => void;
   accessibilityLabel: string;
-  label?: string;
 }) {
   const t = useTheme();
   const styles = useMemo(() => makeStyles(t), [t]);
@@ -64,10 +62,9 @@ export function AddChip({
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
-      style={({ pressed }) => [styles.add, label && styles.addLabelled, pressed && styles.pressed]}
+      style={({ pressed }) => [styles.add, pressed && styles.pressed]}
     >
       <Plus size={14} color={t.colors.textControl} strokeWidth={2.3} />
-      {label ? <Text style={styles.addLabel}>{label}</Text> : null}
     </Pressable>
   );
 }
@@ -111,7 +108,5 @@ const makeStyles = (t: Theme) =>
       alignItems: 'center',
       justifyContent: 'center',
     },
-    addLabelled: { width: undefined, flexDirection: 'row', gap: 6, paddingHorizontal: 12 },
-    addLabel: { fontSize: 13.5, fontWeight: '600', color: t.colors.textControl },
     pressed: { opacity: 0.7 },
   });

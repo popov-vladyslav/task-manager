@@ -3,7 +3,6 @@ import cors from 'cors';
 import { env } from './env';
 import authRouter from './routes/auth';
 import contextsRouter from './routes/contexts';
-import sectionsRouter from './routes/sections';
 import tasksRouter from './routes/tasks';
 import timerRouter from './routes/timer';
 import calendarRouter from './routes/calendar';
@@ -68,7 +67,6 @@ export function createApp(): express.Express {
 
   // Everything under /api requires a valid JWT.
   app.use('/api/contexts', requireAuth, contextsRouter);
-  app.use('/api/sections', requireAuth, sectionsRouter);
   app.use('/api/tasks', requireAuth, tasksRouter);
   app.use('/api/timer', requireAuth, timerRouter);
   app.use('/api/calendar', requireAuth, calendarRouter);

@@ -16,7 +16,7 @@ export const contexts: Pick<Dictionary, keyof typeof import('../en/contexts').co
   'contexts.menu.deleteFailed': 'Не удалось удалить категорию',
   'contexts.menu.deleteConfirm':
     'Удалить «{name}»? Её завершённые задачи сохранятся, но уже без категории.',
-  'contexts.screen.noOpenTasks': 'Нет открытых задач',
+  'contexts.screen.noOpenTasks': 'Пустой список',
   'contexts.drawer.caption': 'КАТЕГОРИИ',
   'contexts.drawer.newContext': 'Новая категория',
   'contexts.drawer.hiddenNote':
@@ -24,18 +24,4 @@ export const contexts: Pick<Dictionary, keyof typeof import('../en/contexts').co
   'contexts.drawer.closeMenu': 'Закрыть меню',
   'contexts.menu.deleteBlocked':
     'Открытые задачи ещё используют эту категорию — перенесите или удалите их.',
-  'contexts.section.unsorted': 'Неразобранное',
-  'contexts.section.new': 'Новая секция',
-  'contexts.section.manage': 'Управлять секциями',
-  'contexts.section.namePlaceholder': 'Название секции',
-  'contexts.section.addTaskTo': 'Добавить задачу в {section}…',
-  'contexts.section.deleteConfirm': 'Удалить «{name}»? Её задачи перейдут в «{target}».',
-  'contexts.section.deleteConfirmLast': 'Удалить «{name}»? Её задачи останутся в категории.',
-  'contexts.section.duplicate': 'Секция с таким названием уже есть',
-  'contexts.section.none': 'Секций пока нет',
-  'contexts.section.addChip': 'Добавить секцию',
-  'contexts.section.reorder': 'Изменить порядок',
-  'contexts.editor.sections': 'Секции',
-  'contexts.section.turnOn': 'Включить секции',
-  'contexts.section.turnOff': 'Выключить секции',
 };
