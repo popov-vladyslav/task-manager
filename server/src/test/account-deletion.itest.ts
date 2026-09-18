@@ -14,6 +14,7 @@ import {
   recurrenceRules,
   sessions,
   settings,
+  sections,
   subtasks,
   tasks,
   timeEntries,
@@ -84,6 +85,11 @@ async function populate(account: Account): Promise<void> {
   });
   const { id: taskId } = (await created.json()) as { id: string };
 
+  await fetch(`${server.baseUrl}/api/contexts/${contextId}/sections`, {
+    method: 'POST',
+    headers: account.headers,
+    body: JSON.stringify({ name: 'doomed section' }),
+  });
   await fetch(`${server.baseUrl}/api/tasks/${taskId}/subtasks`, {
     method: 'POST',
     headers: account.headers,
@@ -154,6 +160,7 @@ test('deleting wipes every table the account owned', async () => {
     ['users', await db.select().from(users).where(eq(users.id, doomed.id))],
     ['contexts', await db.select().from(contexts).where(eq(contexts.userId, doomed.id))],
     ['tasks', await db.select().from(tasks).where(eq(tasks.userId, doomed.id))],
+    ['sections', await db.select().from(sections).where(eq(sections.userId, doomed.id))],
     ['subtasks', await db.select().from(subtasks).where(eq(subtasks.userId, doomed.id))],
     [
       'recurrence_rules',

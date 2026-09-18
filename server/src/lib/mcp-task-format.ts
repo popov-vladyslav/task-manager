@@ -22,7 +22,7 @@ function clip(text: string, max: number): string {
   return flat.length > max ? `${flat.slice(0, max)}…` : flat;
 }
 
-export function fmtTask(t: Task, contextLabel?: string): string {
+export function fmtTask(t: Task, contextLabel?: string, sectionName?: string): string {
   const bits = [`• ${t.title}`, `[${t.id}]`];
   if (contextLabel) bits.push(`(${contextLabel})`);
   if (t.dueAt) {
@@ -40,6 +40,7 @@ export function fmtTask(t: Task, contextLabel?: string): string {
   }
   if (t.status !== 'active') bits.push(t.status);
   const lines = [bits.join(' ')];
+  if (sectionName) lines.push(`    section: ${sectionName}`);
   if (t.note) lines.push(`    note: ${clip(t.note, NOTE_MAX)}`);
   for (const s of t.subtasks) {
     lines.push(`    [${s.done ? 'x' : ' '}] ${clip(s.title, NOTE_MAX)} [${s.id}]`);

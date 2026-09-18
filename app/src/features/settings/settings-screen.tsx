@@ -5,7 +5,6 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Switch,
   Text,
   TextInput,
   useWindowDimensions,
@@ -19,6 +18,7 @@ import { useUpdates } from 'expo-updates';
 import { ChevronRight, RefreshCw, Trash2 } from 'lucide-react-native';
 import { LOCALES, localeLabel, type Locale } from '@task-manager/shared';
 import { OptionField, type Option, type OptionFieldHandle } from '../../components/option-field';
+import { Toggle } from '../../components/toggle';
 import { api, type McpTokenMetadata } from '../../lib/api';
 import { useIntlTag, useT } from '../../lib/i18n';
 import { useLocaleStore } from '../../store/locale';
@@ -195,14 +195,7 @@ function NotificationsSection() {
                 : tr('settings.notifications.subtitle')}
             </Text>
           </View>
-          {enabled === null ? null : (
-            <Switch
-              value={enabled}
-              onValueChange={onToggle}
-              trackColor={{ false: colors.bgElevated, true: colors.accentPrimary }}
-              thumbColor={colors.textPrimary}
-            />
-          )}
+          {enabled === null ? null : <Toggle value={enabled} onValueChange={onToggle} />}
         </View>
       </View>
     </View>

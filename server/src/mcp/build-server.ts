@@ -5,9 +5,11 @@ import type { Context, Task, UpdateContextInput } from '@task-manager/shared';
 import * as tasksSvc from '../services/tasks';
 import * as contextsSvc from '../services/contexts';
 import * as subtasksSvc from '../services/subtasks';
+import * as sectionsSvc from '../services/sections';
 import * as timerSvc from '../services/timer';
 import { ruleFromSpec } from '../lib/recurrence';
 import { fmtTask } from '../lib/mcp-task-format';
+import { fmtWhen } from '../lib/when';
 
 function text(s: string) {
   return { content: [{ type: 'text' as const, text: s }] };
@@ -117,6 +119,44 @@ export function buildMcpServer(userId: string): McpServer {
   const fmtContext = (c: Context) =>
     `${contextEmoji(c) ?? ''} ${c.slug} — ${c.label} (${c.color})`.trim();
 
+  const sectionNames = async (): Promise<Map<string, string>> =>
+    new Map((await sectionsSvc.listSections(userId)).map((s) => [s.id, s.name]));
+  const fmtWithSection = (t: Task, labels: Map<number, string>, names: Map<string, string>) =>
+    fmtTask(
+      t,
+      t.contextId ? labels.get(t.contextId) : undefined,
+      t.sectionId ? names.get(t.sectionId) : undefined,
+    );
+  const resolveSection = async (
+    contextId: number | null,
+    section: string,
+  ): Promise<{ id: string } | { error: string }> => {
+    if (contextId == null) return { error: 'A section needs a context — set context first.' };
+    const list = await sectionsSvc.listSections(userId, contextId);
+    const hit =
+      list.find((s) => s.id === section) ??
+      list.find((s) => s.name.toLowerCase() === section.trim().toLowerCase());
+    if (hit) return { id: hit.id };
+    const created = await sectionsSvc.createSection(userId, contextId, section);
+    logWrite('create_section', { id: created.id, name: created.name });
+    return { id: created.id };
+  };
+
+  reg(
+    'list_sections',
+    {
+      description:
+        'List the sections of a context (by slug): one line per section as "name [id]", in display order. Tasks without a section sit under "Unsorted".',
+      inputSchema: { context: z.string().min(1) },
+    },
+    async ({ context }) => {
+      const c = await contextsSvc.findContextBySlug(userId, context);
+      if (!c) return text(`Unknown context '${context}'.`);
+      const list = await sectionsSvc.listSections(userId, c.id);
+      return text(list.map((s) => `${s.name} [${s.id}]`).join('\n') || 'No sections.');
+    },
+  );
+
   reg(
     'list_contexts',
     { description: 'List the work contexts (emoji, slug, label, color).', inputSchema: {} },
@@ -130,20 +170,22 @@ export function buildMcpServer(userId: string): McpServer {
     'create_context',
     {
       description:
-        'Create a work context. Provide a label and a #RRGGBB hex color (e.g. #4FB6A9). Slug is auto-generated. Optional emoji (one character) shown next to the name; without it one is derived from the color. Set exclude_from_all to hide its tasks from the All view (reachable via its own chip) — good for routines / repeated payments.',
+        'Create a work context. Provide a label and a #RRGGBB hex color (e.g. #4FB6A9). Slug is auto-generated. Optional emoji (one character) shown next to the name; without it one is derived from the color. Set exclude_from_all to hide its tasks from the All view (reachable via its own chip) — good for routines / repeated payments. Set sections_enabled to show section chips on its page.',
       inputSchema: {
         label: z.string().min(1),
         color: hexColor,
         emoji: emojiSchema.optional(),
         exclude_from_all: z.boolean().optional(),
+        sections_enabled: z.boolean().optional(),
       },
     },
-    async ({ label, color, emoji, exclude_from_all }) => {
+    async ({ label, color, emoji, exclude_from_all, sections_enabled }) => {
       const c = await contextsSvc.createContext(userId, {
         label,
         color,
         emoji,
         excludeFromAll: exclude_from_all,
+        sectionsEnabled: sections_enabled,
       });
       logWrite('create_context', { id: c.id, slug: c.slug });
       return text(`Created context: ${fmtContext(c)}`);
@@ -154,16 +196,17 @@ export function buildMcpServer(userId: string): McpServer {
     'update_context',
     {
       description:
-        'Rename, recolor (#RRGGBB), set or clear the emoji (pass null to clear), or toggle exclude_from_all on a context, identified by its slug.',
+        'Rename, recolor (#RRGGBB), set or clear the emoji (pass null to clear), or toggle exclude_from_all / sections_enabled on a context, identified by its slug.',
       inputSchema: {
         slug: z.string().min(1),
         label: z.string().min(1).optional(),
         color: hexColor.optional(),
         emoji: emojiSchema.nullable().optional(),
         exclude_from_all: z.boolean().optional(),
+        sections_enabled: z.boolean().optional(),
       },
     },
-    async ({ slug, label, color, emoji, exclude_from_all }) => {
+    async ({ slug, label, color, emoji, exclude_from_all, sections_enabled }) => {
       const c = await contextsSvc.findContextBySlug(userId, slug);
       if (!c) return text(`Unknown context '${slug}'.`);
       const patch: UpdateContextInput = {};
@@ -171,6 +214,7 @@ export function buildMcpServer(userId: string): McpServer {
       if (color !== undefined) patch.color = color;
       if (emoji !== undefined) patch.emoji = emoji;
       if (exclude_from_all !== undefined) patch.excludeFromAll = exclude_from_all;
+      if (sections_enabled !== undefined) patch.sectionsEnabled = sections_enabled;
       const updated = await contextsSvc.updateContext(userId, c.id, patch);
       logWrite('update_context', { id: updated.id, slug: updated.slug });
       return text(`Updated context: ${fmtContext(updated)}`);
@@ -220,12 +264,10 @@ export function buildMcpServer(userId: string): McpServer {
         status,
         dueBefore: overdue ? new Date() : undefined,
       });
-      const labels = await contextLabels(userId);
+      const [labels, names] = await Promise.all([contextLabels(userId), sectionNames()]);
       return text(
         list.length
-          ? list
-              .map((t) => fmtTask(t, t.contextId ? labels.get(t.contextId) : undefined))
-              .join('\n')
+          ? list.map((t) => fmtWithSection(t, labels, names)).join('\n')
           : 'No matching tasks.',
       );
     },
@@ -239,17 +281,17 @@ export function buildMcpServer(userId: string): McpServer {
       inputSchema: {},
     },
     async () => {
-      const [list, labels, active] = await Promise.all([
+      const [list, labels, names, active] = await Promise.all([
         tasksSvc.tasksDueToday(userId),
         contextLabels(userId),
+        sectionNames(),
         timerSvc.getActiveTimer(userId),
       ]);
       const tasksSection = list.length
-        ? 'Due today / overdue:\n' +
-          list.map((t) => fmtTask(t, t.contextId ? labels.get(t.contextId) : undefined)).join('\n')
+        ? 'Due today / overdue:\n' + list.map((t) => fmtWithSection(t, labels, names)).join('\n')
         : 'Nothing due today.';
       const timerSection = active
-        ? `\n\n⏱ Timer running: ${active.taskTitle} (since ${active.startedAt.slice(11, 16)} UTC)`
+        ? `\n\n⏱ Timer running: ${active.taskTitle} (since ${fmtWhen(active.startedAt)})`
         : '';
       return text(tasksSection + timerSection);
     },
@@ -259,7 +301,7 @@ export function buildMcpServer(userId: string): McpServer {
     'create_task',
     {
       description:
-        'Create a task. Optionally set context (slug), due_at (ISO 8601 — the deadline, also the calendar block start; a value without an offset is Europe/Warsaw local time, e.g. 2026-09-15T18:00 — add +02:00 or Z to be explicit), remind_at (same format), duration_min (block length in minutes; a task with a due_at is shown on the calendar, default 30 min), recurrence (a repeat rule — see the recurrence field), and a note (free text attached to the task).',
+        'Create a task. Optionally set context (slug), due_at (ISO 8601 — the deadline, also the calendar block start; a value without an offset is Europe/Warsaw local time, e.g. 2026-09-15T18:00 — add +02:00 or Z to be explicit), remind_at (same format), duration_min (block length in minutes; a task with a due_at is shown on the calendar, default 30 min), recurrence (a repeat rule — see the recurrence field), a note (free text attached to the task), and section (a section name or id inside the context; an unknown name is created; requires context).',
       inputSchema: {
         title: z.string().min(1),
         context: z.string().optional(),
@@ -268,14 +310,21 @@ export function buildMcpServer(userId: string): McpServer {
         duration_min: z.number().int().positive().optional(),
         recurrence: recurrenceInput.optional(),
         note: z.string().optional(),
+        section: z.string().optional(),
       },
     },
-    async ({ title, context, due_at, remind_at, duration_min, recurrence, note }) => {
+    async ({ title, context, due_at, remind_at, duration_min, recurrence, note, section }) => {
       let contextId: number | null = null;
       if (context) {
         const c = await contextsSvc.findContextBySlug(userId, context);
         if (!c) return text(`Unknown context '${context}'.`);
         contextId = c.id;
+      }
+      let sectionId: string | null = null;
+      if (section) {
+        const sec = await resolveSection(contextId, section);
+        if ('error' in sec) return text(sec.error);
+        sectionId = sec.id;
       }
       let recurrenceRule: { rule: string; remindTime: string | null } | null = null;
       if (recurrence) {
@@ -291,9 +340,10 @@ export function buildMcpServer(userId: string): McpServer {
         durationMin: duration_min ?? null,
         recurrence: recurrenceRule,
         note: note ?? null,
+        sectionId,
       });
       logWrite('create_task', { id: task.id, title });
-      return text(`Created: ${fmtTask(task)}`);
+      return text(`Created: ${fmtWithSection(task, new Map(), await sectionNames())}`);
     },
   );
 
@@ -301,7 +351,7 @@ export function buildMcpServer(userId: string): McpServer {
     'update_task',
     {
       description:
-        'Update a task by id or title_match. Set any of: title, context (slug), due_at (deadline / calendar block start; ISO 8601, zone-less = Europe/Warsaw local time; pass null to clear), remind_at (same format), duration_min (block length in minutes), status, recurrence (a repeat rule — pass null to remove), note (free text; pass null to clear — use append_note to add to it instead of replacing).',
+        "Update a task by id or title_match. Set any of: title, context (slug), due_at (deadline / calendar block start; ISO 8601, zone-less = Europe/Warsaw local time; pass null to clear), remind_at (same format), duration_min (block length in minutes), status, recurrence (a repeat rule — pass null to remove), note (free text; pass null to clear — use append_note to add to it instead of replacing), section (name or id inside the task's context; unknown name is created; pass null to move the task to Unsorted).",
       inputSchema: {
         id: z.string().optional(),
         title_match: z.string().optional(),
@@ -313,6 +363,7 @@ export function buildMcpServer(userId: string): McpServer {
         status: z.enum(['active', 'waiting', 'done', 'missed']).optional(),
         recurrence: recurrenceInput.nullable().optional(),
         note: z.string().nullable().optional(),
+        section: z.string().nullable().optional(),
       },
     },
     async (a) => {
@@ -330,6 +381,15 @@ export function buildMcpServer(userId: string): McpServer {
         if (!c) return text(`Unknown context '${a.context}'.`);
         patch.contextId = c.id;
       }
+      if (a.section !== undefined) {
+        if (a.section === null) {
+          patch.sectionId = null;
+        } else {
+          const sec = await resolveSection(patch.contextId ?? r.task.contextId, a.section);
+          if ('error' in sec) return text(sec.error);
+          patch.sectionId = sec.id;
+        }
+      }
       if (a.recurrence !== undefined) {
         if (a.recurrence === null) {
           patch.recurrence = null;
@@ -341,7 +401,7 @@ export function buildMcpServer(userId: string): McpServer {
       }
       const updated = await tasksSvc.updateTask(userId, r.task.id, patch);
       logWrite('update_task', { id: updated.id });
-      return text(`Updated: ${fmtTask(updated)}`);
+      return text(`Updated: ${fmtWithSection(updated, new Map(), await sectionNames())}`);
     },
   );
 

@@ -76,7 +76,7 @@ pass). The production default already includes `localhost:8081`; stage needs it 
 
 ## MCP connector (claude.ai)
 
-The API exposes an MCP server at `POST /mcp` (Streamable HTTP) with 8 thick tools:
+The API exposes an MCP server at `POST /mcp` (Streamable HTTP) with thick tools (see tech_spec.md §4):
 `list_contexts`, `list_tasks`, `get_today`, `create_task`, `update_task`, `complete_task`,
 `delete_task`, `add_comment` (`title_match` fuzzy-resolves open tasks). Routine/timer tools
 arrive with their phases.

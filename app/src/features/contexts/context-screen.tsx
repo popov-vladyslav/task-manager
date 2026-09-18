@@ -6,7 +6,14 @@ import { haptics } from '../../lib/haptics';
 import { useT } from '../../lib/i18n';
 import { useRefreshOnFocus } from '../../lib/use-refresh-on-focus';
 import { useTasksStore } from '../../store/tasks';
-import { excludedContextIds, isInAll } from '../../store/task-selectors';
+import {
+  defaultSectionOf,
+  effectiveSectionId,
+  excludedContextIds,
+  isInAll,
+  sectionCounts,
+  sectionsOf,
+} from '../../store/task-selectors';
 import { useToastStore } from '../../store/toast';
 import { useUiStore } from '../../store/ui';
 import { useTheme, type Theme } from '../../theme';
@@ -17,6 +24,9 @@ import { AddTaskRow } from '../tasks/add-task-row';
 import { QuickCreateSheet } from '../tasks/quick-create-sheet';
 import { TaskCard } from '../tasks/task-card';
 import { useTaskCard } from '../tasks/task-card-host';
+import { SectionChips } from './section-chips';
+import { SectionNameSheet } from './section-name-sheet';
+import { SectionsSheet } from './sections-sheet';
 
 export function ContextScreen() {
   const t = useTheme();
@@ -42,6 +52,11 @@ export function ContextScreen() {
   const requestOpenTask = useTasksStore((s) => s.requestOpenTask);
   const openDrawer = useUiStore((s) => s.openDrawer);
   const openContextMenu = useUiStore((s) => s.openContextMenu);
+  const activeSectionByContext = useUiStore((s) => s.activeSectionByContext);
+  const setActiveSection = useUiStore((s) => s.setActiveSection);
+  const sections = useTasksStore((s) => s.sections);
+  const createSection = useTasksStore((s) => s.createSection);
+  const [newSectionOpen, setNewSectionOpen] = useState(false);
 
   const { openTask, taskCardNode } = useTaskCard();
   const [showCompleted, setShowCompleted] = useState(false);
@@ -68,11 +83,35 @@ export function ContextScreen() {
   }, [contexts]);
   const activeContext = activeContextId == null ? null : contextById.get(activeContextId);
   const excluded = useMemo(() => excludedContextIds(contexts), [contexts]);
+  const contextSections = useMemo(
+    () => (activeContextId == null ? [] : sectionsOf(sections, activeContextId)),
+    [sections, activeContextId],
+  );
+  const sectionsOn = !!activeContext?.sectionsEnabled && contextSections.length > 0;
+  const defaultSectionId =
+    activeContextId == null ? null : (defaultSectionOf(sections, activeContextId)?.id ?? null);
+  const rawActiveSection =
+    activeContextId == null || !sectionsOn
+      ? null
+      : (activeSectionByContext[activeContextId] ?? null);
+  const activeSectionId = !sectionsOn
+    ? null
+    : rawActiveSection != null && contextSections.some((s) => s.id === rawActiveSection)
+      ? rawActiveSection
+      : defaultSectionId;
+  const activeSection = contextSections.find((s) => s.id === activeSectionId) ?? null;
+  const counts = useMemo(
+    () => (activeContextId == null ? {} : sectionCounts(tasks, activeContextId, defaultSectionId)),
+    [tasks, activeContextId, defaultSectionId],
+  );
 
   const inView = useCallback(
     (task: Task) =>
-      activeContextId == null ? isInAll(task, excluded) : task.contextId === activeContextId,
-    [activeContextId, excluded],
+      activeContextId == null
+        ? isInAll(task, excluded)
+        : task.contextId === activeContextId &&
+          (!sectionsOn || effectiveSectionId(task, defaultSectionId) === activeSectionId),
+    [activeContextId, activeSectionId, defaultSectionId, sectionsOn, excluded],
   );
 
   const visible = useMemo(() => {
@@ -80,7 +119,12 @@ export function ContextScreen() {
     return tasks.filter(inView).sort((a, b) => a[key] - b[key]);
   }, [tasks, activeContextId, inView]);
 
-  const visibleCompleted = useMemo(() => completed.filter(inView), [completed, inView]);
+  const inContext = useCallback(
+    (task: Task) =>
+      activeContextId == null ? isInAll(task, excluded) : task.contextId === activeContextId,
+    [activeContextId, excluded],
+  );
+  const visibleCompleted = useMemo(() => completed.filter(inContext), [completed, inContext]);
 
   const toggleShowCompleted = () => {
     const next = !showCompleted;
@@ -160,6 +204,39 @@ export function ContextScreen() {
     );
 
   const title = activeContext?.label ?? tr('common.all');
+  const addLabel = activeSection
+    ? tr('contexts.section.addTaskTo', { section: activeSection.name })
+    : undefined;
+  const chips =
+    activeContext && activeContextId != null && activeContext.sectionsEnabled ? (
+      <SectionChips
+        sections={contextSections}
+        counts={counts}
+        color={activeContext.color}
+        activeId={activeSectionId}
+        onSelect={(id) => setActiveSection(activeContextId, id)}
+        onAdd={() => setNewSectionOpen(true)}
+      />
+    ) : null;
+  const sectionSheets = (
+    <>
+      <SectionsSheet contextId={activeContextId} />
+      <SectionNameSheet
+        open={newSectionOpen}
+        title={tr('contexts.section.new')}
+        onClose={() => setNewSectionOpen(false)}
+        onSubmit={async (name) => {
+          if (activeContextId == null) return;
+          const created = await createSection(activeContextId, name);
+          setActiveSection(activeContextId, created.id);
+        }}
+      />
+    </>
+  );
+  const createInitial = useMemo(
+    () => (sectionsOn && activeSectionId ? { sectionId: activeSectionId } : undefined),
+    [sectionsOn, activeSectionId],
+  );
 
   if (wide) {
     return (
@@ -175,12 +252,15 @@ export function ContextScreen() {
             align="start"
             horizontalPadding={20}
           />
-          <AddTaskRow onPress={() => setCreateOpen(true)} />
+          {chips}
+          <AddTaskRow label={addLabel} onPress={() => setCreateOpen(true)} />
           <View style={styles.wideListWrap}>{list}</View>
         </View>
         {taskCardNode}
+        {sectionSheets}
         <QuickCreateSheet
           open={createOpen}
+          initial={createInitial}
           onClose={() => setCreateOpen(false)}
           onOpenCard={openTask}
         />
@@ -197,11 +277,14 @@ export function ContextScreen() {
         right={activeContext ? undefined : <View style={styles.headerSpacer} />}
         onMorePress={openContextMenu}
       />
-      <AddTaskRow onPress={() => setCreateOpen(true)} />
+      {chips}
+      <AddTaskRow label={addLabel} onPress={() => setCreateOpen(true)} />
       <View style={styles.flex1}>{list}</View>
       {taskCardNode}
+      {sectionSheets}
       <QuickCreateSheet
         open={createOpen}
+        initial={createInitial}
         onClose={() => setCreateOpen(false)}
         onOpenCard={openTask}
       />

@@ -6,9 +6,11 @@ import {
   StyleSheet,
   TextInput,
   useWindowDimensions,
+  View,
   type TextInputProps,
 } from 'react-native';
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   BottomSheetBackdrop,
   BottomSheetModal,
@@ -33,13 +35,48 @@ interface BottomSheetProps {
   onClose: () => void;
   children: ReactNode;
   padded?: boolean;
+  // A plain Modal panel instead of the gorhom sheet: for content that owns a
+  // drag-to-reorder list (the sheet's gestures break it) and for anything that
+  // must stack above such a panel.
+  plain?: boolean;
 }
 
 export function BottomSheet(props: BottomSheetProps) {
   const t = useTheme();
   const { width } = useWindowDimensions();
   const wide = width >= t.sizes.wideBreakpoint;
-  return wide ? <WideModal {...props} /> : <MobileSheet {...props} />;
+  if (wide) return <WideModal {...props} />;
+  return props.plain ? <MobilePanel {...props} /> : <MobileSheet {...props} />;
+}
+
+function MobilePanel({ open, onClose, children, padded = true }: BottomSheetProps) {
+  const t = useTheme();
+  const styles = useMemo(() => makeStyles(t), [t]);
+  const insets = useSafeAreaInsets();
+  const inset = useMemo(
+    () => StyleSheet.create({ pad: { paddingBottom: Math.max(insets.bottom, 22) } }),
+    [insets.bottom],
+  );
+  return (
+    <Modal
+      transparent
+      visible={open}
+      animationType="slide"
+      statusBarTranslucent
+      onRequestClose={onClose}
+    >
+      <KeyboardAvoidingView behavior={isIOS ? 'padding' : undefined} style={styles.flex1}>
+        <Pressable onPress={onClose} style={styles.panelBackdrop}>
+          <Pressable onPress={(e) => e.stopPropagation?.()} style={styles.panel}>
+            <View style={styles.panelHandle} />
+            <View style={[padded ? styles.sheetContentPadded : styles.sheetContent, inset.pad]}>
+              {children}
+            </View>
+          </Pressable>
+        </Pressable>
+      </KeyboardAvoidingView>
+    </Modal>
+  );
 }
 
 function MobileSheet({ open, onClose, children, padded = true }: BottomSheetProps) {
@@ -100,7 +137,7 @@ function MobileSheet({ open, onClose, children, padded = true }: BottomSheetProp
   );
 }
 
-function WideModal({ open, onClose, children, padded = true }: BottomSheetProps) {
+function WideModal({ open, onClose, children, padded = true, plain = false }: BottomSheetProps) {
   const t = useTheme();
   const styles = useMemo(() => makeStyles(t), [t]);
   return (
@@ -114,12 +151,16 @@ function WideModal({ open, onClose, children, padded = true }: BottomSheetProps)
       <KeyboardAvoidingView behavior={isIOS ? 'padding' : undefined} style={styles.flex1}>
         <Pressable onPress={onClose} style={styles.backdrop}>
           <Pressable onPress={(e) => e.stopPropagation?.()} style={styles.card}>
-            <ScrollView
-              contentContainerStyle={padded ? styles.cardContentPadded : styles.cardContent}
-              keyboardShouldPersistTaps="handled"
-            >
-              {children}
-            </ScrollView>
+            {!plain ? (
+              <ScrollView
+                contentContainerStyle={padded ? styles.cardContentPadded : styles.cardContent}
+                keyboardShouldPersistTaps="handled"
+              >
+                {children}
+              </ScrollView>
+            ) : (
+              <View style={padded ? styles.cardContentPadded : styles.cardContent}>{children}</View>
+            )}
           </Pressable>
         </Pressable>
       </KeyboardAvoidingView>
@@ -139,6 +180,22 @@ const makeStyles = (t: Theme) =>
       borderColor: t.colors.borderStrong,
     },
     sheetContent: { paddingBottom: 22 },
+    panelBackdrop: { flex: 1, backgroundColor: t.colors.scrim, justifyContent: 'flex-end' },
+    panel: {
+      backgroundColor: t.colors.bgSurface,
+      borderTopLeftRadius: t.radius.sheet,
+      borderTopRightRadius: t.radius.sheet,
+      borderTopWidth: 1,
+      borderColor: t.colors.borderStrong,
+    },
+    panelHandle: {
+      alignSelf: 'center',
+      width: 38,
+      height: 4,
+      borderRadius: 2,
+      marginTop: 8,
+      backgroundColor: t.colors.handle,
+    },
     sheetContentPadded: { paddingHorizontal: 18, paddingTop: 6, paddingBottom: 22, gap: 14 },
     backdrop: {
       flex: 1,

@@ -18,6 +18,7 @@ const work: Context = {
   archived: false,
   excludeFromAll: false,
   emoji: null,
+  sectionsEnabled: false,
 };
 const home: Context = { ...work, id: 2, slug: 'home', label: 'Home', color: '#4CA8F6' };
 
@@ -37,6 +38,8 @@ function sample(id: string, title: string, patch: Partial<Task>): Task {
     trackedSec: 0,
     sortGlobal: 0,
     sortContext: 0,
+    sectionId: null,
+    sortSection: 0,
     recurrenceId: null,
     recurrenceRule: null,
     completedAt: null,

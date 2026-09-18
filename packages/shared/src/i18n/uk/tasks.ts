@@ -17,4 +17,5 @@ export const tasks: Pick<Dictionary, keyof typeof import('../en/tasks').tasks> =
   'tasks.completed.hide': 'СХОВАТИ ВИКОНАНІ',
   'tasks.completed.empty': 'Немає виконаних задач',
   'tasks.completed.reopen': 'Відновити {title}',
+  'tasks.card.moveToSection': 'Перемістити в секцію…',
 };

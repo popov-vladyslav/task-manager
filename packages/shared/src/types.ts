@@ -11,7 +11,7 @@ export type TaskStatus = 'active' | 'waiting' | 'done' | 'missed';
 // Statuses that keep a task out of every open/active list.
 export const TERMINAL_STATUSES = ['done', 'missed'] as const satisfies readonly TaskStatus[];
 export type CreatedVia = 'app' | 'mcp';
-export type ReorderScope = 'global' | 'context';
+export type ReorderScope = 'global' | 'context' | 'section';
 
 export interface Context {
   id: number;
@@ -24,6 +24,7 @@ export interface Context {
   // Calendar; reachable only by selecting the context's own chip.
   excludeFromAll: boolean;
   emoji: string | null;
+  sectionsEnabled: boolean;
 }
 
 export interface Task {
@@ -42,6 +43,8 @@ export interface Task {
   trackedSec: number;
   sortGlobal: number;
   sortContext: number;
+  sectionId: string | null;
+  sortSection: number;
   recurrenceId: string | null;
   recurrenceRule: string | null; // e.g. 'daily' | 'weekly:mon' | 'monthly:15'
   completedAt: string | null;
@@ -51,6 +54,22 @@ export interface Task {
   subtasks: Subtask[];
   // Derived fields for the list/detail UI (populated by the service layer):
   nextInstance: string | null; // computed from the recurrence rule, when recurring
+}
+
+export interface Section {
+  id: string;
+  contextId: number;
+  name: string;
+  sort: number;
+}
+
+export interface CreateSectionInput {
+  name: string;
+}
+
+export interface SectionReorderInput {
+  afterId?: string | null;
+  beforeId?: string | null;
 }
 
 export interface Subtask {
@@ -85,6 +104,7 @@ export interface CreateTaskInput {
   durationMin?: number | null;
   recurrence?: RecurrenceInput | null;
   note?: string | null;
+  sectionId?: string | null;
 }
 
 export interface UpdateTaskInput {
@@ -97,6 +117,7 @@ export interface UpdateTaskInput {
   completed?: boolean; // true => run complete-logic
   recurrence?: RecurrenceInput | null; // set/change a rule, or null to remove
   note?: string | null;
+  sectionId?: string | null;
 }
 
 export interface ReorderInput {
@@ -111,6 +132,7 @@ export interface CreateContextInput {
   slug?: string;
   excludeFromAll?: boolean;
   emoji?: string | null;
+  sectionsEnabled?: boolean;
 }
 
 export interface UpdateContextInput {
@@ -119,6 +141,7 @@ export interface UpdateContextInput {
   archived?: boolean;
   excludeFromAll?: boolean;
   emoji?: string | null;
+  sectionsEnabled?: boolean;
 }
 
 // Timer — at most one running entry at a time (one_running_timer unique index).

@@ -14,6 +14,8 @@ const BASE: Task = {
   trackedSec: 0,
   sortGlobal: 0,
   sortContext: 0,
+  sectionId: null,
+  sortSection: 0,
   recurrenceId: null,
   recurrenceRule: null,
   completedAt: null,
@@ -79,4 +81,10 @@ test('subtasks render as checkbox lines with their ids, after the note', () => {
   ]);
   assert.equal(fmtTask(BASE).includes('['), true);
   assert.equal(fmtTask(BASE).split('\n').length, 1);
+});
+
+test('a section name renders before the note', () => {
+  const out = fmtTask({ ...BASE, note: 'ctx' }, undefined, 'Review');
+  assert.deepEqual(out.split('\n').slice(1), ['    section: Review', '    note: ctx']);
+  assert.equal(fmtTask(BASE).includes('section:'), false);
 });

@@ -17,6 +17,7 @@ export interface QuickCreateInitial {
   dueAt?: string | null;
   durationMin?: number | null;
   contextId?: number | null;
+  sectionId?: string | null;
 }
 
 interface QuickCreateSheetProps {
@@ -60,6 +61,7 @@ export function QuickCreateSheet({
   const [note, setNote] = useState('');
   const [showNote, setShowNote] = useState(false);
   const [contextId, setContextId] = useState<number | null>(null);
+  const initialContextId = initial?.contextId !== undefined ? initial.contextId : activeContextId;
   const [when, setWhen] = useState<WhenPatch>(EMPTY_WHEN);
   const [whenOpen, setWhenOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -125,6 +127,8 @@ export function QuickCreateSheet({
         durationMin: when.durationMin,
         recurrence: when.recurrence,
         note: note.trim() || null,
+        sectionId:
+          contextId != null && contextId === initialContextId ? (initial?.sectionId ?? null) : null,
       });
       haptics.success();
       if (!openCard)

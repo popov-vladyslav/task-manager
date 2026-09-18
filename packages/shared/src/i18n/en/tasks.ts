@@ -15,4 +15,5 @@ export const tasks = {
   'tasks.completed.hide': 'HIDE COMPLETED',
   'tasks.completed.empty': 'No completed tasks',
   'tasks.completed.reopen': 'Reopen {title}',
+  'tasks.card.moveToSection': 'Move to section…',
 } as const;
