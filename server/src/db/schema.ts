@@ -139,16 +139,6 @@ export const subtasks = pgTable(
   (t) => [index('idx_subtasks_task').on(t.taskId, t.sortOrder)],
 );
 
-export const comments = pgTable('comments', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  userId: uuid('user_id')
-    .notNull()
-    .references(() => users.id, { onDelete: 'cascade' }),
-  taskId: uuid('task_id').references(() => tasks.id, { onDelete: 'cascade' }),
-  body: text('body').notNull(),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-});
-
 export const timeEntries = pgTable('time_entries', {
   id: uuid('id').primaryKey().defaultRandom(),
   userId: uuid('user_id')

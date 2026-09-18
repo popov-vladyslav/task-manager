@@ -85,11 +85,9 @@ CREATE TABLE recurrence_rules (
   last_spawned  date                         -- захист від дублів
 );
 
--- comments: replaced by tasks.note (ADR 0006); the table is dropped by a later contracting migration (0016) after the comment-free code is verified on prod
-
+-- comments: replaced by tasks.note (ADR 0006); table dropped in 0019.
 -- sections (0017: table + tasks.section_id + tasks.sort_section; 0018: contexts.sections_enabled):
--- the feature was removed on 2026-09-18 and no code reads or writes these objects. They are
--- dropped by a later contracting migration once the section-free code is deployed to stage and prod.
+-- the feature was removed on 2026-09-18; all of it dropped in 0019.
 
 -- DESCOPED (see STATUS.md): photos were never implemented; the table was dropped
 -- in migration 0008 and `photosCount` removed from the Task contract.
