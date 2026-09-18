@@ -11,7 +11,7 @@ export type TaskStatus = 'active' | 'waiting' | 'done' | 'missed';
 // Statuses that keep a task out of every open/active list.
 export const TERMINAL_STATUSES = ['done', 'missed'] as const satisfies readonly TaskStatus[];
 export type CreatedVia = 'app' | 'mcp';
-export type ReorderScope = 'global' | 'context';
+export type ReorderScope = 'global' | 'context' | 'section';
 
 export interface Context {
   id: number;
@@ -42,6 +42,8 @@ export interface Task {
   trackedSec: number;
   sortGlobal: number;
   sortContext: number;
+  sectionId: string | null;
+  sortSection: number;
   recurrenceId: string | null;
   recurrenceRule: string | null; // e.g. 'daily' | 'weekly:mon' | 'monthly:15'
   completedAt: string | null;
@@ -51,6 +53,13 @@ export interface Task {
   subtasks: Subtask[];
   // Derived fields for the list/detail UI (populated by the service layer):
   nextInstance: string | null; // computed from the recurrence rule, when recurring
+}
+
+export interface Section {
+  id: string;
+  contextId: number;
+  name: string;
+  sort: number;
 }
 
 export interface Subtask {

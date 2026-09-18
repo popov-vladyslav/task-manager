@@ -14,6 +14,8 @@ const BASE: Task = {
   trackedSec: 0,
   sortGlobal: 0,
   sortContext: 0,
+  sectionId: null,
+  sortSection: 0,
   recurrenceId: null,
   recurrenceRule: null,
   completedAt: null,

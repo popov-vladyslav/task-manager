@@ -37,6 +37,8 @@ function sample(id: string, title: string, patch: Partial<Task>): Task {
     trackedSec: 0,
     sortGlobal: 0,
     sortContext: 0,
+    sectionId: null,
+    sortSection: 0,
     recurrenceId: null,
     recurrenceRule: null,
     completedAt: null,

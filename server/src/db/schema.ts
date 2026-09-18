@@ -12,6 +12,7 @@ import {
   jsonb,
   primaryKey,
   index,
+  type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
 
 // Drizzle schema for type-safe queries. The authoritative DDL lives in
@@ -112,6 +113,10 @@ export const tasks = pgTable('tasks', {
   trackedSec: integer('tracked_sec').notNull().default(0),
   sortGlobal: real('sort_global').notNull().default(0),
   sortContext: real('sort_context').notNull().default(0),
+  sectionId: uuid('section_id').references((): AnyPgColumn => sections.id, {
+    onDelete: 'set null',
+  }),
+  sortSection: real('sort_section').notNull().default(0),
   recurrenceId: uuid('recurrence_id'),
   completedAt: timestamp('completed_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
@@ -120,6 +125,23 @@ export const tasks = pgTable('tasks', {
     .default('app'),
   note: text('note'),
 });
+
+export const sections = pgTable(
+  'sections',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    contextId: integer('context_id')
+      .notNull()
+      .references(() => contexts.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    sort: real('sort').notNull().default(0),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('idx_sections_context').on(t.contextId, t.sort)],
+);
 
 export const subtasks = pgTable(
   'subtasks',

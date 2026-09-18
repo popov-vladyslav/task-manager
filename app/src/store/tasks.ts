@@ -237,21 +237,41 @@ export const useTasksStore = create<TasksState>((set, get) => ({
 
   async patchTask(id, patch) {
     const updated = await api.updateTask(id, patch);
-    const next =
-      updated.status === 'done'
+    const done = updated.status === 'done';
+    set({
+      tasks: done
         ? get().tasks.filter((t) => t.id !== id)
-        : get().tasks.map((t) => (t.id === id ? updated : t));
-    set({ tasks: next });
+        : get().tasks.some((t) => t.id === id)
+          ? replaceIn(get().tasks, updated)
+          : [updated, ...get().tasks],
+      completed: done
+        ? get().completed.some((t) => t.id === id)
+          ? replaceIn(get().completed, updated)
+          : [updated, ...get().completed]
+        : get().completed.filter((t) => t.id !== id),
+    });
   },
 
   async removeTask(id) {
-    const task = get().tasks.find((t) => t.id === id);
+    const task = get().tasks.find((t) => t.id === id) ?? get().completed.find((t) => t.id === id);
     if (!task || pendingDeletes.has(id)) return;
-    set({ tasks: get().tasks.filter((t) => t.id !== id) });
+    const wasDone = task.status === 'done';
+    set({
+      tasks: get().tasks.filter((t) => t.id !== id),
+      completed: get().completed.filter((t) => t.id !== id),
+    });
+    const restore = () => {
+      if (wasDone) {
+        if (!get().completed.some((t) => t.id === id))
+          set({ completed: [task, ...get().completed] });
+      } else if (!get().tasks.some((t) => t.id === id)) {
+        set({ tasks: [task, ...get().tasks] });
+      }
+    };
     const timer = setTimeout(() => {
       pendingDeletes.delete(id);
       api.deleteTask(id).catch(() => {
-        if (!get().tasks.some((t) => t.id === id)) set({ tasks: [task, ...get().tasks] });
+        restore();
         const tr = currentT();
         useToastStore
           .getState()
@@ -266,7 +286,8 @@ export const useTasksStore = create<TasksState>((set, get) => ({
     if (!pending) return;
     clearTimeout(pending.timer);
     pendingDeletes.delete(id);
-    if (!get().tasks.some((t) => t.id === id)) set({ tasks: [pending.task, ...get().tasks] });
+    const list = pending.task.status === 'done' ? 'completed' : 'tasks';
+    if (!get()[list].some((t) => t.id === id)) set({ [list]: [pending.task, ...get()[list]] });
   },
 
   requestOpenTask(id) {

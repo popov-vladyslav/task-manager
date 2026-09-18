@@ -8,6 +8,7 @@ import * as subtasksSvc from '../services/subtasks';
 import * as timerSvc from '../services/timer';
 import { ruleFromSpec } from '../lib/recurrence';
 import { fmtTask } from '../lib/mcp-task-format';
+import { fmtWhen } from '../lib/when';
 
 function text(s: string) {
   return { content: [{ type: 'text' as const, text: s }] };
@@ -249,7 +250,7 @@ export function buildMcpServer(userId: string): McpServer {
           list.map((t) => fmtTask(t, t.contextId ? labels.get(t.contextId) : undefined)).join('\n')
         : 'Nothing due today.';
       const timerSection = active
-        ? `\n\n⏱ Timer running: ${active.taskTitle} (since ${active.startedAt.slice(11, 16)} UTC)`
+        ? `\n\n⏱ Timer running: ${active.taskTitle} (since ${fmtWhen(active.startedAt)})`
         : '';
       return text(tasksSection + timerSection);
     },

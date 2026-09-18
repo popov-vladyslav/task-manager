@@ -56,9 +56,23 @@ CREATE TABLE tasks (
   completed_at  timestamptz,
   created_at    timestamptz NOT NULL DEFAULT now(),
   created_via   text CHECK (created_via IN ('app','mcp')) DEFAULT 'app',
-  note          text                         -- 0014: nullable; replaces comments (ADR 0006)
+  note          text,                        -- 0014: nullable; replaces comments (ADR 0006)
+  section_id    uuid REFERENCES sections(id) ON DELETE SET NULL, -- 0017: NULL = "Unsorted"
+  sort_section  real NOT NULL DEFAULT 0      -- 0017: fractional order inside a section
 );
 CREATE INDEX idx_tasks_open ON tasks (status, context_id) WHERE status != 'done';
+
+-- 0017 (ADR 0008): sections inside a category. No default row — tasks with
+-- section_id NULL are the "Unsorted" chip. Names unique per context (service-enforced).
+CREATE TABLE sections (
+  id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id    uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  context_id integer NOT NULL REFERENCES contexts(id) ON DELETE CASCADE,
+  name       text NOT NULL,
+  sort       real NOT NULL DEFAULT 0,        -- fractional indexing (lib/frac-index.ts)
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX idx_sections_context ON sections (context_id, sort);
 
 -- 0015 (ADR 0007): checklist items owned by a task. No dates, reminders,
 -- timers or contexts — never listed as tasks anywhere.
@@ -85,7 +99,7 @@ CREATE TABLE recurrence_rules (
   last_spawned  date                         -- захист від дублів
 );
 
--- comments: dropped in 0015 (ADR 0006); replaced by tasks.note
+-- comments: replaced by tasks.note (ADR 0006); the table is dropped by a later contracting migration (0016) after the comment-free code is verified on prod
 
 -- DESCOPED (see STATUS.md): photos were never implemented; the table was dropped
 -- in migration 0008 and `photosCount` removed from the Task contract.
