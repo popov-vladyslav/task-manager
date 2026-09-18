@@ -53,6 +53,7 @@ export function TaskCardScreen({ taskId, onClose, compact = false }: TaskCardScr
   const updateSubtask = useTasksStore((s) => s.updateSubtask);
   const deleteSubtask = useTasksStore((s) => s.deleteSubtask);
   const reorderSubtasks = useTasksStore((s) => s.reorderSubtasks);
+  const moveTaskToSection = useTasksStore((s) => s.moveTaskToSection);
   const openTimer = useTimerStore((s) => s.open);
 
   const popover = usePopoverAnchor();
@@ -387,6 +388,8 @@ export function TaskCardScreen({ taskId, onClose, compact = false }: TaskCardScr
         selectedId={task.contextId}
         onSelect={(id) => patchTask(task.id, { contextId: id })}
         onClose={popover.close}
+        sectionId={task.sectionId}
+        onSelectSection={(id) => moveTaskToSection(task.id, id).catch(() => {})}
       />
 
       <WhenSheet

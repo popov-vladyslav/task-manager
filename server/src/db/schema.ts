@@ -73,6 +73,7 @@ export const contexts = pgTable('contexts', {
   archived: boolean('archived').notNull().default(false),
   excludeFromAll: boolean('exclude_from_all').notNull().default(false),
   emoji: text('emoji'),
+  sectionsEnabled: boolean('sections_enabled').notNull().default(false),
 });
 
 export const recurrenceRules = pgTable('recurrence_rules', {

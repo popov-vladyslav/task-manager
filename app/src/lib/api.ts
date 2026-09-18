@@ -3,7 +3,10 @@ import type {
   CalendarData,
   Context,
   CreateContextInput,
+  CreateSectionInput,
   Locale,
+  Section,
+  SectionReorderInput,
   CreateSubtaskInput,
   CreateTaskInput,
   MorningSummary,
@@ -94,6 +97,14 @@ export const api = {
   reorderContexts: (ids: number[]) =>
     request<Context[]>('/api/contexts/reorder', { method: 'POST', body: { ids } }),
   resetData: () => request<void>('/api/data', { method: 'DELETE', body: { confirm: 'RESET' } }),
+  listSections: () => request<Section[]>('/api/sections'),
+  createSection: (contextId: number, input: CreateSectionInput) =>
+    request<Section>(`/api/contexts/${contextId}/sections`, { method: 'POST', body: input }),
+  renameSection: (id: string, name: string) =>
+    request<Section>(`/api/sections/${id}`, { method: 'PATCH', body: { name } }),
+  reorderSection: (id: string, input: SectionReorderInput) =>
+    request<Section>(`/api/sections/${id}/reorder`, { method: 'POST', body: input }),
+  deleteSection: (id: string) => request<void>(`/api/sections/${id}`, { method: 'DELETE' }),
   listTasks: (params?: { context?: number; status?: string }) =>
     request<Task[]>(`/api/tasks${qs(params)}`),
   createTask: (input: CreateTaskInput) =>

@@ -1,6 +1,14 @@
 import { useMemo, useState, type ComponentType } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { Eye, EyeOff, Pencil, Trash2, type LucideProps } from 'lucide-react-native';
+import { Pressable, StyleSheet, Switch, Text, View } from 'react-native';
+import {
+  Eye,
+  EyeOff,
+  LayoutList,
+  Pencil,
+  Plus,
+  Trash2,
+  type LucideProps,
+} from 'lucide-react-native';
 import { contextEmoji } from '@task-manager/shared';
 import { BottomSheet } from '../../components/bottom-sheet';
 import { ApiError } from '../../lib/api';
@@ -9,6 +17,7 @@ import { useTasksStore } from '../../store/tasks';
 import { useUiStore } from '../../store/ui';
 import { openCounts } from '../../store/task-selectors';
 import { useTheme, type Theme } from '../../theme';
+import { SectionNameSheet } from './section-name-sheet';
 
 function MenuItem({
   icon: Icon,
@@ -46,6 +55,10 @@ export function ContextMenuSheet() {
   const open = useUiStore((s) => s.contextMenuOpen);
   const close = useUiStore((s) => s.closeContextMenu);
   const openEditor = useUiStore((s) => s.openContextEditor);
+  const openSectionsSheet = useUiStore((s) => s.openSectionsSheet);
+  const createSection = useTasksStore((s) => s.createSection);
+  const setActiveSection = useUiStore((s) => s.setActiveSection);
+  const [newSectionOpen, setNewSectionOpen] = useState(false);
   const contexts = useTasksStore((s) => s.contexts);
   const tasks = useTasksStore((s) => s.tasks);
   const activeContextId = useTasksStore((s) => s.activeContextId);
@@ -62,6 +75,13 @@ export function ContextMenuSheet() {
     () => StyleSheet.create({ emoji: { backgroundColor: `${context?.color ?? '#000000'}26` } }),
     [context?.color],
   );
+
+  const toggleSections = () => {
+    if (!context) return;
+    updateContext(context.id, { sectionsEnabled: !context.sectionsEnabled }).catch(() =>
+      setError(tr('contexts.editor.saveFailed')),
+    );
+  };
 
   const toggleHidden = async () => {
     if (!context) return;
@@ -87,44 +107,83 @@ export function ContextMenuSheet() {
   };
 
   return (
-    <BottomSheet open={open && !!context} onClose={close} padded={false}>
-      {context ? (
-        <>
-          <View style={styles.head}>
-            <View style={[styles.emojiBox, tint.emoji]}>
-              <Text style={styles.emoji}>{contextEmoji(context) ?? ''}</Text>
+    <>
+      <SectionNameSheet
+        open={newSectionOpen}
+        title={tr('contexts.section.new')}
+        onClose={() => setNewSectionOpen(false)}
+        onSubmit={async (name) => {
+          if (!context) return;
+          const created = await createSection(context.id, name);
+          setActiveSection(context.id, created.id);
+        }}
+      />
+      <BottomSheet open={open && !!context} onClose={close} padded={false}>
+        {context ? (
+          <>
+            <View style={styles.head}>
+              <View style={[styles.emojiBox, tint.emoji]}>
+                <Text style={styles.emoji}>{contextEmoji(context) ?? ''}</Text>
+              </View>
+              <View>
+                <Text style={styles.name}>{context.label}</Text>
+                <Text style={styles.sub}>
+                  {tr(count === 1 ? 'contexts.menu.taskCountOne' : 'contexts.menu.taskCount', {
+                    n: count,
+                  })}
+                </Text>
+              </View>
             </View>
-            <View>
-              <Text style={styles.name}>{context.label}</Text>
-              <Text style={styles.sub}>
-                {tr(count === 1 ? 'contexts.menu.taskCountOne' : 'contexts.menu.taskCount', {
-                  n: count,
-                })}
-              </Text>
+            <View style={styles.group}>
+              <MenuItem
+                icon={LayoutList}
+                label={tr('contexts.editor.sections')}
+                onPress={toggleSections}
+                trailing={
+                  <Switch
+                    value={context.sectionsEnabled}
+                    onValueChange={toggleSections}
+                    trackColor={{ false: t.colors.bgElevated, true: t.colors.accentPrimary }}
+                    thumbColor={t.colors.textPrimary}
+                  />
+                }
+              />
+              <MenuItem
+                icon={Plus}
+                label={tr('contexts.section.new')}
+                onPress={() => {
+                  close();
+                  setNewSectionOpen(true);
+                }}
+              />
+              <MenuItem
+                icon={Pencil}
+                label={tr('contexts.section.manage')}
+                onPress={openSectionsSheet}
+              />
+              <View style={styles.divider} />
+              <MenuItem
+                icon={Pencil}
+                label={tr('contexts.menu.rename')}
+                onPress={() => openEditor(context.id)}
+                trailing={<View style={[styles.dot, { backgroundColor: context.color }]} />}
+              />
+              <MenuItem
+                icon={context.excludeFromAll ? Eye : EyeOff}
+                label={
+                  context.excludeFromAll
+                    ? tr('contexts.menu.showInAll')
+                    : tr('contexts.editor.hideFromAll')
+                }
+                onPress={toggleHidden}
+              />
+              <MenuItem icon={Trash2} label={tr('contexts.menu.delete')} onPress={remove} danger />
             </View>
-          </View>
-          <View style={styles.group}>
-            <MenuItem
-              icon={Pencil}
-              label={tr('contexts.menu.rename')}
-              onPress={() => openEditor(context.id)}
-              trailing={<View style={[styles.dot, { backgroundColor: context.color }]} />}
-            />
-            <MenuItem
-              icon={context.excludeFromAll ? Eye : EyeOff}
-              label={
-                context.excludeFromAll
-                  ? tr('contexts.menu.showInAll')
-                  : tr('contexts.editor.hideFromAll')
-              }
-              onPress={toggleHidden}
-            />
-            <MenuItem icon={Trash2} label={tr('contexts.menu.delete')} onPress={remove} danger />
-          </View>
-          {error ? <Text style={styles.error}>{error}</Text> : null}
-        </>
-      ) : null}
-    </BottomSheet>
+            {error ? <Text style={styles.error}>{error}</Text> : null}
+          </>
+        ) : null}
+      </BottomSheet>
+    </>
   );
 }
 
@@ -162,5 +221,11 @@ const makeStyles = (t: Theme) =>
     itemLabel: { flex: 1, fontSize: 14.5, fontWeight: '600', color: t.colors.textPrimary },
     itemDanger: { color: t.colors.accentNow },
     dot: { width: 11, height: 11, borderRadius: 6 },
+    divider: {
+      height: 1,
+      backgroundColor: t.colors.borderSubtle,
+      marginVertical: 6,
+      marginHorizontal: 4,
+    },
     error: { fontSize: 12.5, color: t.colors.accentNow, paddingHorizontal: 22, paddingBottom: 8 },
   });

@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { EMOJI_MAX_LENGTH, isSingleGrapheme } from '@task-manager/shared';
 import * as svc from '../services/contexts';
+import * as sectionsSvc from '../services/sections';
 import { requireUserId } from '../middleware/auth';
 
 const router = Router();
@@ -21,6 +22,7 @@ const createSchema = z.object({
   color: hexColor,
   slug: z.string().optional(),
   excludeFromAll: z.boolean().optional(),
+  sectionsEnabled: z.boolean().optional(),
   emoji: emojiSchema.nullish(),
 });
 
@@ -29,6 +31,7 @@ const updateSchema = z.object({
   color: hexColor.optional(),
   archived: z.boolean().optional(),
   excludeFromAll: z.boolean().optional(),
+  sectionsEnabled: z.boolean().optional(),
   emoji: emojiSchema.nullable().optional(),
 });
 
@@ -61,6 +64,17 @@ router.patch('/:id', async (req, res) => {
 router.delete('/:id', async (req, res) => {
   await svc.deleteContext(requireUserId(req), Number(req.params.id));
   res.status(204).end();
+});
+
+router.get('/:id/sections', async (req, res) => {
+  res.json(await sectionsSvc.listSections(requireUserId(req), Number(req.params.id)));
+});
+
+router.post('/:id/sections', async (req, res) => {
+  const { name } = z.object({ name: z.string().min(1) }).parse(req.body);
+  res
+    .status(201)
+    .json(await sectionsSvc.createSection(requireUserId(req), Number(req.params.id), name));
 });
 
 export default router;

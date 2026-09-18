@@ -18,6 +18,7 @@ const work: Context = {
   archived: false,
   excludeFromAll: false,
   emoji: null,
+  sectionsEnabled: false,
 };
 const home: Context = { ...work, id: 2, slug: 'home', label: 'Home', color: '#4CA8F6' };
 

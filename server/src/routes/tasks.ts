@@ -24,6 +24,7 @@ const createSchema = z.object({
   durationMin: z.number().int().positive().nullish(),
   recurrence: recurrenceSchema.nullish(),
   note: z.string().nullish(),
+  sectionId: z.uuid().nullish(),
 });
 
 const updateSchema = z.object({
@@ -36,12 +37,13 @@ const updateSchema = z.object({
   completed: z.boolean().optional(),
   recurrence: recurrenceSchema.nullish(),
   note: z.string().nullable().optional(),
+  sectionId: z.uuid().nullable().optional(),
 });
 
 const reorderSchema = z.object({
   afterId: z.uuid().nullish(),
   beforeId: z.uuid().nullish(),
-  scope: z.enum(['global', 'context']),
+  scope: z.enum(['global', 'context', 'section']),
 });
 
 router.get('/', async (req, res) => {

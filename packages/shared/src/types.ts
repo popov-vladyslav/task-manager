@@ -24,6 +24,7 @@ export interface Context {
   // Calendar; reachable only by selecting the context's own chip.
   excludeFromAll: boolean;
   emoji: string | null;
+  sectionsEnabled: boolean;
 }
 
 export interface Task {
@@ -62,6 +63,15 @@ export interface Section {
   sort: number;
 }
 
+export interface CreateSectionInput {
+  name: string;
+}
+
+export interface SectionReorderInput {
+  afterId?: string | null;
+  beforeId?: string | null;
+}
+
 export interface Subtask {
   id: string;
   taskId: string;
@@ -94,6 +104,7 @@ export interface CreateTaskInput {
   durationMin?: number | null;
   recurrence?: RecurrenceInput | null;
   note?: string | null;
+  sectionId?: string | null;
 }
 
 export interface UpdateTaskInput {
@@ -106,6 +117,7 @@ export interface UpdateTaskInput {
   completed?: boolean; // true => run complete-logic
   recurrence?: RecurrenceInput | null; // set/change a rule, or null to remove
   note?: string | null;
+  sectionId?: string | null;
 }
 
 export interface ReorderInput {
@@ -120,6 +132,7 @@ export interface CreateContextInput {
   slug?: string;
   excludeFromAll?: boolean;
   emoji?: string | null;
+  sectionsEnabled?: boolean;
 }
 
 export interface UpdateContextInput {
@@ -128,6 +141,7 @@ export interface UpdateContextInput {
   archived?: boolean;
   excludeFromAll?: boolean;
   emoji?: string | null;
+  sectionsEnabled?: boolean;
 }
 
 // Timer — at most one running entry at a time (one_running_timer unique index).

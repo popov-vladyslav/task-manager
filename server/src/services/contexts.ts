@@ -67,6 +67,7 @@ export async function createContext(userId: string, input: CreateContextInput): 
       sortOrder: Number(max) + 1,
       excludeFromAll: input.excludeFromAll ?? false,
       emoji: input.emoji ?? null,
+      sectionsEnabled: input.sectionsEnabled ?? false,
     })
     .returning();
   return toContext(row);

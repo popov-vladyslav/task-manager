@@ -17,6 +17,7 @@ import { badRequest, notFound } from '../lib/errors';
 import { parseWhen } from '../lib/when';
 import { invalidateReminderClocks } from './reminder-clock';
 import { subtasksByTask } from './subtasks-read';
+import { assertSectionInContext } from './sections';
 
 // A task may only point at a context its own owner holds. Without this, a
 // crafted contextId would attach one user's task to another user's context —
@@ -147,8 +148,10 @@ export async function createTask(userId: string, input: CreateTaskInput): Promis
   const title = input.title?.trim();
   if (!title) throw badRequest('Title is required');
   const contextId = input.contextId ?? null;
+  const sectionId = input.sectionId ?? null;
   const dueAt = input.dueAt ? parseWhen(input.dueAt) : null;
   await assertContextOwned(db, userId, contextId);
+  await assertSectionInContext(db, userId, sectionId, contextId);
 
   // One unit of work: a failure between the rule insert and the task insert would
   // otherwise leave an orphaned recurrence_rules row.
@@ -158,6 +161,7 @@ export async function createTask(userId: string, input: CreateTaskInput): Promis
       .select({
         ming: sql<number>`coalesce(min(${tasks.sortGlobal}), 1)`,
         minc: sql<number>`coalesce(min(${tasks.sortContext}) filter (where ${tasks.contextId} is not distinct from ${contextId}), 1)`,
+        mins: sql<number>`coalesce(min(${tasks.sortSection}) filter (where ${tasks.sectionId} is not distinct from ${sectionId}), 1)`,
       })
       .from(tasks)
       .where(ownedBy(tasks.userId, userId));
@@ -190,6 +194,8 @@ export async function createTask(userId: string, input: CreateTaskInput): Promis
         durationMin: resolveDuration(dueAt, input.durationMin),
         sortGlobal: Number(mins.ming) - 1,
         sortContext: Number(mins.minc) - 1,
+        sectionId,
+        sortSection: Number(mins.mins) - 1,
         recurrenceId,
         createdVia: 'app',
         note: input.note?.trim() || null,
@@ -228,10 +234,17 @@ export async function updateTask(
 
     // Re-pointing a task at another user's context is a cross-account write.
     await assertContextOwned(tx, userId, patch.contextId);
+    const nextContextId = patch.contextId !== undefined ? patch.contextId : cur.contextId;
+    if (patch.sectionId != null) {
+      await assertSectionInContext(tx, userId, patch.sectionId, nextContextId);
+    }
 
     const set: Partial<typeof tasks.$inferInsert> = {};
     if (patch.title !== undefined) set.title = patch.title;
     if (patch.contextId !== undefined) set.contextId = patch.contextId;
+    if (patch.sectionId !== undefined) set.sectionId = patch.sectionId;
+    else if (patch.contextId !== undefined && patch.contextId !== cur.contextId)
+      set.sectionId = null;
     if (patch.status !== undefined) set.status = patch.status;
     if (patch.dueAt !== undefined) set.dueAt = patch.dueAt ? parseWhen(patch.dueAt) : null;
     if (patch.remindAt !== undefined)
@@ -399,7 +412,12 @@ export async function snoozeTask(userId: string, id: string, minutes: number): P
 }
 
 export async function reorderTask(userId: string, id: string, input: ReorderInput): Promise<Task> {
-  const col = input.scope === 'context' ? tasks.sortContext : tasks.sortGlobal;
+  const col =
+    input.scope === 'section'
+      ? tasks.sortSection
+      : input.scope === 'context'
+        ? tasks.sortContext
+        : tasks.sortGlobal;
 
   const neighborSort = async (nid?: string | null): Promise<number | null> => {
     if (!nid) return null;
@@ -417,7 +435,11 @@ export async function reorderTask(userId: string, id: string, input: ReorderInpu
   const newSort = between(after, before);
 
   const set: Partial<typeof tasks.$inferInsert> =
-    input.scope === 'context' ? { sortContext: newSort } : { sortGlobal: newSort };
+    input.scope === 'section'
+      ? { sortSection: newSort }
+      : input.scope === 'context'
+        ? { sortContext: newSort }
+        : { sortGlobal: newSort };
   const [row] = await db
     .update(tasks)
     .set(set)

@@ -39,7 +39,8 @@ CREATE TABLE contexts (
   sort_order  int  NOT NULL DEFAULT 0,
   archived    boolean NOT NULL DEFAULT false,
   exclude_from_all boolean NOT NULL DEFAULT false, -- 0004: hidden from "All"
-  emoji       text                              -- 0013: nullable; fallback derived from color
+  emoji       text,                             -- 0013: nullable; fallback derived from color
+  sections_enabled boolean NOT NULL DEFAULT false -- 0018: show section chips on this category
 );
 
 CREATE TABLE tasks (
@@ -174,8 +175,8 @@ POST   /auth/pin               { pin }   → { jwt }        (PIN задаєть�
 POST   /auth/refresh           { refresh } → { jwt }
 
 GET    /api/contexts
-POST   /api/contexts           { label, color, slug?, excludeFromAll?, emoji? }
-PATCH  /api/contexts/:id       { label?, color?, archived?, excludeFromAll?, emoji? (nullable, один графем) }
+POST   /api/contexts           { label, color, slug?, excludeFromAll?, emoji?, sectionsEnabled? }
+PATCH  /api/contexts/:id       { label?, color?, archived?, excludeFromAll?, emoji? (nullable, один графем), sectionsEnabled? }
 POST   /api/contexts/reorder   { ids: number[] } → повний список; чужі id пропускаються
 
 GET    /api/tasks?context=&status=          (сортовано по sort_*)
@@ -183,6 +184,16 @@ POST   /api/tasks              { title, contextId?, dueAt?, remindAt?, durationM
 PATCH  /api/tasks/:id          (будь-які поля вкл. note (nullable); { completed: true } → complete-логіка)
 DELETE /api/tasks/:id
 POST   /api/tasks/:id/reorder  { after_id?, before_id?, scope: 'global'|'context' }
+
+# Sections (0017, ADR 0008). Порядок — fractional index (`sort`); імена унікальні в межах категорії (409).
+GET    /api/contexts/:id/sections         → Section[]
+POST   /api/contexts/:id/sections         { name } → 201 Section
+GET    /api/sections                      → усі секції користувача
+PATCH  /api/sections/:id                  { name } → Section
+POST   /api/sections/:id/reorder          { afterId?, beforeId? } → Section
+DELETE /api/sections/:id                  → 204; задачі секції отримують section_id = NULL ("Unsorted")
+# Задачі: POST/PATCH /api/tasks приймають sectionId (має належати контексту задачі, інакше 400);
+# зміна contextId без sectionId скидає секцію; reorder scope 'section' впорядковує sort_section.
 
 # Subtasks (0015, ADR 0007). Кожен запис повертає батьківський Task з subtasks[] (відсортовані по sort_order).
 POST   /api/tasks/:id/subtasks            { title } → 201 Task
@@ -237,14 +248,19 @@ delete_subtask  { subtask_id }                     (ADR 0007; підзадачі
                                                 -- title_match: пошук по назві, щоб
 complete_task   { id | title_match }               я міг "закрий задачу про іпотеку"
 delete_task     { id | title_match }
+list_sections   { context }                       → рядок на секцію: `<name> [<id>]`
+                                                  -- create_task / update_task приймають section
+                                                  -- (ім'я або id у межах контексту; невідоме ім'я
+                                                  -- створюється; null знімає секцію); у відповідях
+                                                  -- задача друкує `    section: <name>`
 list_tasks      { context?, status?, due_before?, overdue? }
 get_today       {} → задачі на сьогодні + рутина + активний таймер
 add_routine     { title, time_hint? }
 start_timer     { task: id|title_match }
 stop_timer      {}
 list_contexts   {}                                → рядок на контекст: `<emoji> <slug> — <label> (<color>)`
-create_context  { label, color (#RRGGBB), emoji?, exclude_from_all? }
-update_context  { slug, label?, color?, emoji? (null очищає), exclude_from_all? }
+create_context  { label, color (#RRGGBB), emoji?, exclude_from_all?, sections_enabled? }
+update_context  { slug, label?, color?, emoji? (null очищає), exclude_from_all?, sections_enabled? }
 delete_context  { slug }
 ```
 
