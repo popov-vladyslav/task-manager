@@ -191,7 +191,8 @@ POST   /api/contexts/:id/sections         { name } → 201 Section
 GET    /api/sections                      → усі секції користувача
 PATCH  /api/sections/:id                  { name } → Section
 POST   /api/sections/:id/reorder          { afterId?, beforeId? } → Section
-DELETE /api/sections/:id                  → 204; задачі секції отримують section_id = NULL ("Unsorted")
+DELETE /api/sections/:id                  → 204; задачі секції переходять у першу (за sort) з решти секцій, або section_id = NULL якщо секцій не лишилось
+# Задачі з section_id = NULL показуються у першій секції контексту. Увімкнення sections_enabled створює першу секцію, якщо жодної немає.
 # Задачі: POST/PATCH /api/tasks приймають sectionId (має належати контексту задачі, інакше 400);
 # зміна contextId без sectionId скидає секцію; reorder scope 'section' впорядковує sort_section.
 

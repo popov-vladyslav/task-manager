@@ -4,6 +4,7 @@ import type { Context, CreateContextInput, UpdateContextInput } from '@task-mana
 import { db } from '../db/client';
 import { contexts, recurrenceRules, tasks } from '../db/schema';
 import { toContext } from '../db/mappers';
+import { ensureSection } from './sections';
 import { ownedBy, type Executor } from '../db/scope';
 import { conflict, notFound } from '../lib/errors';
 
@@ -106,6 +107,7 @@ export async function updateContext(
     .where(and(ownedBy(contexts.userId, userId), eq(contexts.id, id)))
     .returning();
   if (!row) throw notFound('Category not found');
+  if (patch.sectionsEnabled) await ensureSection(userId, id);
   return toContext(row);
 }
 

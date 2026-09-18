@@ -398,8 +398,13 @@ export const useTasksStore = create<TasksState>((set, get) => ({
 
   async deleteSection(id) {
     const prev = { sections: get().sections, tasks: get().tasks, completed: get().completed };
+    const gone = prev.sections.find((s) => s.id === id);
+    const target = gone
+      ? (sortSections(prev.sections).find((s) => s.contextId === gone.contextId && s.id !== id)
+          ?.id ?? null)
+      : null;
     const clear = (list: Task[]) =>
-      list.map((t) => (t.sectionId === id ? { ...t, sectionId: null } : t));
+      list.map((t) => (t.sectionId === id ? { ...t, sectionId: target } : t));
     set({
       sections: prev.sections.filter((s) => s.id !== id),
       tasks: clear(prev.tasks),

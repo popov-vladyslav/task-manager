@@ -30,17 +30,24 @@ export function sectionsOf(sections: Section[], contextId: number): Section[] {
   return sections.filter((s) => s.contextId === contextId).sort((a, b) => a.sort - b.sort);
 }
 
-export function tasksInSection(tasks: Task[], sectionId: string | null): Task[] {
-  return tasks
-    .filter((t) => (t.sectionId ?? null) === sectionId)
-    .sort((a, b) => a.sortSection - b.sortSection);
+export function defaultSectionOf(sections: Section[], contextId: number): Section | null {
+  return sectionsOf(sections, contextId)[0] ?? null;
 }
 
-export function sectionCounts(tasks: Task[], contextId: number): Record<string, number> {
-  const counts: Record<string, number> = { unsorted: 0 };
+export function effectiveSectionId(task: Task, defaultId: string | null): string | null {
+  return task.sectionId ?? defaultId;
+}
+
+export function sectionCounts(
+  tasks: Task[],
+  contextId: number,
+  defaultId: string | null,
+): Record<string, number> {
+  const counts: Record<string, number> = {};
   for (const t of tasks) {
     if (t.contextId !== contextId) continue;
-    const key = t.sectionId ?? 'unsorted';
+    const key = effectiveSectionId(t, defaultId);
+    if (key == null) continue;
     counts[key] = (counts[key] ?? 0) + 1;
   }
   return counts;

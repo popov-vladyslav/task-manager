@@ -10,7 +10,7 @@ interface SectionChipsProps {
   counts: Record<string, number>;
   color: string;
   activeId: string | null;
-  onSelect: (id: string | null) => void;
+  onSelect: (id: string) => void;
   onAdd: () => void;
 }
 
@@ -30,13 +30,6 @@ export function SectionChips({
 
   const chips = (
     <>
-      <Chip
-        label={tr('contexts.section.unsorted')}
-        count={counts.unsorted ?? 0}
-        selected={activeId == null}
-        tint={color}
-        onPress={() => onSelect(null)}
-      />
       {sections.map((s) => (
         <Chip
           key={s.id}
@@ -47,7 +40,11 @@ export function SectionChips({
           onPress={() => onSelect(s.id)}
         />
       ))}
-      <AddChip onPress={onAdd} accessibilityLabel={tr('contexts.section.addChip')} />
+      <AddChip
+        onPress={onAdd}
+        accessibilityLabel={tr('contexts.section.addChip')}
+        label={sections.length === 0 ? tr('contexts.section.addChip') : undefined}
+      />
     </>
   );
 

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Trash2, X } from 'lucide-react-native';
 import {
   contextPalette,
@@ -9,6 +9,7 @@ import {
   type Context,
 } from '@task-manager/shared';
 import { BottomSheet, SheetInput } from '../../components/bottom-sheet';
+import { Toggle } from '../../components/toggle';
 import { ApiError } from '../../lib/api';
 import { useT } from '../../lib/i18n';
 import { useTasksStore } from '../../store/tasks';
@@ -146,12 +147,7 @@ function ContextEditorForm({ context, onClose }: { context?: Context; onClose: (
           <Text style={styles.hideTitle}>{tr('contexts.editor.hideFromAll')}</Text>
           <Text style={styles.hideSubtitle}>{tr('contexts.editor.hideFromAllHint')}</Text>
         </View>
-        <Switch
-          value={excludeFromAll}
-          onValueChange={setExcludeFromAll}
-          trackColor={{ false: t.colors.bgElevated, true: t.colors.accentPrimary }}
-          thumbColor={t.colors.textPrimary}
-        />
+        <Toggle value={excludeFromAll} onValueChange={setExcludeFromAll} />
       </View>
 
       <View>

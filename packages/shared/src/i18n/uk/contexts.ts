@@ -14,6 +14,8 @@ export const contexts: Pick<Dictionary, keyof typeof import('../en/contexts').co
   'contexts.menu.showInAll': 'Показувати в «Усі задачі»',
   'contexts.menu.delete': 'Видалити категорію',
   'contexts.menu.deleteFailed': 'Не вдалося видалити категорію',
+  'contexts.menu.deleteConfirm':
+    'Видалити «{name}»? Її завершені задачі збережуться, лише без категорії.',
   'contexts.screen.noOpenTasks': 'Немає відкритих задач',
   'contexts.drawer.caption': 'КАТЕГОРІЇ',
   'contexts.drawer.newContext': 'Нова категорія',
@@ -27,7 +29,8 @@ export const contexts: Pick<Dictionary, keyof typeof import('../en/contexts').co
   'contexts.section.manage': 'Керувати секціями',
   'contexts.section.namePlaceholder': 'Назва секції',
   'contexts.section.addTaskTo': 'Додати задачу в {section}…',
-  'contexts.section.deleteConfirm': 'Видалити «{name}»? Її задачі перейдуть у «Неопрацьоване».',
+  'contexts.section.deleteConfirm': 'Видалити «{name}»? Її задачі перейдуть у «{target}».',
+  'contexts.section.deleteConfirmLast': 'Видалити «{name}»? Її задачі залишаться в категорії.',
   'contexts.section.duplicate': 'Секція з такою назвою вже є',
   'contexts.section.none': 'Секцій ще немає',
   'contexts.section.addChip': 'Додати секцію',

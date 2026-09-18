@@ -6,7 +6,14 @@ import { haptics } from '../../lib/haptics';
 import { useT } from '../../lib/i18n';
 import { useRefreshOnFocus } from '../../lib/use-refresh-on-focus';
 import { useTasksStore } from '../../store/tasks';
-import { excludedContextIds, isInAll, sectionCounts, sectionsOf } from '../../store/task-selectors';
+import {
+  defaultSectionOf,
+  effectiveSectionId,
+  excludedContextIds,
+  isInAll,
+  sectionCounts,
+  sectionsOf,
+} from '../../store/task-selectors';
 import { useToastStore } from '../../store/toast';
 import { useUiStore } from '../../store/ui';
 import { useTheme, type Theme } from '../../theme';
@@ -80,19 +87,22 @@ export function ContextScreen() {
     () => (activeContextId == null ? [] : sectionsOf(sections, activeContextId)),
     [sections, activeContextId],
   );
-  const sectionsOn = !!activeContext?.sectionsEnabled;
+  const sectionsOn = !!activeContext?.sectionsEnabled && contextSections.length > 0;
+  const defaultSectionId =
+    activeContextId == null ? null : (defaultSectionOf(sections, activeContextId)?.id ?? null);
   const rawActiveSection =
     activeContextId == null || !sectionsOn
       ? null
       : (activeSectionByContext[activeContextId] ?? null);
-  const activeSectionId =
-    rawActiveSection != null && contextSections.some((s) => s.id === rawActiveSection)
+  const activeSectionId = !sectionsOn
+    ? null
+    : rawActiveSection != null && contextSections.some((s) => s.id === rawActiveSection)
       ? rawActiveSection
-      : null;
+      : defaultSectionId;
   const activeSection = contextSections.find((s) => s.id === activeSectionId) ?? null;
   const counts = useMemo(
-    () => (activeContextId == null ? {} : sectionCounts(tasks, activeContextId)),
-    [tasks, activeContextId],
+    () => (activeContextId == null ? {} : sectionCounts(tasks, activeContextId, defaultSectionId)),
+    [tasks, activeContextId, defaultSectionId],
   );
 
   const inView = useCallback(
@@ -100,8 +110,8 @@ export function ContextScreen() {
       activeContextId == null
         ? isInAll(task, excluded)
         : task.contextId === activeContextId &&
-          (!sectionsOn || (task.sectionId ?? null) === activeSectionId),
-    [activeContextId, activeSectionId, sectionsOn, excluded],
+          (!sectionsOn || effectiveSectionId(task, defaultSectionId) === activeSectionId),
+    [activeContextId, activeSectionId, defaultSectionId, sectionsOn, excluded],
   );
 
   const visible = useMemo(() => {
@@ -198,7 +208,7 @@ export function ContextScreen() {
     ? tr('contexts.section.addTaskTo', { section: activeSection.name })
     : undefined;
   const chips =
-    activeContext && activeContextId != null && sectionsOn ? (
+    activeContext && activeContextId != null && activeContext.sectionsEnabled ? (
       <SectionChips
         sections={contextSections}
         counts={counts}
@@ -224,8 +234,8 @@ export function ContextScreen() {
     </>
   );
   const createInitial = useMemo(
-    () => (activeSectionId ? { sectionId: activeSectionId } : undefined),
-    [activeSectionId],
+    () => (sectionsOn && activeSectionId ? { sectionId: activeSectionId } : undefined),
+    [sectionsOn, activeSectionId],
   );
 
   if (wide) {

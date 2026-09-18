@@ -6,6 +6,7 @@ import {
   Bell,
   CalendarDays,
   Check,
+  LayoutList,
   ListChecks,
   MoreHorizontal,
   Play,
@@ -19,6 +20,7 @@ import { Popover, usePopoverAnchor } from '../../components/popover';
 import { haptics } from '../../lib/haptics';
 import { useT } from '../../lib/i18n';
 import { useTasksStore } from '../../store/tasks';
+import { defaultSectionOf, sectionsOf } from '../../store/task-selectors';
 import { useTimerStore } from '../../store/timer';
 import { useToastStore } from '../../store/toast';
 import { useTheme, webInputReset, type Theme } from '../../theme';
@@ -59,6 +61,8 @@ export function TaskCardScreen({ taskId, onClose, compact = false }: TaskCardScr
   const popover = usePopoverAnchor();
   const menu = usePopoverAnchor();
   const [whenOpen, setWhenOpen] = useState(false);
+  const [menuMode, setMenuMode] = useState<'root' | 'sections'>('root');
+  const allSections = useTasksStore((s) => s.sections);
   const [title, setTitle] = useState(task?.title ?? '');
   const [note, setNote] = useState(task?.note ?? '');
   const [titleHeight, setTitleHeight] = useState<number>();
@@ -77,6 +81,16 @@ export function TaskCardScreen({ taskId, onClose, compact = false }: TaskCardScr
   useEffect(() => setNote(task?.note ?? ''), [task?.id, task?.note]);
 
   const context = task?.contextId != null ? contexts.find((c) => c.id === task.contextId) : null;
+  const cardSections = useMemo(
+    () =>
+      context?.sectionsEnabled && task?.contextId != null
+        ? sectionsOf(allSections, task.contextId)
+        : [],
+    [allSections, context?.sectionsEnabled, task?.contextId],
+  );
+  const currentSectionId =
+    task?.sectionId ??
+    (task?.contextId != null ? (defaultSectionOf(allSections, task.contextId)?.id ?? null) : null);
   const done = task?.status === 'done';
   const when = useMemo(
     () =>
@@ -407,11 +421,52 @@ export function TaskCardScreen({ taskId, onClose, compact = false }: TaskCardScr
         }}
       />
 
-      <Popover anchor={menu.anchor} onClose={menu.close} width={200}>
-        <Pressable onPress={remove} accessibilityRole="button" style={styles.menuItem}>
-          <Trash2 size={17} color={t.colors.accentNow} strokeWidth={1.8} />
-          <Text style={styles.menuDanger}>{tr('tasks.card.deleteTask')}</Text>
-        </Pressable>
+      <Popover
+        anchor={menu.anchor}
+        onClose={() => {
+          menu.close();
+          setMenuMode('root');
+        }}
+        width={220}
+      >
+        {menuMode === 'sections' ? (
+          cardSections.map((s) => (
+            <Pressable
+              key={s.id}
+              onPress={() => {
+                menu.close();
+                setMenuMode('root');
+                moveTaskToSection(task.id, s.id).catch(() => {});
+              }}
+              accessibilityRole="button"
+              style={styles.menuItem}
+            >
+              <Text style={[styles.menuText, s.id === currentSectionId && styles.menuTextOn]}>
+                {s.name}
+              </Text>
+              {s.id === currentSectionId ? (
+                <Check size={14} color={t.colors.accentPrimary} strokeWidth={2.6} />
+              ) : null}
+            </Pressable>
+          ))
+        ) : (
+          <>
+            {cardSections.length > 0 ? (
+              <Pressable
+                onPress={() => setMenuMode('sections')}
+                accessibilityRole="button"
+                style={styles.menuItem}
+              >
+                <LayoutList size={17} color={t.colors.textControl} strokeWidth={1.8} />
+                <Text style={styles.menuText}>{tr('tasks.card.moveToSection')}</Text>
+              </Pressable>
+            ) : null}
+            <Pressable onPress={remove} accessibilityRole="button" style={styles.menuItem}>
+              <Trash2 size={17} color={t.colors.accentNow} strokeWidth={1.8} />
+              <Text style={styles.menuDanger}>{tr('tasks.card.deleteTask')}</Text>
+            </Pressable>
+          </>
+        )}
       </Popover>
     </View>
   );
@@ -548,4 +603,6 @@ const makeStyles = (t: Theme, compact: boolean) =>
       borderRadius: 10,
     },
     menuDanger: { fontSize: 14, fontWeight: '600', color: t.colors.accentNow },
+    menuText: { flex: 1, fontSize: 14, fontWeight: '600', color: t.colors.textPrimary },
+    menuTextOn: { color: t.colors.accentPrimary },
   });

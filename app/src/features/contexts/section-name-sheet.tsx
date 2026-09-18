@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { BottomSheet, SheetInput } from '../../components/bottom-sheet';
 import { ApiError } from '../../lib/api';
 import { useT } from '../../lib/i18n';
@@ -9,6 +9,7 @@ interface SectionNameSheetProps {
   open: boolean;
   title: string;
   initialName?: string;
+  plain?: boolean;
   onClose: () => void;
   onSubmit: (name: string) => Promise<unknown>;
 }
@@ -17,6 +18,7 @@ export function SectionNameSheet({
   open,
   title,
   initialName = '',
+  plain = false,
   onClose,
   onSubmit,
 }: SectionNameSheetProps) {
@@ -34,6 +36,7 @@ export function SectionNameSheet({
     setBusy(false);
   }, [open, initialName]);
 
+  const Input = plain ? TextInput : SheetInput;
   const canSave = name.trim().length > 0 && !busy;
   const dynamic = useMemo(
     () =>
@@ -64,9 +67,9 @@ export function SectionNameSheet({
   };
 
   return (
-    <BottomSheet open={open} onClose={onClose}>
+    <BottomSheet open={open} onClose={onClose} plain={plain}>
       <Text style={styles.title}>{title}</Text>
-      <SheetInput
+      <Input
         value={name}
         onChangeText={setName}
         placeholder={tr('contexts.section.namePlaceholder')}
@@ -102,9 +105,8 @@ const makeStyles = (t: Theme) =>
   StyleSheet.create({
     title: { fontSize: 16, fontWeight: '700', color: t.colors.textPrimary, marginBottom: 12 },
     input: {
-      height: 40,
       paddingHorizontal: 12,
-      paddingVertical: 0,
+      paddingVertical: 10,
       borderRadius: 10,
       backgroundColor: t.colors.bgCard,
       borderWidth: 1,

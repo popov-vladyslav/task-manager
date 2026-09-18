@@ -12,6 +12,8 @@ export const contexts = {
   'contexts.menu.showInAll': 'Show in All tasks',
   'contexts.menu.delete': 'Delete category',
   'contexts.menu.deleteFailed': 'Could not delete category',
+  'contexts.menu.deleteConfirm':
+    'Delete "{name}"? Its completed tasks keep their history, just without the category.',
   'contexts.screen.noOpenTasks': 'No open tasks',
   'contexts.drawer.caption': 'CATEGORIES',
   'contexts.drawer.newContext': 'New category',
@@ -24,7 +26,8 @@ export const contexts = {
   'contexts.section.manage': 'Manage sections',
   'contexts.section.namePlaceholder': 'Section name',
   'contexts.section.addTaskTo': 'Add task to {section}…',
-  'contexts.section.deleteConfirm': 'Delete "{name}"? Its tasks move to Unsorted.',
+  'contexts.section.deleteConfirm': 'Delete "{name}"? Its tasks move to "{target}".',
+  'contexts.section.deleteConfirmLast': 'Delete "{name}"? Its tasks stay in the category.',
   'contexts.section.duplicate': 'A section with this name already exists',
   'contexts.section.none': 'No sections yet',
   'contexts.section.addChip': 'Add section',

@@ -5,7 +5,7 @@ import { contextEmoji, type Context } from '@task-manager/shared';
 import { Popover, type AnchorRect } from '../../components/popover';
 import { useT } from '../../lib/i18n';
 import { useTasksStore } from '../../store/tasks';
-import { openCounts, sectionsOf } from '../../store/task-selectors';
+import { defaultSectionOf, openCounts, sectionsOf } from '../../store/task-selectors';
 import { Chip } from '../../components/chip';
 import { useTheme, type Theme } from '../../theme';
 
@@ -38,6 +38,9 @@ export function ContextPopover({
     [allSections, selectedId],
   );
   const selectedContext = contexts.find((c) => c.id === selectedId);
+  const currentSectionId =
+    sectionId ??
+    (selectedId == null ? null : (defaultSectionOf(allSections, selectedId)?.id ?? null));
 
   const pick = (id: number | null) => {
     onSelect(id);
@@ -68,24 +71,15 @@ export function ContextPopover({
           <Check size={14} color={t.colors.accentPrimary} strokeWidth={2.6} />
         ) : null}
       </Pressable>
-      {onSelectSection && selectedContext && sections.length > 0 ? (
+      {onSelectSection && selectedContext?.sectionsEnabled && sections.length > 0 ? (
         <>
           <View style={styles.separator} />
           <View style={styles.chips}>
-            <Chip
-              label={tr('contexts.section.unsorted')}
-              selected={sectionId == null}
-              tint={selectedContext.color}
-              onPress={() => {
-                onSelectSection(null);
-                onClose();
-              }}
-            />
             {sections.map((s) => (
               <Chip
                 key={s.id}
                 label={s.name}
-                selected={sectionId === s.id}
+                selected={currentSectionId === s.id}
                 tint={selectedContext.color}
                 onPress={() => {
                   onSelectSection(s.id);

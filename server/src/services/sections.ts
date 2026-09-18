@@ -1,5 +1,6 @@
-import { and, asc, eq, sql } from 'drizzle-orm';
-import type { Section } from '@task-manager/shared';
+import { and, asc, eq, ne, sql } from 'drizzle-orm';
+import { translate, type Section } from '@task-manager/shared';
+import { languageOf } from './settings';
 import { db } from '../db/client';
 import { contexts, sections, tasks } from '../db/schema';
 import { toSection } from '../db/mappers';
@@ -66,15 +67,43 @@ export async function createSection(
     .where(and(ownedBy(contexts.userId, userId), eq(contexts.id, contextId)));
   if (!ctx) throw notFound('Category not found');
   await assertNameFree(userId, contextId, clean);
-  const [{ next }] = await db
+  const [agg] = await db
     .select({ next: sql<number>`coalesce(max(${sections.sort}), 0) + 1` })
     .from(sections)
     .where(and(ownedBy(sections.userId, userId), eq(sections.contextId, contextId)));
   const [row] = await db
     .insert(sections)
-    .values({ userId, contextId, name: clean, sort: Number(next) })
+    .values({ userId, contextId, name: clean, sort: Number(agg.next) })
     .returning();
   return toSection(row);
+}
+
+async function firstSection(
+  executor: Executor,
+  userId: string,
+  contextId: number,
+  exceptId?: string,
+) {
+  const [row] = await executor
+    .select()
+    .from(sections)
+    .where(
+      and(
+        ownedBy(sections.userId, userId),
+        eq(sections.contextId, contextId),
+        exceptId ? ne(sections.id, exceptId) : undefined,
+      ),
+    )
+    .orderBy(asc(sections.sort), asc(sections.createdAt))
+    .limit(1);
+  return row ?? null;
+}
+
+export async function ensureSection(userId: string, contextId: number): Promise<Section> {
+  const first = await firstSection(db, userId, contextId);
+  if (first) return toSection(first);
+  const name = translate(await languageOf(userId), 'contexts.section.unsorted');
+  return createSection(userId, contextId, name);
 }
 
 async function getOwned(userId: string, id: string) {
@@ -129,10 +158,12 @@ export async function reorderSection(
 }
 
 export async function deleteSection(userId: string, id: string): Promise<void> {
+  const cur = await getOwned(userId, id);
   await db.transaction(async (tx) => {
+    const target = await firstSection(tx, userId, cur.contextId, id);
     await tx
       .update(tasks)
-      .set({ sectionId: null })
+      .set({ sectionId: target?.id ?? null })
       .where(and(ownedBy(tasks.userId, userId), eq(tasks.sectionId, id)));
     const [row] = await tx
       .delete(sections)

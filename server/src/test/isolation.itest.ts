@@ -388,16 +388,23 @@ test('B round-trips a section: create, task in it, rename, reorder, delete keeps
   await fetch(`${server.baseUrl}/api/tasks/${task.id}`, {
     method: 'PATCH',
     headers: bob.headers,
-    body: JSON.stringify({ contextId: ctxId, sectionId: first.id }),
+    body: JSON.stringify({ contextId: ctxId, sectionId: second.id }),
   });
-  const del = await fetch(`${server.baseUrl}/api/sections/${first.id}`, {
+  const del = await fetch(`${server.baseUrl}/api/sections/${second.id}`, {
     method: 'DELETE',
     headers: bob.headers,
   });
   assert.equal(del.status, 204);
   const [after] = await db.select().from(tasks).where(eq(tasks.id, task.id));
   assert.ok(after, 'deleting a section never deletes its tasks');
-  assert.equal(after.sectionId, null);
+  assert.equal(after.sectionId, first.id, 'its tasks move to the first remaining section');
+  const delLast = await fetch(`${server.baseUrl}/api/sections/${first.id}`, {
+    method: 'DELETE',
+    headers: bob.headers,
+  });
+  assert.equal(delLast.status, 204, 'the last section can be deleted too');
+  const [orphan] = await db.select().from(tasks).where(eq(tasks.id, task.id));
+  assert.equal(orphan.sectionId, null, 'with no section left the task just stays in the category');
 });
 
 // The cross-user foreign key the Challenge flagged: owning the row you write is

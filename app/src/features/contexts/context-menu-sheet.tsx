@@ -1,23 +1,24 @@
 import { useMemo, useState, type ComponentType } from 'react';
-import { Pressable, StyleSheet, Switch, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import {
   Eye,
   EyeOff,
   LayoutList,
   Pencil,
-  Plus,
+  Settings2,
   Trash2,
   type LucideProps,
 } from 'lucide-react-native';
 import { contextEmoji } from '@task-manager/shared';
 import { BottomSheet } from '../../components/bottom-sheet';
+import { ConfirmDialog } from '../../components/confirm-dialog';
+import { Toggle } from '../../components/toggle';
 import { ApiError } from '../../lib/api';
 import { useT } from '../../lib/i18n';
 import { useTasksStore } from '../../store/tasks';
 import { useUiStore } from '../../store/ui';
 import { openCounts } from '../../store/task-selectors';
 import { useTheme, type Theme } from '../../theme';
-import { SectionNameSheet } from './section-name-sheet';
 
 function MenuItem({
   icon: Icon,
@@ -56,15 +57,14 @@ export function ContextMenuSheet() {
   const close = useUiStore((s) => s.closeContextMenu);
   const openEditor = useUiStore((s) => s.openContextEditor);
   const openSectionsSheet = useUiStore((s) => s.openSectionsSheet);
-  const createSection = useTasksStore((s) => s.createSection);
-  const setActiveSection = useUiStore((s) => s.setActiveSection);
-  const [newSectionOpen, setNewSectionOpen] = useState(false);
   const contexts = useTasksStore((s) => s.contexts);
   const tasks = useTasksStore((s) => s.tasks);
   const activeContextId = useTasksStore((s) => s.activeContextId);
   const updateContext = useTasksStore((s) => s.updateContext);
   const deleteContext = useTasksStore((s) => s.deleteContext);
   const [error, setError] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const context = contexts.find((c) => c.id === activeContextId);
   const count = useMemo(
@@ -90,12 +90,15 @@ export function ContextMenuSheet() {
   };
 
   const remove = async () => {
-    if (!context) return;
+    if (!context || deleting) return;
     setError(null);
+    setDeleting(true);
     try {
       await deleteContext(context.id);
+      setConfirmDelete(false);
       close();
     } catch (e) {
+      setConfirmDelete(false);
       setError(
         e instanceof ApiError && e.status === 409
           ? tr('contexts.menu.deleteBlocked')
@@ -103,21 +106,13 @@ export function ContextMenuSheet() {
             ? e.message
             : tr('contexts.menu.deleteFailed'),
       );
+    } finally {
+      setDeleting(false);
     }
   };
 
   return (
     <>
-      <SectionNameSheet
-        open={newSectionOpen}
-        title={tr('contexts.section.new')}
-        onClose={() => setNewSectionOpen(false)}
-        onSubmit={async (name) => {
-          if (!context) return;
-          const created = await createSection(context.id, name);
-          setActiveSection(context.id, created.id);
-        }}
-      />
       <BottomSheet open={open && !!context} onClose={close} padded={false}>
         {context ? (
           <>
@@ -139,25 +134,10 @@ export function ContextMenuSheet() {
                 icon={LayoutList}
                 label={tr('contexts.editor.sections')}
                 onPress={toggleSections}
-                trailing={
-                  <Switch
-                    value={context.sectionsEnabled}
-                    onValueChange={toggleSections}
-                    trackColor={{ false: t.colors.bgElevated, true: t.colors.accentPrimary }}
-                    thumbColor={t.colors.textPrimary}
-                  />
-                }
+                trailing={<Toggle value={context.sectionsEnabled} onValueChange={toggleSections} />}
               />
               <MenuItem
-                icon={Plus}
-                label={tr('contexts.section.new')}
-                onPress={() => {
-                  close();
-                  setNewSectionOpen(true);
-                }}
-              />
-              <MenuItem
-                icon={Pencil}
+                icon={Settings2}
                 label={tr('contexts.section.manage')}
                 onPress={openSectionsSheet}
               />
@@ -177,9 +157,27 @@ export function ContextMenuSheet() {
                 }
                 onPress={toggleHidden}
               />
-              <MenuItem icon={Trash2} label={tr('contexts.menu.delete')} onPress={remove} danger />
+              <MenuItem
+                icon={Trash2}
+                label={tr('contexts.menu.delete')}
+                onPress={() => {
+                  setError(null);
+                  setConfirmDelete(true);
+                }}
+                danger
+              />
             </View>
             {error ? <Text style={styles.error}>{error}</Text> : null}
+            <ConfirmDialog
+              open={confirmDelete}
+              title={tr('contexts.menu.delete')}
+              message={tr('contexts.menu.deleteConfirm', { name: context.label })}
+              confirmLabel={tr('common.delete')}
+              danger
+              busy={deleting}
+              onConfirm={remove}
+              onCancel={() => setConfirmDelete(false)}
+            />
           </>
         ) : null}
       </BottomSheet>

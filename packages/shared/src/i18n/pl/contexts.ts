@@ -15,6 +15,8 @@ export const contexts: Pick<Dictionary, keyof typeof import('../en/contexts').co
   'contexts.menu.showInAll': 'Pokaż we „Wszystkie zadania”',
   'contexts.menu.delete': 'Usuń kategorię',
   'contexts.menu.deleteFailed': 'Nie udało się usunąć kategorii',
+  'contexts.menu.deleteConfirm':
+    'Usunąć „{name}”? Jej ukończone zadania zostaną zachowane, tylko bez kategorii.',
   'contexts.screen.noOpenTasks': 'Brak otwartych zadań',
   'contexts.drawer.caption': 'KATEGORIE',
   'contexts.drawer.newContext': 'Nowa kategoria',
@@ -28,7 +30,8 @@ export const contexts: Pick<Dictionary, keyof typeof import('../en/contexts').co
   'contexts.section.manage': 'Zarządzaj sekcjami',
   'contexts.section.namePlaceholder': 'Nazwa sekcji',
   'contexts.section.addTaskTo': 'Dodaj zadanie do {section}…',
-  'contexts.section.deleteConfirm': 'Usunąć „{name}”? Jej zadania trafią do „Nieposortowane”.',
+  'contexts.section.deleteConfirm': 'Usunąć „{name}”? Jej zadania trafią do „{target}”.',
+  'contexts.section.deleteConfirmLast': 'Usunąć „{name}”? Jej zadania zostaną w kategorii.',
   'contexts.section.duplicate': 'Sekcja o tej nazwie już istnieje',
   'contexts.section.none': 'Brak sekcji',
   'contexts.section.addChip': 'Dodaj sekcję',
