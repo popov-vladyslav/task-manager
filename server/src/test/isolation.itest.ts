@@ -14,7 +14,6 @@ import {
   loginCodes,
   pushTokens,
   recurrenceRules,
-  sections,
   subtasks,
   tasks,
   users,
@@ -299,114 +298,6 @@ test('B round-trips a subtask: add, tick, reorder, delete', async () => {
   );
 });
 
-test('A cannot list, create, rename, reorder or delete B’s sections', async () => {
-  const ctxId = await bobsContextId();
-  const created = await fetch(`${server.baseUrl}/api/contexts/${ctxId}/sections`, {
-    method: 'POST',
-    headers: bob.headers,
-    body: JSON.stringify({ name: 'Bob step' }),
-  });
-  assert.equal(created.status, 201);
-  const section = (await created.json()) as { id: string; name: string };
-
-  const list = (await (
-    await fetch(`${server.baseUrl}/api/sections`, { headers: alice.headers })
-  ).json()) as { id: string }[];
-  assert.ok(!list.some((s) => s.id === section.id), "B's section leaked into A's list");
-
-  const attempts: [string, RequestInit][] = [
-    [`/api/contexts/${ctxId}/sections`, { method: 'POST', body: JSON.stringify({ name: 'x' }) }],
-    [`/api/sections/${section.id}`, { method: 'PATCH', body: JSON.stringify({ name: 'pwned' }) }],
-    [`/api/sections/${section.id}/reorder`, { method: 'POST', body: JSON.stringify({}) }],
-    [`/api/sections/${section.id}`, { method: 'DELETE' }],
-  ];
-  for (const [path, init] of attempts) {
-    const res = await fetch(`${server.baseUrl}${path}`, { ...init, headers: alice.headers });
-    assert.equal(res.status, 404, `${init.method} ${path} should be refused`);
-  }
-  const [row] = await db.select().from(sections).where(eq(sections.id, section.id));
-  assert.ok(row, "B's section must still exist");
-  assert.equal(row.name, 'Bob step');
-
-  const stolen = await fetch(`${server.baseUrl}/api/tasks`, {
-    method: 'POST',
-    headers: alice.headers,
-    body: JSON.stringify({ title: 'borrowing a section', sectionId: section.id }),
-  });
-  assert.equal(stolen.status, 400, "A's task must not attach to B's section");
-});
-
-test('B round-trips a section: create, task in it, rename, reorder, delete keeps the task', async () => {
-  const ctxId = await bobsContextId();
-  const post = (name: string) =>
-    fetch(`${server.baseUrl}/api/contexts/${ctxId}/sections`, {
-      method: 'POST',
-      headers: bob.headers,
-      body: JSON.stringify({ name }),
-    });
-  const first = (await (await post('Inbox')).json()) as { id: string; sort: number };
-  const second = (await (await post('Review')).json()) as { id: string; sort: number };
-  assert.ok(second.sort > first.sort, 'new sections append at the end');
-  assert.equal((await post('inbox')).status, 409, 'names are unique per category');
-
-  const task = (await (
-    await fetch(`${server.baseUrl}/api/tasks`, {
-      method: 'POST',
-      headers: bob.headers,
-      body: JSON.stringify({ title: 'sectioned', contextId: ctxId, sectionId: first.id }),
-    })
-  ).json()) as { id: string; sectionId: string | null };
-  assert.equal(task.sectionId, first.id);
-
-  const renamed = (await (
-    await fetch(`${server.baseUrl}/api/sections/${first.id}`, {
-      method: 'PATCH',
-      headers: bob.headers,
-      body: JSON.stringify({ name: 'Backlog' }),
-    })
-  ).json()) as { name: string };
-  assert.equal(renamed.name, 'Backlog');
-
-  const moved = (await (
-    await fetch(`${server.baseUrl}/api/sections/${second.id}/reorder`, {
-      method: 'POST',
-      headers: bob.headers,
-      body: JSON.stringify({ beforeId: first.id }),
-    })
-  ).json()) as { sort: number };
-  assert.ok(moved.sort < first.sort, 'reorder before the first section');
-
-  const cleared = (await (
-    await fetch(`${server.baseUrl}/api/tasks/${task.id}`, {
-      method: 'PATCH',
-      headers: bob.headers,
-      body: JSON.stringify({ contextId: null }),
-    })
-  ).json()) as { sectionId: string | null };
-  assert.equal(cleared.sectionId, null, 'leaving the category clears the section');
-
-  await fetch(`${server.baseUrl}/api/tasks/${task.id}`, {
-    method: 'PATCH',
-    headers: bob.headers,
-    body: JSON.stringify({ contextId: ctxId, sectionId: second.id }),
-  });
-  const del = await fetch(`${server.baseUrl}/api/sections/${second.id}`, {
-    method: 'DELETE',
-    headers: bob.headers,
-  });
-  assert.equal(del.status, 204);
-  const [after] = await db.select().from(tasks).where(eq(tasks.id, task.id));
-  assert.ok(after, 'deleting a section never deletes its tasks');
-  assert.equal(after.sectionId, first.id, 'its tasks move to the first remaining section');
-  const delLast = await fetch(`${server.baseUrl}/api/sections/${first.id}`, {
-    method: 'DELETE',
-    headers: bob.headers,
-  });
-  assert.equal(delLast.status, 204, 'the last section can be deleted too');
-  const [orphan] = await db.select().from(tasks).where(eq(tasks.id, task.id));
-  assert.equal(orphan.sectionId, null, 'with no section left the task just stays in the category');
-});
-
 // The cross-user foreign key the Challenge flagged: owning the row you write is
 // not enough — the rows it REFERENCES must be yours too.
 test('A cannot attach a task to B’s context', async () => {
@@ -628,12 +519,6 @@ test('every /api route requires authentication', async () => {
     ['PATCH', '/api/tasks/x/subtasks/y'],
     ['DELETE', '/api/tasks/x/subtasks/y'],
     ['POST', '/api/tasks/x/subtasks/reorder'],
-    ['GET', '/api/contexts/1/sections'],
-    ['POST', '/api/contexts/1/sections'],
-    ['GET', '/api/sections'],
-    ['PATCH', '/api/sections/x'],
-    ['DELETE', '/api/sections/x'],
-    ['POST', '/api/sections/x/reorder'],
     ['GET', '/api/timer'],
     ['POST', '/api/timer/start'],
     ['POST', '/api/timer/stop'],

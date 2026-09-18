@@ -25,18 +25,4 @@ export const contexts: Pick<Dictionary, keyof typeof import('../en/contexts').co
   'contexts.drawer.closeMenu': 'Zamknij menu',
   'contexts.menu.deleteBlocked':
     'Otwarte zadania nadal używają tej kategorii — przenieś je lub usuń.',
-  'contexts.section.unsorted': 'Nieposortowane',
-  'contexts.section.new': 'Nowa sekcja',
-  'contexts.section.manage': 'Zarządzaj sekcjami',
-  'contexts.section.namePlaceholder': 'Nazwa sekcji',
-  'contexts.section.addTaskTo': 'Dodaj zadanie do {section}…',
-  'contexts.section.deleteConfirm': 'Usunąć „{name}”? Jej zadania trafią do „{target}”.',
-  'contexts.section.deleteConfirmLast': 'Usunąć „{name}”? Jej zadania zostaną w kategorii.',
-  'contexts.section.duplicate': 'Sekcja o tej nazwie już istnieje',
-  'contexts.section.none': 'Brak sekcji',
-  'contexts.section.addChip': 'Dodaj sekcję',
-  'contexts.section.reorder': 'Zmień kolejność',
-  'contexts.editor.sections': 'Sekcje',
-  'contexts.section.turnOn': 'Włącz sekcje',
-  'contexts.section.turnOff': 'Wyłącz sekcje',
 };
