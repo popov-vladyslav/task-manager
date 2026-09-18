@@ -10,6 +10,20 @@ export function isInAll(task: Task, excluded: Set<number>): boolean {
   return task.contextId == null || !excluded.has(task.contextId);
 }
 
+export function completedCountFor(
+  counts: Record<string, number> | null,
+  contextId: number | null,
+  excluded: Set<number>,
+): number | undefined {
+  if (!counts) return undefined;
+  if (contextId != null) return counts[String(contextId)] ?? 0;
+  let sum = 0;
+  for (const [key, n] of Object.entries(counts)) {
+    if (key === 'none' || !excluded.has(Number(key))) sum += n;
+  }
+  return sum;
+}
+
 export function subtaskProgress(task: Task): { done: number; total: number } | null {
   const subs = task.subtasks ?? [];
   if (subs.length === 0) return null;

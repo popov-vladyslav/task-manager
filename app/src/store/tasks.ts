@@ -32,6 +32,7 @@ interface TasksState {
   contexts: Context[];
   tasks: Task[]; // all open tasks (status != done), unfiltered
   completed: Task[]; // done tasks, loaded lazily for the "Show completed" section
+  completedCounts: Record<string, number> | null;
   activeContextId: number | null; // null = "All"
   loading: boolean;
   hydrated: boolean;
@@ -85,6 +86,15 @@ interface TasksState {
 const replaceIn = (list: Task[], updated: Task) =>
   list.map((t) => (t.id === updated.id ? updated : t));
 
+export const countKey = (contextId: number | null) =>
+  contextId == null ? 'none' : String(contextId);
+
+const bump = (counts: Record<string, number> | null, contextId: number | null, delta: number) => {
+  if (!counts) return counts;
+  const key = countKey(contextId);
+  return { ...counts, [key]: Math.max(0, (counts[key] ?? 0) + delta) };
+};
+
 const mapSubtasks = (list: Task[], taskId: string, fn: (subs: Subtask[]) => Subtask[]) =>
   list.map((t) => (t.id === taskId ? { ...t, subtasks: fn(t.subtasks ?? []) } : t));
 
@@ -92,6 +102,7 @@ export const useTasksStore = create<TasksState>((set, get) => ({
   contexts: [],
   tasks: [],
   completed: [],
+  completedCounts: null,
   activeContextId: null,
   loading: false,
   hydrated: false,
@@ -108,9 +119,20 @@ export const useTasksStore = create<TasksState>((set, get) => ({
     if (!opts?.silent) set({ loading: true, error: null });
     inFlightLoad = (async () => {
       try {
-        const [contexts, tasks] = await Promise.all([api.listContexts(), api.listTasks()]);
+        const [contexts, tasks, completedCounts] = await Promise.all([
+          api.listContexts(),
+          api.listTasks(),
+          api.completedCounts().catch(() => null),
+        ]);
         const open = pendingDeletes.size ? tasks.filter((t) => !pendingDeletes.has(t.id)) : tasks;
-        set({ contexts, tasks: open, loading: false, hydrated: true, lastLoadedAt: Date.now() });
+        set({
+          contexts,
+          tasks: open,
+          completedCounts,
+          loading: false,
+          hydrated: true,
+          lastLoadedAt: Date.now(),
+        });
       } catch (e) {
         set({
           loading: false,
@@ -134,7 +156,10 @@ export const useTasksStore = create<TasksState>((set, get) => ({
   async loadCompleted() {
     try {
       const completed = await api.listTasks({ status: 'done' });
-      set({ completed });
+      const counts: Record<string, number> = {};
+      for (const t of completed)
+        counts[countKey(t.contextId)] = (counts[countKey(t.contextId)] ?? 0) + 1;
+      set({ completed, completedCounts: counts });
     } catch {
       /* ignore — the section just stays empty */
     }
@@ -142,13 +167,16 @@ export const useTasksStore = create<TasksState>((set, get) => ({
 
   async uncomplete(task) {
     // Optimistic: move it out of the completed list back into the open list.
-    const { completed, tasks } = get();
-    set({ completed: completed.filter((t) => t.id !== task.id) });
+    const { completed, tasks, completedCounts } = get();
+    set({
+      completed: completed.filter((t) => t.id !== task.id),
+      completedCounts: bump(completedCounts, task.contextId, -1),
+    });
     try {
       const updated = await api.updateTask(task.id, { status: 'active' });
       set({ tasks: [updated, ...get().tasks] });
     } catch {
-      set({ completed, tasks }); // rollback
+      set({ completed, tasks, completedCounts }); // rollback
     }
   },
 
@@ -193,6 +221,10 @@ export const useTasksStore = create<TasksState>((set, get) => ({
       contexts: get().contexts.filter((c) => c.id !== id),
       activeContextId: get().activeContextId === id ? null : get().activeContextId,
     });
+    api
+      .completedCounts()
+      .then((completedCounts) => set({ completedCounts }))
+      .catch(() => {});
   },
 
   async resetData() {
@@ -224,21 +256,28 @@ export const useTasksStore = create<TasksState>((set, get) => ({
     // completed section has been loaded) surfaces it there.
     const prev = get().tasks;
     const prevCompleted = get().completed;
+    const prevCounts = get().completedCounts;
     set({
       tasks: prev.filter((t) => t.id !== task.id),
       completed: [{ ...task, status: 'done' }, ...prevCompleted],
+      completedCounts: bump(prevCounts, task.contextId, 1),
     });
     try {
       await api.updateTask(task.id, { completed: true });
     } catch {
-      set({ tasks: prev, completed: prevCompleted }); // rollback
+      set({ tasks: prev, completed: prevCompleted, completedCounts: prevCounts }); // rollback
     }
   },
 
   async patchTask(id, patch) {
+    const before = get().tasks.find((t) => t.id === id) ?? get().completed.find((t) => t.id === id);
     const updated = await api.updateTask(id, patch);
     const done = updated.status === 'done';
+    let counts = get().completedCounts;
+    if (before?.status === 'done') counts = bump(counts, before.contextId, -1);
+    if (done) counts = bump(counts, updated.contextId, 1);
     set({
+      completedCounts: counts,
       tasks: done
         ? get().tasks.filter((t) => t.id !== id)
         : get().tasks.some((t) => t.id === id)
@@ -259,11 +298,17 @@ export const useTasksStore = create<TasksState>((set, get) => ({
     set({
       tasks: get().tasks.filter((t) => t.id !== id),
       completed: get().completed.filter((t) => t.id !== id),
+      completedCounts: wasDone
+        ? bump(get().completedCounts, task.contextId, -1)
+        : get().completedCounts,
     });
     const restore = () => {
       if (wasDone) {
         if (!get().completed.some((t) => t.id === id))
-          set({ completed: [task, ...get().completed] });
+          set({
+            completed: [task, ...get().completed],
+            completedCounts: bump(get().completedCounts, task.contextId, 1),
+          });
       } else if (!get().tasks.some((t) => t.id === id)) {
         set({ tasks: [task, ...get().tasks] });
       }
@@ -288,6 +333,8 @@ export const useTasksStore = create<TasksState>((set, get) => ({
     pendingDeletes.delete(id);
     const list = pending.task.status === 'done' ? 'completed' : 'tasks';
     if (!get()[list].some((t) => t.id === id)) set({ [list]: [pending.task, ...get()[list]] });
+    if (list === 'completed')
+      set({ completedCounts: bump(get().completedCounts, pending.task.contextId, 1) });
   },
 
   requestOpenTask(id) {

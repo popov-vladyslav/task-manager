@@ -111,5 +111,5 @@ const styles = StyleSheet.create({
   // absolute-fill inside a flex:1 parent so the list bounds + scrolls on web
   // (react-native-web needs this; flex min-height:0 alone doesn't work here).
   list: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
-  content: { paddingHorizontal: 20, paddingTop: 4, paddingBottom: 24 },
+  content: { flexGrow: 1, paddingHorizontal: 16, paddingTop: 4, paddingBottom: 24 },
 });

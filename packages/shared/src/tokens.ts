@@ -36,20 +36,25 @@ export const radius = {
 export const contextStripWidth = 3; // border-left px on each card
 
 export const contextPalette = [
-  '#5B8DEF',
-  '#4FB6A9',
-  '#E8A33D',
-  '#D9668B',
-  '#9B7EDE',
-  '#E0574B',
-  '#6BBF59',
-  '#4AA3D9',
-  '#C77DD6',
-  '#8B93A3',
+  '#5597E9', // blue
+  '#6D74D8', // indigo
+  '#A479DE', // violet
+  '#C770C1', // magenta
+  '#E78AAA', // pink
+  '#DF6862', // red
+  '#E7844D', // orange
+  '#EEA743', // amber
+  '#E6CE57', // yellow
+  '#9DCD53', // lime
+  '#5DB96E', // green
+  '#3DB8A7', // teal
+  '#49BFD9', // cyan
+  '#9A7050', // brown
+  '#8B93A3', // slate
 ] as const;
 
 // The two work contexts seeded into a new account. Colors are used consistently everywhere.
 export const seedContexts = [
-  { slug: 'routine', label: 'Routine', color: '#C77DD6', excludeFromAll: true },
-  { slug: 'meetings', label: 'Meetings', color: '#4FB6A9', excludeFromAll: false },
+  { slug: 'routine', label: 'Routine', color: '#C770C1', excludeFromAll: true },
+  { slug: 'meetings', label: 'Meetings', color: '#3DB8A7', excludeFromAll: false },
 ] as const;

@@ -87,6 +87,35 @@ test('two accounts start with their own starter contexts, not shared ones', asyn
   assert.deepEqual(overlap, [], 'no context row may appear in both accounts');
 });
 
+test('completed counts are per account and per context, and only count done tasks', async () => {
+  const bobId = await bobsContextId();
+  const make = async (title: string, done: boolean) => {
+    const created = (await (
+      await fetch(`${server.baseUrl}/api/tasks`, {
+        method: 'POST',
+        headers: bob.headers,
+        body: JSON.stringify({ title, contextId: bobId }),
+      })
+    ).json()) as { id: string };
+    if (done)
+      await fetch(`${server.baseUrl}/api/tasks/${created.id}`, {
+        method: 'PATCH',
+        headers: bob.headers,
+        body: JSON.stringify({ completed: true }),
+      });
+  };
+  await make('bob done 1', true);
+  await make('bob done 2', true);
+  await make('bob open', false);
+
+  const counts = async (headers: Record<string, string>) =>
+    (await (
+      await fetch(`${server.baseUrl}/api/tasks/completed-counts`, { headers })
+    ).json()) as Record<string, number>;
+  assert.equal((await counts(bob.headers))[String(bobId)], 2, 'only done tasks are counted');
+  assert.equal((await counts(alice.headers))[String(bobId)], undefined, "B's counts leak to A");
+});
+
 test('A cannot see B’s context in the list', async () => {
   const bobId = await bobsContextId();
   const list = (await (

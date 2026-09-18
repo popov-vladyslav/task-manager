@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Keyboard, Pressable, StyleSheet, Text, View, type TextInput } from 'react-native';
 import { AlignLeft, ArrowRight, Bell, ChevronUp, Clock, Repeat } from 'lucide-react-native';
-import { contextEmoji } from '@task-manager/shared';
+import { ContextMark } from '../../components/context-mark';
 import { BottomSheet, SheetInput } from '../../components/bottom-sheet';
 import { Chip } from '../../components/chip';
 import { usePopoverAnchor } from '../../components/popover';
@@ -194,10 +194,11 @@ export function QuickCreateSheet({
         />
         <View ref={popover.ref} collapsable={false}>
           <Chip
-            label={
-              context
-                ? `${contextEmoji(context) ?? ''} ${context.label}`.trim()
-                : tr('when.create.context')
+            label={context ? context.label : tr('when.create.context')}
+            icon={
+              context ? (
+                <ContextMark emoji={context.emoji} color={context.color} size={12} />
+              ) : undefined
             }
             selected={!!context}
             tint={chipTint.context}

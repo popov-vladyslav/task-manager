@@ -35,7 +35,7 @@ CREATE TABLE contexts (
   id          serial PRIMARY KEY,
   slug        text UNIQUE NOT NULL,          -- 'work', 'home'
   label       text NOT NULL,
-  color       text NOT NULL,                 -- '#5B8DEF'
+  color       text NOT NULL,                 -- '#5597E9'; palette = contextPalette (15 hues), 0020 remapped old palette colours
   sort_order  int  NOT NULL DEFAULT 0,
   archived    boolean NOT NULL DEFAULT false,
   exclude_from_all boolean NOT NULL DEFAULT false, -- 0004: hidden from "All"
@@ -167,6 +167,8 @@ PATCH  /api/contexts/:id       { label?, color?, archived?, excludeFromAll?, emo
 POST   /api/contexts/reorder   { ids: number[] } → повний список; чужі id пропускаються
 
 GET    /api/tasks?context=&status=          (сортовано по sort_*)
+GET    /api/tasks/completed-counts       → { [contextId | 'none']: n } — кількість задач зі status='done' по контекстах
+                                          (без завантаження списку; app ховає "Показати виконані", якщо 0)
 POST   /api/tasks              { title, contextId?, dueAt?, remindAt?, durationMin?, recurrence?, note? }
 PATCH  /api/tasks/:id          (будь-які поля вкл. note (nullable); { completed: true } → complete-логіка)
 DELETE /api/tasks/:id

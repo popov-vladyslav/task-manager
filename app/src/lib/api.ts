@@ -94,6 +94,7 @@ export const api = {
   reorderContexts: (ids: number[]) =>
     request<Context[]>('/api/contexts/reorder', { method: 'POST', body: { ids } }),
   resetData: () => request<void>('/api/data', { method: 'DELETE', body: { confirm: 'RESET' } }),
+  completedCounts: () => request<Record<string, number>>('/api/tasks/completed-counts'),
   listTasks: (params?: { context?: number; status?: string }) =>
     request<Task[]>(`/api/tasks${qs(params)}`),
   createTask: (input: CreateTaskInput) =>

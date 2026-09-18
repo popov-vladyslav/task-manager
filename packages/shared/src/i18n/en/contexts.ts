@@ -14,7 +14,7 @@ export const contexts = {
   'contexts.menu.deleteFailed': 'Could not delete category',
   'contexts.menu.deleteConfirm':
     'Delete "{name}"? Its completed tasks keep their history, just without the category.',
-  'contexts.screen.noOpenTasks': 'No open tasks',
+  'contexts.screen.noOpenTasks': 'Empty list',
   'contexts.drawer.caption': 'CATEGORIES',
   'contexts.drawer.newContext': 'New category',
   'contexts.drawer.hiddenNote':

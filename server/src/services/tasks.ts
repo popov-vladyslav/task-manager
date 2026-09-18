@@ -108,6 +108,17 @@ export async function listTasks(userId: string, filter: ListFilter): Promise<Tas
   return rowsToTasks(userId, rows);
 }
 
+export async function completedCounts(userId: string): Promise<Record<string, number>> {
+  const rows = await db
+    .select({ contextId: tasks.contextId, n: sql<number>`count(*)::int` })
+    .from(tasks)
+    .where(and(ownedBy(tasks.userId, userId), eq(tasks.status, 'done')))
+    .groupBy(tasks.contextId);
+  const out: Record<string, number> = {};
+  for (const r of rows) out[r.contextId == null ? 'none' : String(r.contextId)] = Number(r.n);
+  return out;
+}
+
 export async function getTask(userId: string, id: string): Promise<Task> {
   const rows = await db
     .select(selection)

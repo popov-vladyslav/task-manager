@@ -16,7 +16,7 @@ export const contexts: Pick<Dictionary, keyof typeof import('../en/contexts').co
   'contexts.menu.deleteFailed': 'Не вдалося видалити категорію',
   'contexts.menu.deleteConfirm':
     'Видалити «{name}»? Її завершені задачі збережуться, лише без категорії.',
-  'contexts.screen.noOpenTasks': 'Немає відкритих задач',
+  'contexts.screen.noOpenTasks': 'Пустий список',
   'contexts.drawer.caption': 'КАТЕГОРІЇ',
   'contexts.drawer.newContext': 'Нова категорія',
   'contexts.drawer.hiddenNote':

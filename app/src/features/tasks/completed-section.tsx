@@ -61,6 +61,7 @@ export function groupCompletedByDay(tasks: Task[], tr: T, intl: string): Complet
 }
 
 interface CompletedSectionProps {
+  count?: number;
   tasks: Task[];
   open: boolean;
   onToggle: () => void;
@@ -69,6 +70,7 @@ interface CompletedSectionProps {
 }
 
 export function CompletedSection({
+  count,
   tasks,
   open,
   onToggle,
@@ -92,6 +94,7 @@ export function CompletedSection({
         <Text style={styles.toggleLabel}>
           {open ? tr('tasks.completed.hide') : tr('tasks.completed.show')}
         </Text>
+        {count != null ? <Text style={styles.count}>{count}</Text> : null}
       </Pressable>
       {open ? (
         tasks.length === 0 ? (
@@ -131,6 +134,12 @@ const makeStyles = (t: Theme) =>
   StyleSheet.create({
     wrap: { marginTop: 8 },
     toggle: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 10 },
+    count: {
+      marginLeft: 'auto',
+      fontFamily: t.fonts.mono,
+      fontSize: 11,
+      color: t.colors.textMuted,
+    },
     toggleLabel: {
       fontFamily: t.fonts.mono,
       fontSize: 11,

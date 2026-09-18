@@ -1,7 +1,8 @@
 import { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Check } from 'lucide-react-native';
-import { contextEmoji, type Context } from '@task-manager/shared';
+import type { Context } from '@task-manager/shared';
+import { ContextMark } from '../../components/context-mark';
 import { Popover, type AnchorRect } from '../../components/popover';
 import { useT } from '../../lib/i18n';
 import { useTasksStore } from '../../store/tasks';
@@ -81,7 +82,7 @@ function ContextRow({
       style={({ pressed }) => [styles.row, (pressed || selected) && styles.rowOn]}
     >
       <View style={[styles.emojiBox, tint.emoji]}>
-        <Text style={styles.emoji}>{contextEmoji(context) ?? ''}</Text>
+        <ContextMark emoji={context.emoji} color={context.color} size={12} />
       </View>
       <Text style={styles.name} numberOfLines={1}>
         {context.label}
@@ -114,7 +115,6 @@ const makeStyles = (t: Theme) =>
       justifyContent: 'center',
     },
     emojiBoxNone: { borderWidth: 1, borderColor: t.colors.borderStrong, borderStyle: 'dashed' },
-    emoji: { fontSize: 12 },
     name: { flex: 1, fontSize: 14, fontWeight: '600', color: t.colors.textPrimary },
     count: {
       fontFamily: t.fonts.mono,

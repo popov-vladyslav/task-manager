@@ -1,16 +1,17 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, useWindowDimensions, View } from 'react-native';
 import type { Context, Task } from '@task-manager/shared';
 import { Header } from '../../components/header';
 import { haptics } from '../../lib/haptics';
 import { useT } from '../../lib/i18n';
 import { useRefreshOnFocus } from '../../lib/use-refresh-on-focus';
 import { useTasksStore } from '../../store/tasks';
-import { excludedContextIds, isInAll } from '../../store/task-selectors';
+import { completedCountFor, excludedContextIds, isInAll } from '../../store/task-selectors';
 import { useToastStore } from '../../store/toast';
 import { useUiStore } from '../../store/ui';
 import { useTheme, type Theme } from '../../theme';
 import { WideSidebar } from '../nav/wide-sidebar';
+import { EmptyState } from '../../components/empty-state';
 import { CompletedSection } from '../tasks/completed-section';
 import { DraggableTaskList } from '../tasks/draggable-task-list';
 import { AddTaskRow } from '../tasks/add-task-row';
@@ -80,6 +81,8 @@ export function ContextScreen() {
     return tasks.filter(inView).sort((a, b) => a[key] - b[key]);
   }, [tasks, activeContextId, inView]);
 
+  const completedCounts = useTasksStore((s) => s.completedCounts);
+  const completedCount = completedCountFor(completedCounts, activeContextId, excluded);
   const visibleCompleted = useMemo(() => completed.filter(inView), [completed, inView]);
 
   const toggleShowCompleted = () => {
@@ -130,18 +133,20 @@ export function ContextScreen() {
     [contextById, onToggle, onOpenDetail, onDeleteTask],
   );
 
-  const completedSection = (
-    <CompletedSection
-      tasks={visibleCompleted}
-      open={showCompleted}
-      onToggle={toggleShowCompleted}
-      onUncomplete={(task) => {
-        haptics.select();
-        uncomplete(task);
-      }}
-      onOpen={(task) => openTask(task.id)}
-    />
-  );
+  const completedSection =
+    completedCount === 0 ? null : (
+      <CompletedSection
+        count={completedCount}
+        tasks={visibleCompleted}
+        open={showCompleted}
+        onToggle={toggleShowCompleted}
+        onUncomplete={(task) => {
+          haptics.select();
+          uncomplete(task);
+        }}
+        onOpen={(task) => openTask(task.id)}
+      />
+    );
 
   const list =
     loading && visible.length === 0 ? (
@@ -154,7 +159,7 @@ export function ContextScreen() {
           reorder(movedId, afterId, beforeId, activeContextId == null ? 'global' : 'context')
         }
         footer={completedSection}
-        empty={<Text style={styles.empty}>{tr('contexts.screen.noOpenTasks')}</Text>}
+        empty={<EmptyState label={tr('contexts.screen.noOpenTasks')} />}
         renderCard={renderCard}
       />
     );
@@ -215,7 +220,6 @@ const makeStyles = (t: Theme) =>
     root: { flex: 1, backgroundColor: t.colors.bgBase },
     headerSpacer: { width: 38, height: 38 },
     spinner: { marginTop: 40 },
-    empty: { color: t.colors.textMuted, textAlign: 'center', marginTop: 40 },
     wideRoot: { flex: 1, flexDirection: 'row', backgroundColor: t.colors.bgBase },
     wideMain: { flex: 1, paddingHorizontal: 12 },
     wideListWrap: { flex: 1, minHeight: 0 },

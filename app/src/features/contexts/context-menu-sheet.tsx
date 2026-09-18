@@ -1,7 +1,7 @@
 import { useMemo, useState, type ComponentType } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Eye, EyeOff, Pencil, Trash2, type LucideProps } from 'lucide-react-native';
-import { contextEmoji } from '@task-manager/shared';
+import { ContextMark } from '../../components/context-mark';
 import { BottomSheet } from '../../components/bottom-sheet';
 import { ConfirmDialog } from '../../components/confirm-dialog';
 import { ApiError } from '../../lib/api';
@@ -100,7 +100,7 @@ export function ContextMenuSheet() {
         <>
           <View style={styles.head}>
             <View style={[styles.emojiBox, tint.emoji]}>
-              <Text style={styles.emoji}>{contextEmoji(context) ?? ''}</Text>
+              <ContextMark emoji={context.emoji} color={context.color} size={14} />
             </View>
             <View>
               <Text style={styles.name}>{context.label}</Text>
@@ -173,7 +173,6 @@ const makeStyles = (t: Theme) =>
       alignItems: 'center',
       justifyContent: 'center',
     },
-    emoji: { fontSize: 14 },
     name: { fontSize: 15.5, fontWeight: '700', color: t.colors.textPrimary },
     sub: { fontFamily: t.fonts.mono, fontSize: 11.5, color: t.colors.textMuted, marginTop: 2 },
     group: { paddingTop: 8, paddingBottom: 12, paddingHorizontal: 10 },

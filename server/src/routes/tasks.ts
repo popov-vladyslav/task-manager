@@ -57,6 +57,10 @@ router.get('/', async (req, res) => {
   );
 });
 
+router.get('/completed-counts', async (req, res) => {
+  res.json(await svc.completedCounts(requireUserId(req)));
+});
+
 router.get('/:id', async (req, res) => {
   res.json(await svc.getTask(requireUserId(req), req.params.id));
 });
