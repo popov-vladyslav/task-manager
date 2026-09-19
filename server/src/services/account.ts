@@ -24,8 +24,9 @@ export async function getAccount(userId: string): Promise<AccountInfo> {
 // store reviewer.
 //
 // Everything the account owns cascades from the user row (0010_multi_user.sql):
-// contexts, recurrence_rules, tasks, subtasks, time_entries, notification_log,
-// push_tokens, settings, sessions and mcp_tokens. The three NO ACTION foreign
+// contexts, recurrence_rules, recurrence_overrides, tasks, subtasks,
+// time_entries, notification_log, push_tokens, settings, sessions and
+// mcp_tokens. The three NO ACTION foreign
 // keys between tasks / recurrence_rules / contexts are checked at END of
 // statement rather than per row, so the parent delete takes them all down in one
 // go instead of tripping over its own children.

@@ -1,7 +1,12 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { contextEmoji, EMOJI_MAX_LENGTH, isSingleGrapheme } from '@task-manager/shared';
-import type { Context, Task, UpdateContextInput } from '@task-manager/shared';
+import type {
+  Context,
+  RecurrenceInput,
+  Task,
+  UpdateContextInput,
+} from '@task-manager/shared';
 import * as tasksSvc from '../services/tasks';
 import * as contextsSvc from '../services/contexts';
 import * as subtasksSvc from '../services/subtasks';
@@ -37,8 +42,30 @@ const recurrenceInput = z.object({
     .optional()
     .describe("Day of month (1-31) for freq='monthly'. Defaults to 1."),
   remind_time: z.string().optional().describe("Reminder time 'HH:MM' applied to each occurrence."),
+  until: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional()
+    .describe("Last day the rule repeats, 'YYYY-MM-DD'. Omit for an open-ended rule."),
+  tracks_completion: z
+    .boolean()
+    .optional()
+    .describe(
+      'Whether occurrences are meant to be ticked off (default true). False for a routine ' +
+        'nobody completes by hand: an occurrence that passes is closed as skipped and never ' +
+        'counts as overdue.',
+    ),
 });
 type RecurrenceMcpInput = z.infer<typeof recurrenceInput>;
+
+function toRecurrenceInput(rule: string, r: RecurrenceMcpInput): RecurrenceInput {
+  return {
+    rule,
+    remindTime: r.remind_time ?? null,
+    until: r.until ?? null,
+    tracksCompletion: r.tracks_completion ?? true,
+  };
+}
 
 function toRuleString(r: RecurrenceMcpInput): { rule: string } | { error: string } {
   try {
@@ -205,7 +232,7 @@ export function buildMcpServer(userId: string): McpServer {
         'List open tasks (times shown in Europe/Warsaw). Filter by context slug, status, or overdue. Each task with a deadline reports duration_min — its block length in minutes; when no explicit duration was set this is the implicit default and is marked "(default)". A note, when set, is shown inline (first 200 chars).',
       inputSchema: {
         context: z.string().optional(),
-        status: z.enum(['active', 'waiting', 'done', 'missed']).optional(),
+        status: z.enum(['active', 'waiting', 'done', 'missed', 'skipped']).optional(),
         overdue: z.boolean().optional(),
       },
     },
@@ -216,10 +243,14 @@ export function buildMcpServer(userId: string): McpServer {
         if (!c) return text(`Unknown context '${context}'.`);
         contextId = c.id;
       }
+      // An occurrence of a routine that is not ticked off is never overdue, so
+      // it is dropped from this list entirely rather than at a day boundary.
+      const now = new Date();
       const list = await tasksSvc.listTasks(userId, {
         contextId,
         status,
-        dueBefore: overdue ? new Date() : undefined,
+        dueBefore: overdue ? now : undefined,
+        dropUntrackedBefore: overdue ? now : undefined,
       });
       const labels = await contextLabels(userId);
       return text(
@@ -278,11 +309,11 @@ export function buildMcpServer(userId: string): McpServer {
         if (!c) return text(`Unknown context '${context}'.`);
         contextId = c.id;
       }
-      let recurrenceRule: { rule: string; remindTime: string | null } | null = null;
+      let recurrenceRule: RecurrenceInput | null = null;
       if (recurrence) {
         const r = toRuleString(recurrence);
         if ('error' in r) return text(r.error);
-        recurrenceRule = { rule: r.rule, remindTime: recurrence.remind_time ?? null };
+        recurrenceRule = toRecurrenceInput(r.rule, recurrence);
       }
       const task = await tasksSvc.createTask(userId, {
         title,
@@ -311,7 +342,7 @@ export function buildMcpServer(userId: string): McpServer {
         due_at: z.string().nullable().optional(),
         remind_at: z.string().nullable().optional(),
         duration_min: z.number().int().positive().nullable().optional(),
-        status: z.enum(['active', 'waiting', 'done', 'missed']).optional(),
+        status: z.enum(['active', 'waiting', 'done', 'missed', 'skipped']).optional(),
         recurrence: recurrenceInput.nullable().optional(),
         note: z.string().nullable().optional(),
       },
@@ -337,7 +368,7 @@ export function buildMcpServer(userId: string): McpServer {
         } else {
           const rr = toRuleString(a.recurrence);
           if ('error' in rr) return text(rr.error);
-          patch.recurrence = { rule: rr.rule, remindTime: a.recurrence.remind_time ?? null };
+          patch.recurrence = toRecurrenceInput(rr.rule, a.recurrence);
         }
       }
       const updated = await tasksSvc.updateTask(userId, r.task.id, patch);

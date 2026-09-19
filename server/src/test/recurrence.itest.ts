@@ -1,0 +1,380 @@
+// Phase 4: the rule fields the calendar projection and the spawner read --
+// `until`, `tracks_completion` and `duration_min` -- have to survive the trip
+// through the task API, because nothing else writes them. The spawn/skip/
+// override/split behaviour itself arrives with steps 4.4 and 4.10.
+import { after, before, test } from 'node:test';
+import assert from 'node:assert/strict';
+import { eq } from 'drizzle-orm';
+import type { Task } from '@task-manager/shared';
+import { closePool, mcpCall, resetDb, startTestServer, type TestServer } from './harness';
+import { db } from '../db/client';
+import { loginCodes, recurrenceOverrides, recurrenceRules, tasks, users } from '../db/schema';
+import { hashToken } from '../lib/tokens';
+import { localDateStr } from '../lib/recurrence-plan';
+import { spawnDueRecurring } from '../services/recurring';
+import * as tasksSvc from '../services/tasks';
+
+let server: TestServer;
+let headers: Record<string, string>;
+let userId: string;
+let mcpToken: string;
+
+async function signUp(email: string): Promise<void> {
+  const token = `code-${email}`;
+  await db.insert(loginCodes).values({
+    tokenHash: hashToken(token),
+    email,
+    expiresAt: new Date(Date.now() + 60_000),
+  });
+  const res = await fetch(`${server.baseUrl}/auth/verify`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token }),
+  });
+  const { jwt } = (await res.json()) as { jwt: string };
+  const [row] = await db.select({ id: users.id }).from(users).where(eq(users.email, email));
+  userId = row.id;
+  headers = { Authorization: `Bearer ${jwt}`, 'Content-Type': 'application/json' };
+
+  // The token is only ever printed, never returned — capture that one line.
+  const printed: string[] = [];
+  const log = console.log;
+  console.log = (...args: unknown[]) => {
+    printed.push(args.map(String).join(' '));
+  };
+  try {
+    await fetch(`${server.baseUrl}/api/mcp-token`, { method: 'POST', headers });
+  } finally {
+    console.log = log;
+  }
+  const line = printed.find((c) => c.includes('token:'));
+  assert.ok(line, 'an MCP token should have been issued');
+  mcpToken = line.split('token:')[1].trim();
+}
+
+async function createTask(body: Record<string, unknown>): Promise<Task> {
+  const res = await fetch(`${server.baseUrl}/api/tasks`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(body),
+  });
+  // Read the body once: an `await res.text()` passed as the assertion message is
+  // evaluated eagerly and would consume it before the json() below.
+  const payload = await res.text();
+  assert.equal(res.status, 201, payload);
+  return JSON.parse(payload) as Task;
+}
+
+async function patchTask(id: string, body: Record<string, unknown>): Promise<Task> {
+  const res = await fetch(`${server.baseUrl}/api/tasks/${id}`, {
+    method: 'PATCH',
+    headers,
+    body: JSON.stringify(body),
+  });
+  const payload = await res.text();
+  assert.equal(res.status, 200, payload);
+  return JSON.parse(payload) as Task;
+}
+
+async function ruleOf(task: Task) {
+  assert.ok(task.recurrenceId, 'task should carry a rule id');
+  const [rule] = await db
+    .select()
+    .from(recurrenceRules)
+    .where(eq(recurrenceRules.id, task.recurrenceId));
+  return rule;
+}
+
+before(async () => {
+  await resetDb();
+  server = await startTestServer();
+  await signUp('recurrence@example.test');
+});
+
+after(async () => {
+  await server.close();
+  await closePool();
+});
+
+test('create carries until and tracksCompletion onto the rule and back out', async () => {
+  const task = await createTask({
+    title: 'water the plants',
+    dueAt: '2026-10-01T09:00',
+    durationMin: 15,
+    recurrence: { rule: 'daily', until: '2026-12-31', tracksCompletion: false },
+  });
+
+  assert.equal(task.recurrenceUntil, '2026-12-31');
+  assert.equal(task.tracksCompletion, false);
+
+  const rule = await ruleOf(task);
+  assert.equal(rule.until, '2026-12-31');
+  assert.equal(rule.tracksCompletion, false);
+  assert.equal(rule.durationMin, 15, 'the rule projects at the task’s block length');
+  assert.equal(rule.userId, userId);
+});
+
+test('a rule with no end date is open-ended and tracked by default', async () => {
+  const task = await createTask({
+    title: 'standup',
+    dueAt: '2026-10-01T09:30',
+    recurrence: { rule: 'weekly:mon' },
+  });
+
+  assert.equal(task.recurrenceUntil, null);
+  assert.equal(task.tracksCompletion, true);
+
+  const rule = await ruleOf(task);
+  assert.equal(rule.until, null);
+  assert.equal(rule.tracksCompletion, true);
+  // No duration given, but the task has a deadline, so it gets the default block.
+  assert.equal(rule.durationMin, task.durationMin);
+});
+
+test('a task with no rule reads as tracked and open-ended', async () => {
+  const task = await createTask({ title: 'one-off' });
+  assert.equal(task.recurrenceId, null);
+  assert.equal(task.recurrenceUntil, null);
+  assert.equal(task.tracksCompletion, true);
+});
+
+test('update rewrites until and tracksCompletion on an existing rule', async () => {
+  const task = await createTask({
+    title: 'bins out',
+    dueAt: '2026-10-01T20:00',
+    recurrence: { rule: 'weekly:sun', until: '2026-11-30', tracksCompletion: false },
+  });
+  const ruleId = task.recurrenceId;
+
+  const updated = await patchTask(task.id, {
+    recurrence: { rule: 'weekly:sun', until: '2027-01-31', tracksCompletion: true },
+  });
+
+  assert.equal(updated.recurrenceId, ruleId, 'the same rule is edited, not replaced');
+  assert.equal(updated.recurrenceUntil, '2027-01-31');
+  assert.equal(updated.tracksCompletion, true);
+
+  const rule = await ruleOf(updated);
+  assert.equal(rule.until, '2027-01-31');
+  assert.equal(rule.tracksCompletion, true);
+});
+
+test('omitting the fields on an update clears until and restores tracking', async () => {
+  const task = await createTask({
+    title: 'vitamins',
+    dueAt: '2026-10-01T08:00',
+    recurrence: { rule: 'daily', until: '2026-10-31', tracksCompletion: false },
+  });
+
+  const updated = await patchTask(task.id, { recurrence: { rule: 'daily' } });
+
+  assert.equal(updated.recurrenceUntil, null, 'an omitted until means open-ended');
+  assert.equal(updated.tracksCompletion, true, 'an omitted flag means tracked');
+});
+
+test('resizing or rescheduling the task keeps the rule’s duration in sync', async () => {
+  const task = await createTask({
+    title: 'gym',
+    dueAt: '2026-10-01T18:00',
+    durationMin: 60,
+    recurrence: { rule: 'weekly:tue' },
+  });
+  assert.equal((await ruleOf(task)).durationMin, 60);
+
+  // Duration alone, rule untouched.
+  const resized = await patchTask(task.id, { durationMin: 90 });
+  assert.equal((await ruleOf(resized)).durationMin, 90);
+
+  // Deadline alone: the rule's spawn time follows, and so does the duration.
+  const moved = await patchTask(task.id, { dueAt: '2026-10-06T07:15' });
+  const rule = await ruleOf(moved);
+  assert.equal(rule.durationMin, 90);
+  assert.equal(rule.defaultDueTime, '07:15:00');
+});
+
+test('adding a rule to an existing task copies that task’s duration', async () => {
+  const task = await createTask({
+    title: 'physio',
+    dueAt: '2026-10-02T17:00',
+    durationMin: 45,
+  });
+  assert.equal(task.recurrenceId, null);
+
+  const recurring = await patchTask(task.id, {
+    recurrence: { rule: 'weekly:fri', until: '2026-12-01' },
+  });
+
+  const rule = await ruleOf(recurring);
+  assert.equal(rule.durationMin, 45);
+  assert.equal(rule.until, '2026-12-01');
+  assert.equal(rule.tracksCompletion, true);
+});
+
+// --- the spawner (step 4.4) ---------------------------------------------
+// These drive spawnDueRecurring directly against rules inserted here, and
+// assert only on their own rules' occurrences: the job is global by design, so
+// rules left by the tests above spawn in the same run.
+
+async function occurrencesOf(ruleId: string) {
+  return db.select().from(tasks).where(eq(tasks.recurrenceId, ruleId));
+}
+
+async function insertRule(values: Partial<typeof recurrenceRules.$inferInsert>) {
+  const [rule] = await db
+    .insert(recurrenceRules)
+    .values({ userId, title: 'spawner rule', rule: 'daily', active: true, ...values })
+    .returning();
+  return rule;
+}
+
+test('the spawned occurrence carries the rule’s block length', async () => {
+  const rule = await insertRule({ defaultDueTime: '09:00', durationMin: 25 });
+
+  await spawnDueRecurring();
+
+  const [occurrence] = await occurrencesOf(rule.id);
+  assert.ok(occurrence, 'the rule should have spawned');
+  assert.equal(occurrence.durationMin, 25);
+  assert.equal(occurrence.dueAt?.getHours(), 9);
+});
+
+test('a dateless rule spawns an occurrence with no block length', async () => {
+  const rule = await insertRule({ defaultDueTime: null, durationMin: 25 });
+
+  await spawnDueRecurring();
+
+  const [occurrence] = await occurrencesOf(rule.id);
+  assert.equal(occurrence.dueAt, null);
+  assert.equal(occurrence.durationMin, null);
+});
+
+test('a rule past its until spawns nothing', async () => {
+  const rule = await insertRule({ until: '2020-01-01' });
+
+  await spawnDueRecurring();
+
+  assert.deepEqual(await occurrencesOf(rule.id), []);
+  const [after] = await db
+    .select()
+    .from(recurrenceRules)
+    .where(eq(recurrenceRules.id, rule.id));
+  assert.equal(after.lastSpawned, null, 'and it is not stamped as having spawned');
+});
+
+test('an untracked rule closes its previous occurrence as skipped, not missed', async () => {
+  const rule = await insertRule({ tracksCompletion: false });
+  await spawnDueRecurring();
+  const [first] = await occurrencesOf(rule.id);
+  assert.ok(first);
+
+  // Re-arm so the next run supersedes what it just spawned.
+  await db.update(recurrenceRules).set({ lastSpawned: null }).where(eq(recurrenceRules.id, rule.id));
+  await spawnDueRecurring();
+
+  const rows = await occurrencesOf(rule.id);
+  assert.equal(rows.length, 2);
+  const closed = rows.find((r) => r.id === first.id);
+  assert.equal(closed?.status, 'skipped');
+  assert.ok(
+    rows.some((r) => r.id !== first.id && r.status === 'active'),
+    'the fresh occurrence is open',
+  );
+});
+
+test('a tracked rule still closes its previous occurrence as missed', async () => {
+  const rule = await insertRule({});
+  await spawnDueRecurring();
+  const [first] = await occurrencesOf(rule.id);
+
+  await db.update(recurrenceRules).set({ lastSpawned: null }).where(eq(recurrenceRules.id, rule.id));
+  await spawnDueRecurring();
+
+  const rows = await occurrencesOf(rule.id);
+  assert.equal(rows.find((r) => r.id === first.id)?.status, 'missed');
+});
+
+test('today’s override spawns the occurrence at the moved time, reminder included', async () => {
+  const rule = await insertRule({ defaultDueTime: '09:00', remindTime: '08:30' });
+  const today = localDateStr(new Date());
+  const movedDue = new Date(`${today}T16:00:00`);
+  const movedRemind = new Date(`${today}T15:30:00`);
+  await db.insert(recurrenceOverrides).values({
+    userId,
+    ruleId: rule.id,
+    occursOn: today,
+    dueAt: movedDue,
+    remindAt: movedRemind,
+  });
+
+  await spawnDueRecurring();
+
+  const [occurrence] = await occurrencesOf(rule.id);
+  assert.equal(occurrence.dueAt?.getTime(), movedDue.getTime());
+  assert.equal(occurrence.remindAt?.getTime(), movedRemind.getTime());
+});
+
+// --- overdue counts (step 4.5) -------------------------------------------
+// A routine nobody ticks off is never late: its occurrences must not show up
+// as overdue (spec P4.2). Today's agenda still lists today's own.
+
+test('an untracked routine left open from yesterday is not on today’s agenda', async () => {
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  const yesterday = new Date(todayStart.getTime() - 12 * 3600_000);
+
+  const untracked = await insertRule({ title: 'untracked rule', tracksCompletion: false });
+  const tracked = await insertRule({ title: 'tracked rule' });
+  await db.insert(tasks).values([
+    {
+      userId,
+      title: 'untracked yesterday',
+      recurrenceId: untracked.id,
+      dueAt: yesterday,
+      durationMin: 30,
+    },
+    {
+      userId,
+      title: 'untracked today',
+      recurrenceId: untracked.id,
+      dueAt: todayStart,
+      durationMin: 30,
+    },
+    {
+      userId,
+      title: 'tracked yesterday',
+      recurrenceId: tracked.id,
+      dueAt: yesterday,
+      durationMin: 30,
+    },
+  ]);
+
+  const titles = (await tasksSvc.tasksDueToday(userId)).map((t) => t.title);
+
+  assert.ok(!titles.includes('untracked yesterday'), 'yesterday’s routine is not overdue');
+  assert.ok(titles.includes('untracked today'), 'today’s own routine still belongs on the agenda');
+  assert.ok(titles.includes('tracked yesterday'), 'an ordinary recurring task is still overdue');
+});
+
+test('list_tasks overdue omits untracked occurrences entirely', async () => {
+  const res = await mcpCall(server.baseUrl, mcpToken, 'list_tasks', { overdue: true });
+  assert.equal(res.status, 200);
+
+  assert.ok(!res.text.includes('untracked yesterday'));
+  assert.ok(
+    !res.text.includes('untracked today'),
+    'even today’s untracked occurrence is not "overdue" once its time has passed',
+  );
+  assert.ok(res.text.includes('tracked yesterday'));
+});
+
+test('REST rejects an until that is not a plain date', async () => {
+  const res = await fetch(`${server.baseUrl}/api/tasks`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      title: 'bad until',
+      recurrence: { rule: 'daily', until: '2026-12-31T00:00:00Z' },
+    }),
+  });
+  assert.equal(res.status, 400);
+});

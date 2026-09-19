@@ -66,7 +66,8 @@ export const useCalendarStore = create<CalendarState>((set, get) => ({
     const promise = (async () => {
       try {
         const data = await api.getCalendar(from.toISOString(), to.toISOString());
-        const blocks = data.blocks.filter((b) => !isPendingDelete(b.id));
+        // A ghost has no task id, so nothing about it can be pending deletion.
+        const blocks = data.blocks.filter((b) => b.id == null || !isPendingDelete(b.id));
         set({ data: { ...data, blocks }, loading: false, lastLoadedAt: Date.now() });
       } catch {
         set({ loading: false });

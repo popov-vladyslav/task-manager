@@ -2,14 +2,20 @@
 // Timestamps cross the wire as ISO-8601 strings (the DB layer maps Date <-> string).
 // NOTE: task priority is intentionally out of scope (removed from DB, API, and UI).
 
-// 'done' and 'missed' are both terminal: neither shows in an active list.
+// 'done', 'missed' and 'skipped' are all terminal: none shows in an active list.
 // 'missed' closes out a recurring occurrence that was superseded by the next
-// one without ever being completed (see services/recurring.ts). Only the
-// recurrence engine sets it; ordinary one-off tasks are never marked missed.
-export type TaskStatus = 'active' | 'waiting' | 'done' | 'missed';
+// one without ever being completed (see services/recurring.ts). 'skipped' does
+// the same for a rule that does not track completion — a routine nobody ticks
+// off, which must stay out of every overdue count. Only the recurrence engine
+// sets either; ordinary one-off tasks are never marked missed or skipped.
+export type TaskStatus = 'active' | 'waiting' | 'done' | 'missed' | 'skipped';
 
 // Statuses that keep a task out of every open/active list.
-export const TERMINAL_STATUSES = ['done', 'missed'] as const satisfies readonly TaskStatus[];
+export const TERMINAL_STATUSES = [
+  'done',
+  'missed',
+  'skipped',
+] as const satisfies readonly TaskStatus[];
 export type CreatedVia = 'app' | 'mcp';
 export type ReorderScope = 'global' | 'context';
 
@@ -44,6 +50,10 @@ export interface Task {
   sortContext: number;
   recurrenceId: string | null;
   recurrenceRule: string | null; // e.g. 'daily' | 'weekly:mon' | 'monthly:15'
+  recurrenceUntil: string | null; // 'YYYY-MM-DD' — the rule's last day, when it has one
+  // Mirrors the rule's tracks_completion. True on a task with no rule: the
+  // field only means anything for a recurring occurrence.
+  tracksCompletion: boolean;
   completedAt: string | null;
   createdAt: string;
   createdVia: CreatedVia;
@@ -75,6 +85,10 @@ export interface RecurrenceInput {
   rule: string; // 'monthly:1' | 'monthly:20' | 'weekly:mon' | 'daily'
   remindTime?: string | null; // 'HH:MM'
   dueOffsetDays?: number;
+  until?: string | null; // 'YYYY-MM-DD' — last day the rule spawns; null = open-ended
+  // false => an occurrence that passes unfinished closes as 'skipped' and stays
+  // out of every overdue count. A routine nobody ticks off.
+  tracksCompletion?: boolean;
 }
 
 export interface CreateTaskInput {
@@ -142,12 +156,25 @@ export interface ActiveTimer {
 // (due_at + duration_min) — NOT from timer time_entries. Completed tasks are
 // included (rendered as done), not filtered out.
 export interface CalendarBlock {
-  id: string; // task id
+  // Stable identity for lists, layout and drag: the task id for a real block,
+  // `${ruleId}@${occursOn}` for a projected one. Always present — unlike `id`.
+  key: string;
+  // The task row behind this block, or null for a ghost, which has none.
+  id: string | null;
   title: string;
   contextId: number | null;
   startAt: string; // = the deadline (due_at)
   endAt: string; // = due_at + duration_min minutes
   done: boolean;
+  // A projected future occurrence of a recurrence rule: computed per request
+  // from the rule, never stored, and not yet a task (ADR 0010).
+  virtual: boolean;
+  // The rule this block belongs to — set on real occurrences too, so a drag can
+  // ask "this one or the whole series?" either way.
+  ruleId: string | null;
+  // The day the rule matched, 'YYYY-MM-DD'. Null for a one-off task. With a
+  // due_offset_d it is not the day the block is drawn on.
+  occursOn: string | null;
 }
 
 export interface CalendarData {

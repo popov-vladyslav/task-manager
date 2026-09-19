@@ -11,6 +11,7 @@ import {
   mcpTokens,
   notificationLog,
   pushTokens,
+  recurrenceOverrides,
   recurrenceRules,
   sessions,
   settings,
@@ -102,6 +103,18 @@ async function populate(account: Account): Promise<void> {
   });
   await db.insert(settings).values({ userId: account.id, key: 'repeat_reminders', value: true });
   await db.insert(notificationLog).values({ userId: account.id, taskId, kind: 'initial' });
+
+  // No endpoint writes overrides yet (phase 4.10), so seed one directly.
+  const [rule] = await db
+    .select()
+    .from(recurrenceRules)
+    .where(eq(recurrenceRules.userId, account.id));
+  await db.insert(recurrenceOverrides).values({
+    userId: account.id,
+    ruleId: rule.id,
+    occursOn: '2026-09-20',
+    dueAt: new Date(),
+  });
 }
 
 before(async () => {
@@ -158,6 +171,10 @@ test('deleting wipes every table the account owned', async () => {
     [
       'recurrence_rules',
       await db.select().from(recurrenceRules).where(eq(recurrenceRules.userId, doomed.id)),
+    ],
+    [
+      'recurrence_overrides',
+      await db.select().from(recurrenceOverrides).where(eq(recurrenceOverrides.userId, doomed.id)),
     ],
     ['time_entries', await db.select().from(timeEntries).where(eq(timeEntries.userId, doomed.id))],
     [

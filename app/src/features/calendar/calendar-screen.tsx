@@ -335,7 +335,7 @@ function Timeline({
     (ex: number, ey: number, b: CalendarBlock, durMin: number, color: string) => {
       const drop = computeDrop(ex, ey, b, durMin);
       setDrag({
-        id: b.id,
+        id: b.key,
         durMin,
         left: colLeft(drop.dayIndex) + 2,
         top: (drop.minutes / 60) * hourH,
@@ -350,7 +350,8 @@ function Timeline({
     (ex: number, ey: number, b: CalendarBlock, durMin: number) => {
       const drop = computeDrop(ex, ey, b, durMin);
       setDrag(null);
-      if (drop.startISO !== b.startAt) moveBlock(b.id, drop.startISO);
+      // A ghost has no task row to move yet — 4.11 gives it its own path.
+      if (b.id && drop.startISO !== b.startAt) moveBlock(b.id, drop.startISO);
     },
     [computeDrop, moveBlock],
   );
@@ -463,10 +464,10 @@ function Timeline({
                       const start = new Date(b.startAt);
                       const end = new Date(b.endAt);
                       const top = timeToY(start);
-                      const lay = dayLayout.get(b.id);
+                      const lay = dayLayout.get(b.key);
                       return (
                         <TimelineBlock
-                          key={b.id}
+                          key={b.key}
                           block={b}
                           color={colorOf(b.contextId)}
                           top={top}
@@ -475,7 +476,7 @@ function Timeline({
                           col={lay?.col ?? 0}
                           cols={lay?.cols ?? 1}
                           colW={colW}
-                          isDragging={drag?.id === b.id}
+                          isDragging={drag?.id === b.key}
                           onUpdateDrag={updateDrag}
                           onCommitDrag={commitDrag}
                           onOpen={onOpenBlock}
@@ -581,7 +582,9 @@ const TimelineBlock = memo(function TimelineBlock({
         : panBase.activateAfterLongPress(220);
     const tap = Gesture.Tap()
       .runOnJS(true)
-      .onEnd(() => onOpen(block.id));
+      .onEnd(() => {
+        if (block.id) onOpen(block.id);
+      });
     return Gesture.Exclusive(pan, tap);
   }, [block, durMin, color, onUpdateDrag, onCommitDrag, onOpen]);
 
@@ -691,7 +694,7 @@ function MonthView({
                   const c = colorOf(b.contextId);
                   return (
                     <View
-                      key={b.id}
+                      key={b.key}
                       style={[
                         styles.mvBar,
                         // eslint-disable-next-line react-native/no-inline-styles

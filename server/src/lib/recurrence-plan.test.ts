@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { DEFAULT_DURATION_MIN } from '@task-manager/shared';
 import {
   localDateStr,
   planRecurringSpawn,
@@ -17,6 +18,9 @@ const DAILY: PlanRule = {
   remindTime: null,
   dueOffsetD: 0,
   lastSpawned: null,
+  until: null,
+  tracksCompletion: true,
+  durationMin: null,
 };
 
 // Applies a plan the way services/recurring.ts does, against in-memory state:
@@ -24,7 +28,7 @@ const DAILY: PlanRule = {
 function runDay(rules: PlanRule[], open: OpenOccurrence[], now: Date) {
   const missed: string[] = [];
   for (const plan of planRecurringSpawn(rules, open, now)) {
-    for (const id of plan.missedOccurrenceIds) {
+    for (const id of plan.staleOccurrenceIds) {
       const i = open.findIndex((o) => o.id === id);
       if (i >= 0) open.splice(i, 1);
       missed.push(id);
@@ -69,7 +73,7 @@ test('a completed occurrence is simply absent — nothing to close out', () => {
   const [plan] = planRecurringSpawn(rules, open, new Date(2026, 6, 21, 0, 0, 1));
 
   assert.ok(plan);
-  assert.deepEqual(plan.missedOccurrenceIds, []);
+  assert.deepEqual(plan.staleOccurrenceIds, []);
 });
 
 test('cleanup is scoped to the same rule — other rules and one-off tasks are untouched', () => {
@@ -89,7 +93,7 @@ test('cleanup is scoped to the same rule — other rules and one-off tasks are u
 
   assert.equal(plans.length, 1, 'only the rule that spawns is planned');
   assert.equal(plans[0].ruleId, 'rule-daily');
-  assert.deepEqual(plans[0].missedOccurrenceIds, ['daily-yesterday']);
+  assert.deepEqual(plans[0].staleOccurrenceIds, ['daily-yesterday']);
   // One-off tasks carry no recurrence_id and never reach the planner; the other
   // rule's current occurrence is not touched either.
 });
@@ -109,7 +113,96 @@ test('weekly rule only spawns (and only cleans up) on its weekday', () => {
   // Jul 20 2026 is a Monday: spawns, and supersedes the previous occurrence.
   const [plan] = planRecurringSpawn([{ ...weekly }], open, new Date(2026, 6, 20));
   assert.ok(plan);
-  assert.deepEqual(plan.missedOccurrenceIds, ['last-monday']);
+  assert.deepEqual(plan.staleOccurrenceIds, ['last-monday']);
+});
+
+test('until is inclusive: the rule spawns on its last day and never after', () => {
+  const ending: PlanRule = { ...DAILY, until: '2026-07-21', lastSpawned: '2026-07-20' };
+
+  const [onLastDay] = planRecurringSpawn([{ ...ending }], [], new Date(2026, 6, 21, 0, 0, 1));
+  assert.ok(onLastDay, 'the end date itself still spawns');
+
+  assert.deepEqual(
+    planRecurringSpawn([{ ...ending, lastSpawned: '2026-07-21' }], [], new Date(2026, 6, 22)),
+    [],
+    'the day after until spawns nothing',
+  );
+});
+
+test('an expired rule leaves its last occurrence open rather than closing it', () => {
+  const expired: PlanRule = { ...DAILY, until: '2026-07-20', lastSpawned: '2026-07-20' };
+  const open: OpenOccurrence[] = [{ id: 'final', recurrenceId: 'rule-daily' }];
+
+  assert.deepEqual(planRecurringSpawn([expired], open, new Date(2026, 6, 25)), []);
+  assert.equal(open.length, 1, 'the last occurrence is still there to be completed');
+});
+
+test('an untracked rule closes its stale occurrences as skipped', () => {
+  const routine: PlanRule = { ...DAILY, tracksCompletion: false, lastSpawned: '2026-07-20' };
+  const open: OpenOccurrence[] = [{ id: 'yesterday', recurrenceId: 'rule-daily' }];
+
+  const [plan] = planRecurringSpawn([routine], open, new Date(2026, 6, 21, 0, 0, 1));
+
+  assert.equal(plan.staleStatus, 'skipped');
+  assert.deepEqual(plan.staleOccurrenceIds, ['yesterday']);
+});
+
+test('a tracked rule still closes them as missed', () => {
+  const [plan] = planRecurringSpawn(
+    [{ ...DAILY, lastSpawned: '2026-07-20' }],
+    [{ id: 'yesterday', recurrenceId: 'rule-daily' }],
+    new Date(2026, 6, 21, 0, 0, 1),
+  );
+
+  assert.equal(plan.staleStatus, 'missed');
+});
+
+test('the rule’s duration rides along, but only onto a dated occurrence', () => {
+  const dated: PlanRule = { ...DAILY, defaultDueTime: '09:00', durationMin: 45 };
+  const [withDeadline] = planRecurringSpawn([dated], [], new Date(2026, 6, 21, 0, 0, 1));
+  assert.equal(withDeadline.durationMin, 45);
+
+  // No default_due_time → a dateless occurrence, which carries no block length.
+  const [dateless] = planRecurringSpawn(
+    [{ ...DAILY, durationMin: 45 }],
+    [],
+    new Date(2026, 6, 21, 0, 0, 1),
+  );
+  assert.equal(dateless.dueAt, null);
+  assert.equal(dateless.durationMin, null);
+
+  // Dated rule with no duration of its own falls back to the default block.
+  const [fallback] = planRecurringSpawn(
+    [{ ...DAILY, defaultDueTime: '09:00' }],
+    [],
+    new Date(2026, 6, 21, 0, 0, 1),
+  );
+  assert.equal(fallback.durationMin, DEFAULT_DURATION_MIN);
+});
+
+test('today’s override moves the spawned occurrence, reminder and all', () => {
+  const dated: PlanRule = { ...DAILY, defaultDueTime: '09:00', remindTime: '08:30' };
+  const movedDue = new Date(2026, 6, 21, 16, 0);
+  const movedRemind = new Date(2026, 6, 21, 15, 30);
+
+  const [plan] = planRecurringSpawn([dated], [], new Date(2026, 6, 21, 0, 0, 1), [
+    { ruleId: 'rule-daily', occursOn: '2026-07-21', dueAt: movedDue, remindAt: movedRemind },
+  ]);
+
+  assert.equal(plan.dueAt?.getTime(), movedDue.getTime());
+  assert.equal(plan.remindAt?.getTime(), movedRemind.getTime());
+});
+
+test('an override for another day, or another rule, is ignored', () => {
+  const dated: PlanRule = { ...DAILY, defaultDueTime: '09:00' };
+  const otherDay = new Date(2026, 6, 25, 16, 0);
+
+  const [plan] = planRecurringSpawn([dated], [], new Date(2026, 6, 21, 0, 0, 1), [
+    { ruleId: 'rule-daily', occursOn: '2026-07-25', dueAt: otherDay, remindAt: null },
+    { ruleId: 'rule-other', occursOn: '2026-07-21', dueAt: otherDay, remindAt: null },
+  ]);
+
+  assert.equal(plan.dueAt?.getHours(), 9, 'the rule’s own time is used');
 });
 
 test('localDateStr formats the local calendar day', () => {
