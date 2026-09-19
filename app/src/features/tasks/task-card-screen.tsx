@@ -12,13 +12,13 @@ import {
   Repeat,
   Trash2,
 } from 'lucide-react-native';
-import type { Subtask } from '@task-manager/shared';
+import type { Subtask, UpdateTaskInput } from '@task-manager/shared';
 import { Header } from '../../components/header';
 import { IconButton } from '../../components/icon-button';
 import { Popover, usePopoverAnchor } from '../../components/popover';
 import { haptics } from '../../lib/haptics';
 import { useT } from '../../lib/i18n';
-import { useTasksStore } from '../../store/tasks';
+import { isPendingDelete, useTasksStore } from '../../store/tasks';
 import { useTimerStore } from '../../store/timer';
 import { useToastStore } from '../../store/toast';
 import { useTheme, webInputReset, type Theme } from '../../theme';
@@ -168,6 +168,27 @@ export function TaskCardScreen({ taskId, onClose, compact = false }: TaskCardScr
     if (next !== (task.note ?? null)) patchTask(task.id, { note: next });
     if (!next) setNoteOpen(false);
   }, [task, note, patchTask]);
+
+  // Back / swipe / modal close unmount the card without blurring the focused input.
+  const unsaved = useRef({ taskId, title, note });
+  useEffect(() => {
+    unsaved.current = { taskId, title, note };
+  });
+  useEffect(
+    () => () => {
+      const { taskId: id, title: nextTitle, note: nextNote } = unsaved.current;
+      const store = useTasksStore.getState();
+      const cur = store.tasks.find((x) => x.id === id) ?? store.completed.find((x) => x.id === id);
+      if (!cur || isPendingDelete(id)) return;
+      const patch: UpdateTaskInput = {};
+      const t = nextTitle.trim();
+      if (t && t !== cur.title) patch.title = t;
+      const n = nextNote.trim() || null;
+      if (n !== (cur.note ?? null)) patch.note = n;
+      if (Object.keys(patch).length > 0) store.patchTask(id, patch).catch(() => {});
+    },
+    [],
+  );
 
   const toggle = () => {
     if (!task) return;

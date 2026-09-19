@@ -67,12 +67,11 @@ export function QuickCreateSheet({
   const titleRef = useRef<TextInput>(null);
   const noteRef = useRef<TextInput>(null);
   const focusNoteOnShow = useRef(false);
-  useEffect(() => {
-    if (showNote && focusNoteOnShow.current) {
-      focusNoteOnShow.current = false;
-      noteRef.current?.focus();
-    }
-  }, [showNote]);
+  const focusNoteOnLayout = () => {
+    if (!focusNoteOnShow.current) return;
+    focusNoteOnShow.current = false;
+    noteRef.current?.focus();
+  };
 
   const focusTitle = (delay = 0) => {
     setTimeout(() => titleRef.current?.focus(), delay);
@@ -222,6 +221,7 @@ export function QuickCreateSheet({
       {showNote ? (
         <SheetInput
           ref={noteRef}
+          onLayout={focusNoteOnLayout}
           value={note}
           onChangeText={setNote}
           placeholder={tr('when.create.notePlaceholder')}
@@ -288,6 +288,7 @@ const makeStyles = (t: Theme) =>
     hintText: { fontSize: 10.5, fontWeight: '600', color: t.colors.textMuted, letterSpacing: 0.2 },
     title: {
       fontSize: 17,
+      lineHeight: 22,
       fontWeight: '600',
       color: t.colors.textPrimary,
       paddingVertical: 6,
