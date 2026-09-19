@@ -241,6 +241,7 @@ const makeStyles = (t: Theme) =>
       borderWidth: 1,
       borderColor: t.colors.borderSubtle,
       fontSize: 15,
+      lineHeight: 20,
       color: t.colors.textPrimary,
     },
     close: { padding: 7, borderRadius: 9, backgroundColor: t.colors.bgCard },
