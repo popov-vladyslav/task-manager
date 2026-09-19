@@ -95,6 +95,8 @@ const bump = (counts: Record<string, number> | null, contextId: number | null, d
   return { ...counts, [key]: Math.max(0, (counts[key] ?? 0) + delta) };
 };
 
+export const TEMP_SUBTASK_PREFIX = 'tmp-';
+
 const mapSubtasks = (list: Task[], taskId: string, fn: (subs: Subtask[]) => Subtask[]) =>
   list.map((t) => (t.id === taskId ? { ...t, subtasks: fn(t.subtasks ?? []) } : t));
 
@@ -342,8 +344,41 @@ export const useTasksStore = create<TasksState>((set, get) => ({
   },
 
   async addSubtask(taskId, title) {
-    const updated = await api.addSubtask(taskId, { title });
-    set({ tasks: replaceIn(get().tasks, updated), completed: replaceIn(get().completed, updated) });
+    const tempId = `${TEMP_SUBTASK_PREFIX}${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const append = (subs: Subtask[]) => [
+      ...subs,
+      {
+        id: tempId,
+        taskId,
+        title,
+        done: false,
+        sortOrder: subs.reduce((max, x) => Math.max(max, x.sortOrder), 0) + 1,
+        createdAt: new Date().toISOString(),
+      },
+    ];
+    set({
+      tasks: mapSubtasks(get().tasks, taskId, append),
+      completed: mapSubtasks(get().completed, taskId, append),
+    });
+    const drop = (subs: Subtask[]) => subs.filter((x) => x.id !== tempId);
+    try {
+      const updated = await api.addSubtask(taskId, { title });
+      const merge = (list: Task[]) =>
+        list.map((t) => {
+          if (t.id !== taskId) return t;
+          const stillPending = (t.subtasks ?? []).filter(
+            (x) => x.id.startsWith(TEMP_SUBTASK_PREFIX) && x.id !== tempId,
+          );
+          return { ...updated, subtasks: [...(updated.subtasks ?? []), ...stillPending] };
+        });
+      set({ tasks: merge(get().tasks), completed: merge(get().completed) });
+    } catch (e) {
+      set({
+        tasks: mapSubtasks(get().tasks, taskId, drop),
+        completed: mapSubtasks(get().completed, taskId, drop),
+      });
+      throw e;
+    }
   },
 
   async updateSubtask(taskId, id, patch) {
