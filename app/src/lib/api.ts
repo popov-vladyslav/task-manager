@@ -102,7 +102,8 @@ export const api = {
   getTask: (id: string) => request<Task>(`/api/tasks/${id}`),
   updateTask: (id: string, patch: UpdateTaskInput) =>
     request<Task>(`/api/tasks/${id}`, { method: 'PATCH', body: patch }),
-  deleteTask: (id: string) => request<void>(`/api/tasks/${id}`, { method: 'DELETE' }),
+  deleteTask: (id: string, scope?: 'series') =>
+    request<void>(`/api/tasks/${id}${qs({ scope })}`, { method: 'DELETE' }),
   reorderTask: (id: string, input: ReorderInput) =>
     request<Task>(`/api/tasks/${id}/reorder`, { method: 'POST', body: input }),
   snoozeTask: (id: string, minutes: number) =>
@@ -121,8 +122,14 @@ export const api = {
   startTimer: (taskId: string) =>
     request<ActiveTimer>('/api/timer/start', { method: 'POST', body: { taskId } }),
   stopTimer: () => request<TimeEntry | null>('/api/timer/stop', { method: 'POST' }),
-  getCalendar: (fromISO: string, toISO: string) =>
-    request<CalendarData>(`/api/calendar${qs({ from: fromISO, to: toISO })}`),
+  getCalendar: (fromISO: string, toISO: string, ghosts = false) =>
+    request<CalendarData>(
+      `/api/calendar${qs({ from: fromISO, to: toISO, ghosts: ghosts ? 'true' : undefined })}`,
+    ),
+  moveOccurrence: (
+    ruleId: string,
+    body: { occursOn: string; dueAt: string; scope: 'occurrence' | 'following' },
+  ) => request<{ ruleId: string }>(`/api/recurrence/${ruleId}/move`, { method: 'POST', body }),
   getMorningSummary: () => request<MorningSummary>('/api/summary/morning'),
   getSettings: () => request<AppSettings>('/api/settings'),
   updateSettings: (patch: Partial<AppSettings>) =>

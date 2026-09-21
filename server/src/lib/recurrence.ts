@@ -19,7 +19,7 @@ function fmt(d: Date): string {
 }
 
 // Canonical weekday order for serializing a weekly rule.
-const DOW_ORDER = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+export const DOW_ORDER = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
 
 // Structured recurrence -> canonical rule string ('daily' | 'weekly:mon,wed' |
 // 'monthly:15'). Dedupes/sorts/validates weekdays; throws on an empty weekly set

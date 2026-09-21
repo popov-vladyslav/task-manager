@@ -43,6 +43,8 @@ const updateSchema = z.object({
   note: z.string().nullable().optional(),
 });
 
+const deleteQuerySchema = z.object({ scope: z.enum(['occurrence', 'series']).optional() });
+
 const reorderSchema = z.object({
   afterId: z.uuid().nullish(),
   beforeId: z.uuid().nullish(),
@@ -79,7 +81,8 @@ router.patch('/:id', async (req, res) => {
 });
 
 router.delete('/:id', async (req, res) => {
-  await svc.deleteTask(requireUserId(req), req.params.id);
+  const { scope } = deleteQuerySchema.parse(req.query);
+  await svc.deleteTask(requireUserId(req), req.params.id, { series: scope === 'series' });
   res.status(204).end();
 });
 

@@ -1,12 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { contextEmoji, EMOJI_MAX_LENGTH, isSingleGrapheme } from '@task-manager/shared';
-import type {
-  Context,
-  RecurrenceInput,
-  Task,
-  UpdateContextInput,
-} from '@task-manager/shared';
+import type { Context, RecurrenceInput, Task, UpdateContextInput } from '@task-manager/shared';
 import * as tasksSvc from '../services/tasks';
 import * as contextsSvc from '../services/contexts';
 import * as subtasksSvc from '../services/subtasks';
@@ -397,15 +392,24 @@ export function buildMcpServer(userId: string): McpServer {
   reg(
     'delete_task',
     {
-      description: 'Delete a task, by id or title_match.',
-      inputSchema: { id: z.string().optional(), title_match: z.string().optional() },
+      description:
+        'Delete a task, by id or title_match. For a recurring task this removes only that ' +
+        'occurrence and the task comes back on its next day; pass series: true to stop the ' +
+        'repetition as well.',
+      inputSchema: {
+        id: z.string().optional(),
+        title_match: z.string().optional(),
+        series: z.boolean().optional(),
+      },
     },
-    async ({ id, title_match }) => {
+    async ({ id, title_match, series }) => {
       const r = await resolveTask(userId, id, title_match);
       if (!r.task) return text(unresolvedText(r.candidates, title_match));
-      await tasksSvc.deleteTask(userId, r.task.id);
-      logWrite('delete_task', { id: r.task.id });
-      return text(`Deleted: ${r.task.title}.`);
+      const { seriesEnded } = await tasksSvc.deleteTask(userId, r.task.id, { series });
+      logWrite('delete_task', { id: r.task.id, series: seriesEnded });
+      if (seriesEnded) return text(`Deleted: ${r.task.title}. It will not repeat any more.`);
+      const again = r.task.recurrenceId ? ' It still repeats; pass series: true to stop it.' : '';
+      return text(`Deleted: ${r.task.title}.${again}`);
     },
   );
 

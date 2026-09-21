@@ -70,6 +70,7 @@ interface TasksState {
   patchTask: (id: string, patch: Parameters<typeof api.updateTask>[1]) => Promise<void>;
   removeTask: (id: string) => Promise<void>;
   undoRemove: (id: string) => void; // restore a task within its delete-undo window
+  removeSeries: (id: string) => Promise<boolean>; // ends the rule too — no undo
   reorder: (
     id: string,
     afterId: string | null,
@@ -326,6 +327,31 @@ export const useTasksStore = create<TasksState>((set, get) => ({
       });
     }, DELETE_UNDO_MS);
     pendingDeletes.set(id, { task, timer });
+  },
+
+  async removeSeries(id) {
+    const task = get().tasks.find((t) => t.id === id) ?? get().completed.find((t) => t.id === id);
+    if (!task) return false;
+    try {
+      await api.deleteTask(id, 'series');
+    } catch {
+      useToastStore
+        .getState()
+        .show({ title: currentT()('toasts.deleteTaskFailed'), message: task.title });
+      return false;
+    }
+    const ruleId = task.recurrenceId;
+    set({
+      tasks: get().tasks.filter(
+        (t) => t.id !== id && (ruleId == null || t.recurrenceId !== ruleId),
+      ),
+      completed: get().completed.filter((t) => t.id !== id),
+      completedCounts:
+        task.status === 'done'
+          ? bump(get().completedCounts, task.contextId, -1)
+          : get().completedCounts,
+    });
+    return true;
   },
 
   undoRemove(id) {

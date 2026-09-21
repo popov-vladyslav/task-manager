@@ -254,10 +254,7 @@ test('a rule past its until spawns nothing', async () => {
   await spawnDueRecurring();
 
   assert.deepEqual(await occurrencesOf(rule.id), []);
-  const [after] = await db
-    .select()
-    .from(recurrenceRules)
-    .where(eq(recurrenceRules.id, rule.id));
+  const [after] = await db.select().from(recurrenceRules).where(eq(recurrenceRules.id, rule.id));
   assert.equal(after.lastSpawned, null, 'and it is not stamped as having spawned');
 });
 
@@ -268,7 +265,10 @@ test('an untracked rule closes its previous occurrence as skipped, not missed', 
   assert.ok(first);
 
   // Re-arm so the next run supersedes what it just spawned.
-  await db.update(recurrenceRules).set({ lastSpawned: null }).where(eq(recurrenceRules.id, rule.id));
+  await db
+    .update(recurrenceRules)
+    .set({ lastSpawned: null })
+    .where(eq(recurrenceRules.id, rule.id));
   await spawnDueRecurring();
 
   const rows = await occurrencesOf(rule.id);
@@ -286,7 +286,10 @@ test('a tracked rule still closes its previous occurrence as missed', async () =
   await spawnDueRecurring();
   const [first] = await occurrencesOf(rule.id);
 
-  await db.update(recurrenceRules).set({ lastSpawned: null }).where(eq(recurrenceRules.id, rule.id));
+  await db
+    .update(recurrenceRules)
+    .set({ lastSpawned: null })
+    .where(eq(recurrenceRules.id, rule.id));
   await spawnDueRecurring();
 
   const rows = await occurrencesOf(rule.id);
@@ -377,4 +380,141 @@ test('REST rejects an until that is not a plain date', async () => {
     }),
   });
   assert.equal(res.status, 400);
+});
+
+async function deleteTask(id: string, query = ''): Promise<number> {
+  const res = await fetch(`${server.baseUrl}/api/tasks/${id}${query}`, {
+    method: 'DELETE',
+    headers,
+  });
+  return res.status;
+}
+
+async function ghostTitles(days: number): Promise<string[]> {
+  const from = new Date();
+  from.setHours(0, 0, 0, 0);
+  const to = new Date(from);
+  to.setDate(to.getDate() + days);
+  const qs = new URLSearchParams({
+    from: from.toISOString(),
+    to: to.toISOString(),
+    ghosts: 'true',
+  });
+  const res = await fetch(`${server.baseUrl}/api/calendar?${qs}`, { headers });
+  const { blocks } = (await res.json()) as { blocks: { title: string; virtual: boolean }[] };
+  return blocks.filter((b) => b.virtual).map((b) => b.title);
+}
+
+function todayAt(hhmm: string): string {
+  return `${localDateStr(new Date())}T${hhmm}`;
+}
+
+test('deleting one occurrence keeps the rule and does not re-project today', async () => {
+  const task = await createTask({
+    title: 'delete once',
+    dueAt: todayAt('23:30'),
+    durationMin: 15,
+    recurrence: { rule: 'daily' },
+  });
+
+  assert.equal(await deleteTask(task.id), 204);
+
+  const rule = await ruleOf(task);
+  assert.equal(rule.active, true, 'the series goes on');
+  assert.equal(rule.lastSpawned, localDateStr(new Date()), 'today counts as handled');
+
+  const ghosts = (await ghostTitles(3)).filter((t) => t === 'delete once');
+  assert.equal(ghosts.length, 2, 'tomorrow and the day after, but not the day just deleted');
+});
+
+test('deleting the series ends the rule, drops open occurrences and keeps history', async () => {
+  const task = await createTask({
+    title: 'delete series',
+    dueAt: todayAt('23:40'),
+    durationMin: 15,
+    recurrence: { rule: 'daily' },
+  });
+  const [history] = await db
+    .insert(tasks)
+    .values({
+      userId,
+      title: 'delete series',
+      status: 'done',
+      recurrenceId: task.recurrenceId,
+    })
+    .returning({ id: tasks.id });
+
+  assert.equal(await deleteTask(task.id, '?scope=series'), 204);
+
+  const rule = await ruleOf(task);
+  assert.equal(rule.active, false);
+
+  const left = await db.select({ id: tasks.id }).from(tasks).where(eq(tasks.recurrenceId, rule.id));
+  assert.deepEqual(
+    left.map((r) => r.id),
+    [history.id],
+    'only the finished occurrence survives',
+  );
+
+  assert.ok(!(await ghostTitles(3)).includes('delete series'), 'nothing is projected any more');
+
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  await spawnDueRecurring(tomorrow);
+  const after = await db
+    .select({ id: tasks.id })
+    .from(tasks)
+    .where(eq(tasks.recurrenceId, rule.id));
+  assert.equal(after.length, 1, 'the spawner leaves an ended series alone');
+});
+
+test('deleting the series from a finished occurrence also removes the open one', async () => {
+  const task = await createTask({
+    title: 'delete from history',
+    dueAt: todayAt('23:50'),
+    recurrence: { rule: 'daily' },
+  });
+  const [history] = await db
+    .insert(tasks)
+    .values({
+      userId,
+      title: 'delete from history',
+      status: 'done',
+      recurrenceId: task.recurrenceId,
+    })
+    .returning({ id: tasks.id });
+
+  assert.equal(await deleteTask(history.id, '?scope=series'), 204);
+
+  const rule = await ruleOf(task);
+  assert.equal(rule.active, false);
+  const left = await db.select({ id: tasks.id }).from(tasks).where(eq(tasks.recurrenceId, rule.id));
+  assert.equal(left.length, 0);
+});
+
+test('series scope on a one-off task is a plain delete', async () => {
+  const task = await createTask({ title: 'one-off to delete' });
+  assert.equal(await deleteTask(task.id, '?scope=series'), 204);
+  assert.equal(await deleteTask(task.id), 404);
+});
+
+test('an unknown delete scope is rejected before anything is deleted', async () => {
+  const task = await createTask({ title: 'survives a bad scope' });
+  assert.equal(await deleteTask(task.id, '?scope=everything'), 400);
+  assert.equal(await deleteTask(task.id), 204);
+});
+
+test('delete_task says a recurring task still repeats, and series: true stops it', async () => {
+  const once = await createTask({ title: 'mcp delete once', recurrence: { rule: 'daily' } });
+  const kept = await mcpCall(server.baseUrl, mcpToken, 'delete_task', { id: once.id });
+  assert.ok(kept.text.includes('still repeats'), kept.text);
+  assert.equal((await ruleOf(once)).active, true);
+
+  const all = await createTask({ title: 'mcp delete series', recurrence: { rule: 'daily' } });
+  const ended = await mcpCall(server.baseUrl, mcpToken, 'delete_task', {
+    id: all.id,
+    series: true,
+  });
+  assert.ok(ended.text.includes('will not repeat'), ended.text);
+  assert.equal((await ruleOf(all)).active, false);
 });

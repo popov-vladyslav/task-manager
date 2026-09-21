@@ -22,6 +22,7 @@ import { useT } from '../../lib/i18n';
 import { isPendingDelete, TEMP_SUBTASK_PREFIX, useTasksStore } from '../../store/tasks';
 import { useTimerStore } from '../../store/timer';
 import { useToastStore } from '../../store/toast';
+import { useDeleteTask } from './use-delete-task';
 import { useTheme, webInputReset, type Theme } from '../../theme';
 import { ContextPopover } from './context-popover';
 import { AddSubtaskRow, DRAG_GUTTER, SubtaskRow } from './subtask-list';
@@ -48,8 +49,7 @@ export function TaskCardScreen({ taskId, onClose, compact = false }: TaskCardScr
   const load = useTasksStore((s) => s.load);
   const loadCompleted = useTasksStore((s) => s.loadCompleted);
   const patchTask = useTasksStore((s) => s.patchTask);
-  const removeTask = useTasksStore((s) => s.removeTask);
-  const undoRemove = useTasksStore((s) => s.undoRemove);
+  const { requestDelete, deleteDialogNode } = useDeleteTask();
   const toggleComplete = useTasksStore((s) => s.toggleComplete);
   const uncomplete = useTasksStore((s) => s.uncomplete);
   const addSubtask = useTasksStore((s) => s.addSubtask);
@@ -242,13 +242,7 @@ export function TaskCardScreen({ taskId, onClose, compact = false }: TaskCardScr
   const remove = () => {
     if (!task) return;
     menu.close();
-    removeTask(task.id);
-    useToastStore.getState().show({
-      title: tr('toasts.taskDeleted'),
-      message: task.title,
-      onUndo: () => undoRemove(task.id),
-    });
-    onClose();
+    requestDelete(task, onClose);
   };
 
   if (!task) {
@@ -477,6 +471,7 @@ export function TaskCardScreen({ taskId, onClose, compact = false }: TaskCardScr
           <Text style={styles.menuDanger}>{tr('tasks.card.deleteTask')}</Text>
         </Pressable>
       </Popover>
+      {deleteDialogNode}
     </View>
   );
 }

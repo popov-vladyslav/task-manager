@@ -197,7 +197,13 @@ PATCH  /api/tasks/:id          (будь-які поля вкл. note (nullable)
 #   Обидва пишуться в recurrence_rules; Task повертає їх як recurrenceUntil / tracksCompletion
 #   (у задачі без правила — null / true). duration_min правила = довжина блоку задачі
 #   (синхронізується при зміні dueAt або durationMin).
-DELETE /api/tasks/:id
+DELETE /api/tasks/:id?scope=occurrence|series   → 204
+#   Без scope (або 'occurrence') видаляється лише цей рядок: правило лишається активним,
+#   наступний збіг заспавнить задачу знову. Якщо видалено відкритий інстанс, last_spawned
+#   правила підтягується до сьогодні, щоб календар не спроєктував привид у щойно звільнений слот.
+#   scope=series — кінець серії: recurrence_rules.active = false (правило не видаляється),
+#   усі відкриті інстанси правила видаляються, завершені (done/missed/skipped) лишаються як історія.
+#   Для задачі без правила scope=series — звичайне видалення.
 POST   /api/tasks/:id/reorder  { after_id?, before_id?, scope: 'global'|'context' }
 
 # Subtasks (0015, ADR 0007). Кожен запис повертає батьківський Task з subtasks[] (відсортовані по sort_order).
@@ -227,6 +233,26 @@ GET    /api/calendar?from=&to=[&ghosts=true]  (tasks з due_at у діапазо
 # ghosts=true (0021, ADR 0010) додає проєкцію майбутніх інстансів правил: не зберігається,
 #   рахується на запит, тільки для вікна ≤ 42 днів (довше — мовчки без ghosts); місяць не просить.
 #   День з реальним інстансом ніколи не дублюється проєкцією.
+POST   /api/recurrence/:ruleId/move  { occursOn, dueAt, scope: 'occurrence'|'following' } → 200 { ruleId }
+#   Перенесення інстанса правила (drag у календарі). occursOn — `occursOn` самого блоку:
+#   для реального інстанса це локальний день його дедлайну, для проєкції — день збігу правила.
+#   Реальний інстанс = відкрита задача правила з таким днем дедлайну; інакше occursOn мусить бути
+#   справжньою проєкцією (активне правило з default_due_time, день ≥ сьогодні, > last_spawned,
+#   ≤ until, збігається з rule) — інакше 400. dueAt у минулий день → 400. Чуже/невідоме правило → 404.
+#   scope=occurrence: реальний — рухається лише рядок tasks, правило НЕ синхронізується (на відміну
+#     від PATCH); проєкція — upsert у recurrence_overrides (due_at + remind_at), який читають і
+#     календар, і спавнер, тож інстанс заспавниться й нагадає вже в новий час.
+#   scope=following: реальний — правило змінюється на місці (rule, default_due_time, remind_time),
+#     overrides від цього дня видаляються, задача переїжджає; проєкція — серія ділиться:
+#     старе правило until = min(старий, новий день збігу) − 1, нове правило — копія зі зсунутими
+#     полями і last_spawned = тому ж дню. Задача наперед НЕ створюється: нове правило проєктується
+#     і спавниться як звичайне, тому жоден день між ними не губиться і не дублюється.
+#     Відповідь несе ruleId правила, яке тепер керує перенесеним інстансом.
+#   Зсув: daily міняє лише час (інстанс лишається на своєму дні); weekly замінює перетягнутий
+#     день тижня; monthly — число місяця; з due_offset_d день збігу = день дедлайну − offset.
+#     Нагадування зберігає відстань до дедлайну (remind_time обрізається межами доби).
+#   Після перенесення задачі її записи в notification_log стираються — інакше claim за старий
+#     час заглушив би push за новий.
 POST   /api/timer/start        { task_id }  → 409 якщо вже є активний (з деталями)
 POST   /api/timer/stop         → закриває активний, повертає entry
 
@@ -262,7 +288,7 @@ update_subtask  { subtask_id, title?, done? }      друкується `    [x]
 delete_subtask  { subtask_id }                     (ADR 0007; підзадачі — не задачі)
                                                 -- title_match: пошук по назві, щоб
 complete_task   { id | title_match }               я міг "закрий задачу про іпотеку"
-delete_task     { id | title_match }
+delete_task     { id | title_match, series? }      series: true — зупинити повторення (як scope=series)
 list_tasks      { context?, status?, due_before?, overdue? }
 get_today       {} → задачі на сьогодні + рутина + активний таймер
 add_routine     { title, time_hint? }

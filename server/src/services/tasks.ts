@@ -7,6 +7,7 @@ import {
   inArray,
   isNotNull,
   isNull,
+  lt,
   lte,
   notInArray,
   or,
@@ -26,6 +27,7 @@ import { toTask } from '../db/mappers';
 import { ownedBy, type Executor } from '../db/scope';
 import { between } from '../lib/frac-index';
 import { nextInstance as computeNext } from '../lib/recurrence';
+import { localDateStr } from '../lib/recurrence-plan';
 import { badRequest, notFound } from '../lib/errors';
 import { parseWhen } from '../lib/when';
 import { invalidateReminderClocks } from './reminder-clock';
@@ -438,13 +440,61 @@ export async function appendNote(userId: string, id: string, text: string): Prom
   return updateTask(userId, id, { note: next });
 }
 
-export async function deleteTask(userId: string, id: string): Promise<void> {
-  const [row] = await db
-    .delete(tasks)
-    .where(and(ownedBy(tasks.userId, userId), eq(tasks.id, id)))
-    .returning({ id: tasks.id });
-  if (!row) throw notFound('Task not found');
+// Deleting one occurrence leaves its rule running: the next matching day spawns
+// again. `series` ends the rule instead — deactivated rather than deleted, so
+// finished occurrences keep their recurrence_id as history — and removes the
+// occurrences still open. Returns whether a series was actually ended.
+export async function deleteTask(
+  userId: string,
+  id: string,
+  opts: { series?: boolean } = {},
+): Promise<{ seriesEnded: boolean }> {
+  const seriesEnded = await db.transaction(async (tx) => {
+    const [row] = await tx
+      .delete(tasks)
+      .where(and(ownedBy(tasks.userId, userId), eq(tasks.id, id)))
+      .returning({ id: tasks.id, recurrenceId: tasks.recurrenceId, status: tasks.status });
+    if (!row) throw notFound('Task not found');
+    if (!row.recurrenceId) return false;
+
+    if (opts.series) {
+      await tx
+        .update(recurrenceRules)
+        .set({ active: false })
+        .where(
+          and(ownedBy(recurrenceRules.userId, userId), eq(recurrenceRules.id, row.recurrenceId)),
+        );
+      await tx
+        .delete(tasks)
+        .where(
+          and(
+            ownedBy(tasks.userId, userId),
+            eq(tasks.recurrenceId, row.recurrenceId),
+            notInArray(tasks.status, [...TERMINAL_STATUSES]),
+          ),
+        );
+      return true;
+    }
+
+    // A rule made today has spawned nothing yet, so with its occurrence gone the
+    // calendar would project today right back into the emptied slot.
+    if (!(TERMINAL_STATUSES as readonly TaskStatus[]).includes(row.status)) {
+      const today = localDateStr(new Date());
+      await tx
+        .update(recurrenceRules)
+        .set({ lastSpawned: today })
+        .where(
+          and(
+            ownedBy(recurrenceRules.userId, userId),
+            eq(recurrenceRules.id, row.recurrenceId),
+            or(isNull(recurrenceRules.lastSpawned), lt(recurrenceRules.lastSpawned, today)),
+          ),
+        );
+    }
+    return false;
+  });
   invalidateReminderClocks();
+  return { seriesEnded };
 }
 
 // Snooze a task's reminder by `minutes` from now, and clear its notification log

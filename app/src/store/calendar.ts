@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { CalendarData } from '@task-manager/shared';
+import type { CalendarBlock, CalendarData } from '@task-manager/shared';
 import { api } from '../lib/api';
 import { storage } from '../lib/storage';
 import {
@@ -9,6 +9,8 @@ import {
   type CalMode,
 } from '../features/calendar/calendar-dates';
 import { isPendingDelete, useTasksStore } from './tasks';
+import { currentT } from '../lib/i18n';
+import { useToastStore } from './toast';
 
 const MODE_KEY = 'log.calMode';
 const MODES: CalMode[] = ['day', '3day', 'week', 'month'];
@@ -35,6 +37,11 @@ interface CalendarState {
   goToDay: (d: Date) => void; // tap a month cell → day view
   goToToday: () => void;
   moveBlock: (id: string, newStartISO: string) => Promise<void>;
+  moveOccurrence: (
+    block: CalendarBlock,
+    newStartISO: string,
+    scope: 'occurrence' | 'following',
+  ) => Promise<void>;
 }
 
 export const useCalendarStore = create<CalendarState>((set, get) => ({
@@ -65,7 +72,7 @@ export const useCalendarStore = create<CalendarState>((set, get) => ({
     if (!opts?.silent) set({ loading: true });
     const promise = (async () => {
       try {
-        const data = await api.getCalendar(from.toISOString(), to.toISOString());
+        const data = await api.getCalendar(from.toISOString(), to.toISOString(), mode !== 'month');
         // A ghost has no task id, so nothing about it can be pending deletion.
         const blocks = data.blocks.filter((b) => b.id == null || !isPendingDelete(b.id));
         set({ data: { ...data, blocks }, loading: false, lastLoadedAt: Date.now() });
@@ -124,5 +131,36 @@ export const useCalendarStore = create<CalendarState>((set, get) => ({
     } catch {
       set({ data: prev }); // rollback
     }
+  },
+
+  async moveOccurrence(block, newStartISO, scope) {
+    const prev = get().data;
+    if (!prev || !block.ruleId || !block.occursOn) return;
+    const durMs = new Date(block.endAt).getTime() - new Date(block.startAt).getTime();
+    const newEnd = new Date(new Date(newStartISO).getTime() + durMs).toISOString();
+    set({
+      data: {
+        blocks: prev.blocks.map((b) =>
+          b.key === block.key ? { ...b, startAt: newStartISO, endAt: newEnd } : b,
+        ),
+      },
+    });
+    try {
+      await api.moveOccurrence(block.ruleId, {
+        occursOn: block.occursOn,
+        dueAt: newStartISO,
+        scope,
+      });
+    } catch {
+      set({ data: prev });
+      useToastStore
+        .getState()
+        .show({ title: currentT()('toasts.moveFailed'), message: block.title });
+      return;
+    }
+    await Promise.all([
+      get().load({ silent: true }),
+      useTasksStore.getState().load({ silent: true }),
+    ]);
   },
 }));
