@@ -34,6 +34,7 @@ export interface PlanRule {
 export interface OpenOccurrence {
   id: string;
   recurrenceId: string;
+  dueAt: Date | null;
 }
 
 // A single occurrence the user moved (recurrence_overrides). Only today's
@@ -77,6 +78,7 @@ export function planRecurringSpawn(
   overrides: PlanOverride[] = [],
 ): PlannedSpawn[] {
   const today = localDateStr(now);
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const plans: PlannedSpawn[] = [];
 
   for (const rule of rules) {
@@ -100,6 +102,8 @@ export function planRecurringSpawn(
     // A moved occurrence spawns at the time it was moved to — and reminds there
     // too, which is the whole point of the spawner reading overrides.
     const moved = overrides.find((o) => o.ruleId === rule.id && o.occursOn === today);
+    // Moved to an earlier day and already created there — nothing left to spawn.
+    if (moved && moved.dueAt == null) continue;
     const dueAt = moved ? moved.dueAt : computed.dueAt;
     const remindAt = moved ? moved.remindAt : computed.remindAt;
 
@@ -114,8 +118,10 @@ export function planRecurringSpawn(
       // occurrence carries no block length.
       durationMin: dueAt ? (rule.durationMin ?? DEFAULT_DURATION_MIN) : null,
       today,
+      // An occurrence the user moved to today or later is not superseded by
+      // this spawn; it is closed by the first spawn after its own day has passed.
       staleOccurrenceIds: openOccurrences
-        .filter((o) => o.recurrenceId === rule.id)
+        .filter((o) => o.recurrenceId === rule.id && (o.dueAt == null || o.dueAt < startOfToday))
         .map((o) => o.id),
       // An untracked routine is never "missed" — nobody was going to tick it off.
       staleStatus: rule.tracksCompletion ? 'missed' : 'skipped',

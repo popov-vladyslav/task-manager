@@ -1,10 +1,10 @@
-import { and, eq, gt, gte, isNotNull, notInArray } from 'drizzle-orm';
-import { TERMINAL_STATUSES } from '@task-manager/shared';
+import { and, eq, gt, gte, isNotNull, notInArray, sql } from 'drizzle-orm';
+import { DEFAULT_DURATION_MIN, TERMINAL_STATUSES } from '@task-manager/shared';
 import { db } from '../db/client';
 import { notificationLog, recurrenceOverrides, recurrenceRules, tasks } from '../db/schema';
 import { ownedBy } from '../db/scope';
 import { badRequest, notFound } from '../lib/errors';
-import { computeInstanceTimes, ruleMatchesToday } from '../lib/recurrence';
+import { computeInstanceTimes, expandTitle, ruleMatchesToday } from '../lib/recurrence';
 import { localDateStr } from '../lib/recurrence-plan';
 import { addLocalDays, parseLocalDay, shiftInstant, shiftRule } from '../lib/recurrence-shift';
 import { parseWhen } from '../lib/when';
@@ -70,6 +70,32 @@ export async function moveOccurrence(
         .where(and(ownedBy(notificationLog.userId, userId), eq(notificationLog.taskId, id)));
     };
 
+    // The spawner runs once, at midnight, and only for a rule's own match days.
+    // An occurrence that has to exist before then is created here instead.
+    const createOccurrence = async (
+      forRuleId: string,
+      day: string,
+      dueAt: Date,
+      remindAt: Date | null,
+    ) => {
+      const [{ minSort }] = await tx
+        .select({ minSort: sql<number>`coalesce(min(${tasks.sortGlobal}), 1)` })
+        .from(tasks)
+        .where(ownedBy(tasks.userId, userId));
+      const top = Number(minSort) - 1;
+      await tx.insert(tasks).values({
+        userId,
+        title: expandTitle(rule.title, parseLocalDay(day)),
+        contextId: rule.contextId,
+        dueAt,
+        remindAt,
+        durationMin: rule.durationMin ?? DEFAULT_DURATION_MIN,
+        recurrenceId: forRuleId,
+        sortGlobal: top,
+        sortContext: top,
+      });
+    };
+
     if (real) {
       if (input.scope === 'occurrence') {
         await moveTask(real.id, real.dueAt, real.remindAt, newDue);
@@ -110,6 +136,29 @@ export async function moveOccurrence(
     if (input.scope === 'occurrence') {
       const base = computeInstanceTimes(rule, parseLocalDay(matchDay));
       const remindAt = shiftInstant(base.remindAt, base.dueAt, newDue);
+      const newDay = localDateStr(newDue);
+
+      if (matchDay === today) {
+        await createOccurrence(ruleId, matchDay, newDue, remindAt);
+        await tx
+          .update(recurrenceRules)
+          .set({ lastSpawned: today })
+          .where(and(ownedBy(recurrenceRules.userId, userId), eq(recurrenceRules.id, ruleId)));
+        return { ruleId };
+      }
+      if (newDay === today || newDay < matchDay) {
+        await createOccurrence(ruleId, matchDay, newDue, remindAt);
+        // An override with no due time: the projection draws nothing on the
+        // match day and the spawner creates nothing on it.
+        await tx
+          .insert(recurrenceOverrides)
+          .values({ userId, ruleId, occursOn: matchDay, dueAt: null, remindAt: null })
+          .onConflictDoUpdate({
+            target: [recurrenceOverrides.ruleId, recurrenceOverrides.occursOn],
+            set: { dueAt: null, remindAt: null },
+          });
+        return { ruleId };
+      }
       await tx
         .insert(recurrenceOverrides)
         .values({ userId, ruleId, occursOn: matchDay, dueAt: newDue, remindAt })
@@ -153,9 +202,20 @@ export async function moveOccurrence(
         until: rule.until,
         tracksCompletion: rule.tracksCompletion,
         durationMin: rule.durationMin,
-        lastSpawned: lastOldDay,
+        lastSpawned: shifted.matchDay === today ? today : lastOldDay,
       })
       .returning({ id: recurrenceRules.id });
+    if (shifted.matchDay === today) {
+      const times = computeInstanceTimes(
+        {
+          defaultDueTime: shifted.defaultDueTime,
+          remindTime: shifted.remindTime,
+          dueOffsetD: rule.dueOffsetD,
+        },
+        parseLocalDay(today),
+      );
+      await createOccurrence(next.id, today, shifted.dueAt, times.remindAt);
+    }
     return { ruleId: next.id };
   });
 

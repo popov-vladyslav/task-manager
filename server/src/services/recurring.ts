@@ -46,10 +46,10 @@ export async function spawnDueRecurring(now: Date = new Date()): Promise<number>
   // that rule — i.e. of that rule's owner. The writes below are still scoped.
   const openOccurrences: OpenOccurrence[] = (
     await db
-      .select({ id: tasks.id, recurrenceId: tasks.recurrenceId })
+      .select({ id: tasks.id, recurrenceId: tasks.recurrenceId, dueAt: tasks.dueAt })
       .from(tasks)
       .where(and(isNotNull(tasks.recurrenceId), notInArray(tasks.status, [...TERMINAL_STATUSES])))
-  ).map((r) => ({ id: r.id, recurrenceId: r.recurrenceId as string }));
+  ).map((r) => ({ id: r.id, recurrenceId: r.recurrenceId as string, dueAt: r.dueAt ?? null }));
 
   // Only today's moved occurrences matter to the spawner; the future ones are
   // the calendar projection's business. Global like the queries above, and keyed

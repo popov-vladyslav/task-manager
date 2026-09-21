@@ -33,7 +33,7 @@ function runDay(rules: PlanRule[], open: OpenOccurrence[], now: Date) {
       if (i >= 0) open.splice(i, 1);
       missed.push(id);
     }
-    open.push({ id: `${plan.ruleId}@${plan.today}`, recurrenceId: plan.ruleId });
+    open.push({ id: `${plan.ruleId}@${plan.today}`, recurrenceId: plan.ruleId, dueAt: null });
     const rule = rules.find((r) => r.id === plan.ruleId);
     if (rule) rule.lastSpawned = plan.today;
   }
@@ -85,8 +85,8 @@ test('cleanup is scoped to the same rule — other rules and one-off tasks are u
   };
   const rules = [{ ...DAILY, lastSpawned: '2026-07-20' }, other];
   const open: OpenOccurrence[] = [
-    { id: 'daily-yesterday', recurrenceId: 'rule-daily' },
-    { id: 'other-today', recurrenceId: 'rule-other' },
+    { id: 'daily-yesterday', recurrenceId: 'rule-daily', dueAt: null },
+    { id: 'other-today', recurrenceId: 'rule-other', dueAt: null },
   ];
 
   const plans = planRecurringSpawn(rules, open, new Date(2026, 6, 21, 0, 0, 1));
@@ -105,7 +105,7 @@ test('weekly rule only spawns (and only cleans up) on its weekday', () => {
     rule: 'weekly:mon',
     lastSpawned: '2026-07-13',
   };
-  const open: OpenOccurrence[] = [{ id: 'last-monday', recurrenceId: 'rule-weekly' }];
+  const open: OpenOccurrence[] = [{ id: 'last-monday', recurrenceId: 'rule-weekly', dueAt: null }];
 
   // Jul 21 2026 is a Tuesday: no spawn, so last Monday's occurrence stays open.
   assert.deepEqual(planRecurringSpawn([{ ...weekly }], open, new Date(2026, 6, 21)), []);
@@ -131,7 +131,7 @@ test('until is inclusive: the rule spawns on its last day and never after', () =
 
 test('an expired rule leaves its last occurrence open rather than closing it', () => {
   const expired: PlanRule = { ...DAILY, until: '2026-07-20', lastSpawned: '2026-07-20' };
-  const open: OpenOccurrence[] = [{ id: 'final', recurrenceId: 'rule-daily' }];
+  const open: OpenOccurrence[] = [{ id: 'final', recurrenceId: 'rule-daily', dueAt: null }];
 
   assert.deepEqual(planRecurringSpawn([expired], open, new Date(2026, 6, 25)), []);
   assert.equal(open.length, 1, 'the last occurrence is still there to be completed');
@@ -139,7 +139,7 @@ test('an expired rule leaves its last occurrence open rather than closing it', (
 
 test('an untracked rule closes its stale occurrences as skipped', () => {
   const routine: PlanRule = { ...DAILY, tracksCompletion: false, lastSpawned: '2026-07-20' };
-  const open: OpenOccurrence[] = [{ id: 'yesterday', recurrenceId: 'rule-daily' }];
+  const open: OpenOccurrence[] = [{ id: 'yesterday', recurrenceId: 'rule-daily', dueAt: null }];
 
   const [plan] = planRecurringSpawn([routine], open, new Date(2026, 6, 21, 0, 0, 1));
 
@@ -150,11 +150,42 @@ test('an untracked rule closes its stale occurrences as skipped', () => {
 test('a tracked rule still closes them as missed', () => {
   const [plan] = planRecurringSpawn(
     [{ ...DAILY, lastSpawned: '2026-07-20' }],
-    [{ id: 'yesterday', recurrenceId: 'rule-daily' }],
+    [{ id: 'yesterday', recurrenceId: 'rule-daily', dueAt: null }],
     new Date(2026, 6, 21, 0, 0, 1),
   );
 
   assert.equal(plan.staleStatus, 'missed');
+});
+
+test('an occurrence moved to today or later outlives the spawn; a past one does not', () => {
+  const now = new Date(2026, 6, 21, 0, 0, 1);
+  const open: OpenOccurrence[] = [
+    { id: 'moved-to-tomorrow', recurrenceId: 'rule-daily', dueAt: new Date(2026, 6, 22, 10) },
+    { id: 'moved-to-later-today', recurrenceId: 'rule-daily', dueAt: new Date(2026, 6, 21, 18) },
+    { id: 'due-yesterday', recurrenceId: 'rule-daily', dueAt: new Date(2026, 6, 20, 23, 59) },
+    { id: 'dateless', recurrenceId: 'rule-daily', dueAt: null },
+  ];
+
+  const [plan] = planRecurringSpawn([{ ...DAILY, lastSpawned: '2026-07-20' }], open, now);
+
+  assert.deepEqual(plan.staleOccurrenceIds, ['due-yesterday', 'dateless']);
+});
+
+test('a moved occurrence is closed by the first spawn after its own day', () => {
+  const open: OpenOccurrence[] = [
+    { id: 'moved', recurrenceId: 'rule-daily', dueAt: new Date(2026, 6, 22, 10) },
+  ];
+  const rule = { ...DAILY, lastSpawned: '2026-07-21' };
+
+  const [onItsDay] = planRecurringSpawn([{ ...rule }], open, new Date(2026, 6, 22, 0, 0, 1));
+  assert.deepEqual(onItsDay.staleOccurrenceIds, []);
+
+  const [dayAfter] = planRecurringSpawn(
+    [{ ...rule, lastSpawned: '2026-07-22' }],
+    open,
+    new Date(2026, 6, 23, 0, 0, 1),
+  );
+  assert.deepEqual(dayAfter.staleOccurrenceIds, ['moved']);
 });
 
 test('the rule’s duration rides along, but only onto a dated occurrence', () => {
@@ -191,6 +222,15 @@ test('today’s override moves the spawned occurrence, reminder and all', () => 
 
   assert.equal(plan.dueAt?.getTime(), movedDue.getTime());
   assert.equal(plan.remindAt?.getTime(), movedRemind.getTime());
+});
+
+test('an override with no due time means the day was already created elsewhere', () => {
+  const timed: PlanRule = { ...DAILY, defaultDueTime: '09:00', lastSpawned: '2026-07-20' };
+  const plans = planRecurringSpawn([timed], [], new Date(2026, 6, 21, 0, 0, 1), [
+    { ruleId: 'rule-daily', occursOn: '2026-07-21', dueAt: null, remindAt: null },
+  ]);
+
+  assert.deepEqual(plans, []);
 });
 
 test('an override for another day, or another rule, is ignored', () => {

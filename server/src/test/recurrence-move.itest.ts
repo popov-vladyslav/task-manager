@@ -336,6 +336,129 @@ test('another account cannot move — or learn of — a series', async () => {
   assert.equal(bobs.length, 0);
 });
 
+const tasksOf = (ruleId: string) => db.select().from(tasks).where(eq(tasks.recurrenceId, ruleId));
+
+test('moved to an earlier day: the task exists at once and the original day is skipped', async () => {
+  const rule = await makeRule(alice, {
+    title: 'pull earlier',
+    rule: `weekly:${dow(4)}`,
+    remindTime: '08:30',
+  });
+
+  const res = await move(alice, rule.id, {
+    occursOn: dayStr(4),
+    dueAt: at(2, 15).toISOString(),
+    scope: 'occurrence',
+  });
+  assert.equal(res.status, 200);
+
+  const [created] = await tasksOf(rule.id);
+  assert.deepEqual(created.dueAt, at(2, 15));
+  assert.deepEqual(created.remindAt, at(2, 14, 30));
+  assert.equal(created.userId, alice.id);
+  assert.equal(created.durationMin, 30);
+
+  const [override] = await db
+    .select()
+    .from(recurrenceOverrides)
+    .where(eq(recurrenceOverrides.ruleId, rule.id));
+  assert.equal(override.occursOn, dayStr(4));
+  assert.equal(override.dueAt, null);
+
+  assert.deepEqual(startDays(await ghostsOf(alice, 'pull earlier')), [], 'no ghost is left behind');
+
+  await spawnDueRecurring(at(4, 0, 1));
+  assert.equal((await tasksOf(rule.id)).length, 1, 'the original day spawns nothing');
+});
+
+test('dropped onto today: the task is created now, not at a midnight that already passed', async () => {
+  const rule = await makeRule(alice, { title: 'pull to today', rule: `weekly:${dow(3)}` });
+
+  await move(alice, rule.id, {
+    occursOn: dayStr(3),
+    dueAt: at(0, 23).toISOString(),
+    scope: 'occurrence',
+  });
+
+  const [created] = await tasksOf(rule.id);
+  assert.deepEqual(created.dueAt, at(0, 23));
+});
+
+test('today’s own projected block, moved: created now and the rule counts today as done', async () => {
+  const rule = await makeRule(alice, { title: 'today ghost', lastSpawned: dayStr(-1) });
+
+  await move(alice, rule.id, {
+    occursOn: dayStr(0),
+    dueAt: at(1, 7).toISOString(),
+    scope: 'occurrence',
+  });
+
+  const [created] = await tasksOf(rule.id);
+  assert.deepEqual(created.dueAt, at(1, 7));
+  assert.equal((await ruleById(rule.id)).lastSpawned, dayStr(0));
+  const overrides = await db
+    .select()
+    .from(recurrenceOverrides)
+    .where(eq(recurrenceOverrides.ruleId, rule.id));
+  assert.equal(overrides.length, 0);
+});
+
+test('all following, dropped onto today: the new series starts with a real task today', async () => {
+  const rule = await makeRule(alice, {
+    title: 'series to today',
+    rule: `weekly:${dow(3)}`,
+    remindTime: '08:30',
+  });
+
+  const res = await move(alice, rule.id, {
+    occursOn: dayStr(3),
+    dueAt: at(0, 22).toISOString(),
+    scope: 'following',
+  });
+  assert.equal(res.status, 200);
+
+  const next = await ruleById(res.ruleId as string);
+  assert.equal(next.rule, `weekly:${dow(0)}`);
+  assert.equal(next.lastSpawned, dayStr(0));
+  const [created] = await tasksOf(next.id);
+  assert.deepEqual(created.dueAt, at(0, 22));
+  assert.deepEqual(created.remindAt, at(0, 21, 30));
+  assert.equal((await ruleById(rule.id)).until, dayStr(-1));
+  assert.deepEqual(
+    startDays(await ghostsOf(alice, 'series to today')),
+    [dayStr(7)],
+    'today is the real task; the next ghost is a week out',
+  );
+});
+
+test('a real occurrence moved to tomorrow survives the midnight spawn', async () => {
+  const task = await createRecurringToday('move real to tomorrow', 'daily', 12);
+  const res = await move(alice, task.recurrenceId as string, {
+    occursOn: dayStr(0),
+    dueAt: at(1, 10).toISOString(),
+    scope: 'occurrence',
+  });
+  assert.equal(res.status, 200);
+
+  await spawnDueRecurring(at(1, 0, 1));
+
+  const rows = await db
+    .select()
+    .from(tasks)
+    .where(eq(tasks.recurrenceId, task.recurrenceId as string));
+  const moved = rows.find((r) => r.id === task.id);
+  assert.equal(moved?.status, 'active', 'the move is not thrown away as missed');
+  assert.deepEqual(moved?.dueAt, at(1, 10));
+  assert.deepEqual(moved?.remindAt, at(1, 9, 30));
+  const spawned = rows.filter((r) => r.id !== task.id);
+  assert.equal(spawned.length, 1, 'tomorrow’s own occurrence is still created');
+  assert.deepEqual(spawned[0].dueAt, at(1, 12));
+
+  await spawnDueRecurring(at(2, 0, 1));
+  const [later] = await db.select().from(tasks).where(eq(tasks.id, task.id));
+  assert.equal(later.status, 'missed', 'once its own day has passed it is closed like any other');
+});
+
 test('the spawner creates a moved occurrence at its moved time', async () => {
   const rule = await makeRule(alice, { title: 'spawn moved', remindTime: '08:30' });
   await move(alice, rule.id, {

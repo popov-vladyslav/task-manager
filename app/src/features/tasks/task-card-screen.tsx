@@ -114,6 +114,8 @@ export function TaskCardScreen({ taskId, onClose, compact = false }: TaskCardScr
             durationMin: task.durationMin,
             remindAt: task.remindAt,
             recurrenceRule: task.recurrenceRule,
+            recurrenceUntil: task.recurrenceUntil,
+            tracksCompletion: task.tracksCompletion,
           })
         : { main: null, sub: null },
     [task],
@@ -457,6 +459,8 @@ export function TaskCardScreen({ taskId, onClose, compact = false }: TaskCardScr
           durationMin: task.durationMin,
           remindAt: task.remindAt,
           recurrenceRule: task.recurrenceRule,
+          recurrenceUntil: task.recurrenceUntil,
+          tracksCompletion: task.tracksCompletion,
         }}
         onClose={() => setWhenOpen(false)}
         onSave={(patch) => {
