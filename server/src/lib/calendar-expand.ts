@@ -1,6 +1,7 @@
 import { DEFAULT_DURATION_MIN } from '@task-manager/shared';
 import { computeInstanceTimes, expandTitle, ruleMatchesToday } from './recurrence';
 import { localDateStr } from './recurrence-plan';
+import { parseLocalDay } from './recurrence-shift';
 
 // Projects future occurrences of recurrence rules onto a calendar window, as
 // pure data. Nothing here is stored: the spawner still creates exactly one real
@@ -89,9 +90,21 @@ export function expandGhosts(
     // due_offset_d shifts the deadline off the day the rule matched, so to cover
     // the window we scan match days shifted back by the same amount.
     const offset = rule.dueOffsetD ?? 0;
+    const first = addDays(fromDay, -offset);
     const last = addDays(toDay, -offset);
 
-    for (let day = addDays(fromDay, -offset); day <= last; day = addDays(day, 1)) {
+    const days: Date[] = [];
+    for (let day = first; day <= last; day = addDays(day, 1)) days.push(day);
+    // A moved occurrence belongs to the window it landed in, which need not
+    // contain the day the rule matched.
+    const firstStr = localDateStr(first);
+    const lastStr = localDateStr(last);
+    for (const o of overrides) {
+      if (o.ruleId !== rule.id || !o.dueAt) continue;
+      if (o.occursOn < firstStr || o.occursOn > lastStr) days.push(parseLocalDay(o.occursOn));
+    }
+
+    for (const day of days) {
       const occursOn = localDateStr(day);
       // Only the future: the past is whatever really happened, and today is
       // already on the calendar as a real task.

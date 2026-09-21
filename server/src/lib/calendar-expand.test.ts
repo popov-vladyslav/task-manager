@@ -200,6 +200,66 @@ test('a move out of the window drops the ghost from it', () => {
   assert.deepEqual(out, [], 'the 21st moved to the 30th, which is outside');
 });
 
+test('a move into the window from a match day outside it is still drawn', () => {
+  const weekly: ExpandRule = { ...DAILY, id: 'rule-weekly', rule: 'weekly:fri' };
+  const [from, to] = window(27, 31);
+
+  const out = expandGhosts(
+    [weekly],
+    [{ ruleId: weekly.id, occursOn: '2026-07-24', dueAt: day(28, 14, 0) }],
+    from,
+    to,
+    NOW,
+  );
+
+  assert.deepEqual(
+    out.map((g) => [g.occursOn, g.start]),
+    [
+      ['2026-07-24', day(28, 14, 0)],
+      ['2026-07-31', day(31, 9, 0)],
+    ],
+    'Friday the 24th now sits on Tuesday the 28th, next to the 31st’s own block',
+  );
+});
+
+test('an override from outside the window still obeys the rule’s limits', () => {
+  const [from, to] = window(27, 31);
+  const moved = (rule: ExpandRule, occursOn: string, taken?: Set<string>) =>
+    expandGhosts(
+      [rule],
+      [{ ruleId: rule.id, occursOn, dueAt: day(28, 14, 0) }],
+      from,
+      to,
+      NOW,
+      taken,
+    ).filter((g) => g.occursOn === occursOn);
+
+  const weekly: ExpandRule = { ...DAILY, id: 'rule-weekly', rule: 'weekly:fri' };
+  assert.equal(moved(weekly, '2026-07-23').length, 0, 'a Thursday is not a match day');
+  assert.equal(moved({ ...weekly, until: '2026-07-22' }, '2026-07-24').length, 0, 'past until');
+  assert.equal(moved({ ...weekly, lastSpawned: '2026-07-24' }, '2026-07-24').length, 0, 'spawned');
+  assert.equal(moved(weekly, '2026-07-17').length, 0, 'before today');
+  assert.equal(
+    moved(weekly, '2026-07-24', new Set(['rule-weekly@2026-07-24'])).length,
+    0,
+    'a real occurrence already covers it',
+  );
+  assert.equal(moved(weekly, '2026-07-24').length, 1);
+});
+
+test('an override inside the window is not drawn twice', () => {
+  const [from, to] = window(20, 26);
+  const out = expandGhosts(
+    [DAILY],
+    [{ ruleId: DAILY.id, occursOn: '2026-07-22', dueAt: day(22, 15, 0) }],
+    from,
+    to,
+    NOW,
+  );
+
+  assert.equal(out.filter((g) => g.occursOn === '2026-07-22').length, 1);
+});
+
 test('ghosts come back in chronological order across rules', () => {
   const evening: ExpandRule = { ...DAILY, id: 'rule-evening', defaultDueTime: '19:00' };
   const [from, to] = window(20, 22);
@@ -207,12 +267,7 @@ test('ghosts come back in chronological order across rules', () => {
   const out = ghosts([evening, DAILY], from, to);
   const order = out.map((g) => `${g.occursOn} ${g.start.getHours()}`);
 
-  assert.deepEqual(order, [
-    '2026-07-21 9',
-    '2026-07-21 19',
-    '2026-07-22 9',
-    '2026-07-22 19',
-  ]);
+  assert.deepEqual(order, ['2026-07-21 9', '2026-07-21 19', '2026-07-22 9', '2026-07-22 19']);
 });
 
 test('{month} in a title expands to the projected day’s month', () => {
