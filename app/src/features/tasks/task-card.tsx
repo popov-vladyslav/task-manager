@@ -22,7 +22,7 @@ import {
   shortTime,
 } from '../../theme';
 import { useT } from '../../lib/i18n';
-import { subtaskProgress } from '../../store/task-selectors';
+import { isOverdue, subtaskProgress } from '../../store/task-selectors';
 import { useTimerStore } from '../../store/timer';
 
 const isWeb = process.env.EXPO_OS === 'web';
@@ -51,8 +51,7 @@ function TaskCardBase({ task, context, onToggle, onOpenDetail, onDelete, onDrag 
   const tr = useT();
   const color = context?.color ?? colors.textMuted;
   const due = shortDate(task.dueAt);
-  const overdue =
-    !!task.dueAt && task.status !== 'done' && new Date(task.dueAt).getTime() < Date.now();
+  const overdue = isOverdue(task);
   const dueColor = overdue ? colors.accentNow : colors.textSecondary;
   const remind = shortTime(task.remindAt);
   const next = task.recurrenceId ? nextInstanceLabel(task.nextInstance) : null;

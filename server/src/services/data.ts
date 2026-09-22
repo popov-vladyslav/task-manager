@@ -9,7 +9,7 @@ import { invalidateReminderClocks } from './reminder-clock';
 // multi-user would have destroyed every account's tasks when any one user reset
 // theirs. It is a scoped DELETE now. Comments, time entries and notification-log
 // rows go with their tasks via ON DELETE CASCADE; tasks are removed before the
-// rules they reference.
+// rules they reference, and recurrence overrides go with those rules the same way.
 export async function resetData(userId: string): Promise<void> {
   await db.transaction(async (tx) => {
     await tx.delete(tasks).where(ownedBy(tasks.userId, userId));

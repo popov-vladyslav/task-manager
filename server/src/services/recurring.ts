@@ -1,8 +1,13 @@
 import { and, eq, inArray, isNotNull, isNull, lt, notInArray, or, sql } from 'drizzle-orm';
 import { TERMINAL_STATUSES } from '@task-manager/shared';
 import { db } from '../db/client';
-import { recurrenceRules, tasks } from '../db/schema';
-import { localDateStr, planRecurringSpawn, type OpenOccurrence } from '../lib/recurrence-plan';
+import { recurrenceOverrides, recurrenceRules, tasks } from '../db/schema';
+import {
+  localDateStr,
+  planRecurringSpawn,
+  type OpenOccurrence,
+  type PlanOverride,
+} from '../lib/recurrence-plan';
 import { invalidateReminderClocks } from './reminder-clock';
 
 // For each active rule whose day is today (Europe/Warsaw) and that hasn't spawned
@@ -10,8 +15,14 @@ import { invalidateReminderClocks } from './reminder-clock';
 // Instances are dated only when the rule carries a default_due_time — otherwise
 // they spawn dateless (no calendar block). (CR02 §1)
 //
+// A rule stops at its `until` day (inclusive), and an occurrence the user moved
+// (recurrence_overrides for today) spawns at the moved time, so its reminder
+// moves with it. The occurrence inherits the rule's duration_min when it has a
+// deadline at all.
+//
 // Spawning a new occurrence also closes out that rule's previous open
-// occurrences with the terminal 'missed' status, in the same transaction — a
+// occurrences with a terminal status — 'missed', or 'skipped' when the rule does
+// not track completion — in the same transaction. A
 // recurring task therefore only ever shows its current occurrence, and stale
 // ones stop accumulating. Kept in the generation step on purpose: the invariant
 // then holds without the app being opened, and can't drift from a separate job.
@@ -35,12 +46,27 @@ export async function spawnDueRecurring(now: Date = new Date()): Promise<number>
   // that rule — i.e. of that rule's owner. The writes below are still scoped.
   const openOccurrences: OpenOccurrence[] = (
     await db
-      .select({ id: tasks.id, recurrenceId: tasks.recurrenceId })
+      .select({ id: tasks.id, recurrenceId: tasks.recurrenceId, dueAt: tasks.dueAt })
       .from(tasks)
       .where(and(isNotNull(tasks.recurrenceId), notInArray(tasks.status, [...TERMINAL_STATUSES])))
-  ).map((r) => ({ id: r.id, recurrenceId: r.recurrenceId as string }));
+  ).map((r) => ({ id: r.id, recurrenceId: r.recurrenceId as string, dueAt: r.dueAt ?? null }));
 
-  const plans = planRecurringSpawn(rules, openOccurrences, now);
+  // Only today's moved occurrences matter to the spawner; the future ones are
+  // the calendar projection's business. Global like the queries above, and keyed
+  // by rule id (a UUID), so it cannot mix owners.
+  const overrides: PlanOverride[] = (
+    await db
+      .select({
+        ruleId: recurrenceOverrides.ruleId,
+        occursOn: recurrenceOverrides.occursOn,
+        dueAt: recurrenceOverrides.dueAt,
+        remindAt: recurrenceOverrides.remindAt,
+      })
+      .from(recurrenceOverrides)
+      .where(eq(recurrenceOverrides.occursOn, today))
+  ).map((o) => ({ ...o, dueAt: o.dueAt ?? null, remindAt: o.remindAt ?? null }));
+
+  const plans = planRecurringSpawn(rules, openOccurrences, now, overrides);
 
   let spawned = 0;
   for (const plan of plans) {
@@ -56,10 +82,10 @@ export async function spawnDueRecurring(now: Date = new Date()): Promise<number>
         .where(eq(tasks.userId, plan.userId));
       const top = Number(minSort) - 1;
 
-      if (plan.missedOccurrenceIds.length > 0) {
+      if (plan.staleOccurrenceIds.length > 0) {
         await tx
           .update(tasks)
-          .set({ status: 'missed' })
+          .set({ status: plan.staleStatus })
           .where(
             and(
               // Defence in depth: these ids came from this rule's own
@@ -67,7 +93,7 @@ export async function spawnDueRecurring(now: Date = new Date()): Promise<number>
               // cross-account status write must be impossible, not merely
               // unlikely.
               eq(tasks.userId, plan.userId),
-              inArray(tasks.id, plan.missedOccurrenceIds),
+              inArray(tasks.id, plan.staleOccurrenceIds),
               // Re-check under the transaction: the occurrence may have been
               // completed between the read above and here.
               notInArray(tasks.status, [...TERMINAL_STATUSES]),
@@ -81,6 +107,7 @@ export async function spawnDueRecurring(now: Date = new Date()): Promise<number>
         contextId: plan.contextId,
         dueAt: plan.dueAt,
         remindAt: plan.remindAt,
+        durationMin: plan.durationMin,
         recurrenceId: plan.ruleId,
         sortGlobal: top,
         sortContext: top,
@@ -97,4 +124,38 @@ export async function spawnDueRecurring(now: Date = new Date()): Promise<number>
   // scheduler's cache about them.
   if (spawned > 0) invalidateReminderClocks();
   return spawned;
+}
+
+// A rule past its end date never spawns again, so nothing would ever close the
+// occurrence left open on its last day. Done here, after the spawn, with the
+// same rule: an occurrence still due today or later is left alone.
+export async function closeEndedOccurrences(now: Date = new Date()): Promise<number> {
+  const today = localDateStr(now);
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const ended = await db
+    .select({ id: recurrenceRules.id, tracksCompletion: recurrenceRules.tracksCompletion })
+    .from(recurrenceRules)
+    .where(and(isNotNull(recurrenceRules.until), lt(recurrenceRules.until, today)));
+  if (ended.length === 0) return 0;
+
+  let closed = 0;
+  for (const status of ['missed', 'skipped'] as const) {
+    const ids = ended.filter((r) => r.tracksCompletion === (status === 'missed')).map((r) => r.id);
+    if (ids.length === 0) continue;
+    // Global like the spawner: keyed by rule id (a UUID), so it cannot mix owners.
+    const rows = await db
+      .update(tasks)
+      .set({ status })
+      .where(
+        and(
+          inArray(tasks.recurrenceId, ids),
+          notInArray(tasks.status, [...TERMINAL_STATUSES]),
+          or(isNull(tasks.dueAt), lt(tasks.dueAt, startOfToday)),
+        ),
+      )
+      .returning({ id: tasks.id });
+    closed += rows.length;
+  }
+  if (closed > 0) invalidateReminderClocks();
+  return closed;
 }

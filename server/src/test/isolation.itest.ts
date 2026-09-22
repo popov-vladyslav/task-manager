@@ -530,6 +530,33 @@ test('A cannot reach B’s recurrence rule through the task API', async () => {
   assert.equal(after.rule, 'daily', "B's rule must be unchanged");
 });
 
+test('A deleting a whole series cannot end B’s rules, even ones sharing a series_id', async () => {
+  const shared = '11111111-1111-4111-8111-111111111111';
+  const [bobRule] = await db
+    .insert(recurrenceRules)
+    .values({ userId: bob.id, title: 'bob series', rule: 'daily', seriesId: shared })
+    .returning();
+  const [aliceRule] = await db
+    .insert(recurrenceRules)
+    .values({ userId: alice.id, title: 'alice series', rule: 'daily', seriesId: shared })
+    .returning();
+  const [aliceTask] = await db
+    .insert(tasks)
+    .values({ userId: alice.id, title: 'alice series', recurrenceId: aliceRule.id })
+    .returning();
+
+  const res = await fetch(`${server.baseUrl}/api/tasks/${aliceTask.id}?scope=series`, {
+    method: 'DELETE',
+    headers: alice.headers,
+  });
+  assert.equal(res.status, 204);
+
+  const [a] = await db.select().from(recurrenceRules).where(eq(recurrenceRules.id, aliceRule.id));
+  const [b] = await db.select().from(recurrenceRules).where(eq(recurrenceRules.id, bobRule.id));
+  assert.equal(a.active, false);
+  assert.equal(b.active, true, 'a series_id is only ever resolved inside the owner’s rows');
+});
+
 test('every /api route requires authentication', async () => {
   const routes: [string, string][] = [
     ['GET', '/api/contexts'],

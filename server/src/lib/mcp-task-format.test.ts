@@ -16,6 +16,8 @@ const BASE: Task = {
   sortContext: 0,
   recurrenceId: null,
   recurrenceRule: null,
+  recurrenceUntil: null,
+  tracksCompletion: true,
   completedAt: null,
   createdAt: '2026-07-30T10:00:00.000Z',
   createdVia: 'app',

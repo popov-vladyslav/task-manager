@@ -14,6 +14,11 @@ const recurrenceSchema = z.object({
   rule: z.string().min(1).refine(isValidRule, 'Invalid recurrence rule'),
   remindTime: z.string().nullish(),
   dueOffsetDays: z.number().int().optional(),
+  until: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'until must be YYYY-MM-DD')
+    .nullish(),
+  tracksCompletion: z.boolean().optional(),
 });
 
 const createSchema = z.object({
@@ -29,7 +34,7 @@ const createSchema = z.object({
 const updateSchema = z.object({
   title: z.string().min(1).optional(),
   contextId: z.number().int().nullable().optional(),
-  status: z.enum(['active', 'waiting', 'done', 'missed']).optional(),
+  status: z.enum(['active', 'waiting', 'done', 'missed', 'skipped']).optional(),
   dueAt: z.string().nullable().optional(),
   remindAt: z.string().nullable().optional(),
   durationMin: z.number().int().positive().nullable().optional(),
@@ -37,6 +42,8 @@ const updateSchema = z.object({
   recurrence: recurrenceSchema.nullish(),
   note: z.string().nullable().optional(),
 });
+
+const deleteQuerySchema = z.object({ scope: z.enum(['occurrence', 'series']).optional() });
 
 const reorderSchema = z.object({
   afterId: z.uuid().nullish(),
@@ -74,7 +81,8 @@ router.patch('/:id', async (req, res) => {
 });
 
 router.delete('/:id', async (req, res) => {
-  await svc.deleteTask(requireUserId(req), req.params.id);
+  const { scope } = deleteQuerySchema.parse(req.query);
+  await svc.deleteTask(requireUserId(req), req.params.id, { series: scope === 'series' });
   res.status(204).end();
 });
 

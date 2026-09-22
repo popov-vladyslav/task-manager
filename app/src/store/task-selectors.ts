@@ -10,6 +10,12 @@ export function isInAll(task: Task, excluded: Set<number>): boolean {
   return task.contextId == null || !excluded.has(task.contextId);
 }
 
+// A routine nobody ticks off is never late (spec P4.2).
+export function isOverdue(task: Task, now = Date.now()): boolean {
+  if (!task.dueAt || task.status === 'done' || !task.tracksCompletion) return false;
+  return new Date(task.dueAt).getTime() < now;
+}
+
 export function completedCountFor(
   counts: Record<string, number> | null,
   contextId: number | null,

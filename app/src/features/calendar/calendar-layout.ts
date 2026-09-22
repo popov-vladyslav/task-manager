@@ -9,7 +9,7 @@ export interface BlockLayout {
 }
 
 export function layoutDayBlocks(
-  blocks: { id: string; startAt: string; endAt: string }[],
+  blocks: { key: string; startAt: string; endAt: string }[],
 ): Map<string, BlockLayout> {
   const out = new Map<string, BlockLayout>();
   // Floor to the minute for overlap detection: the app is minute-precision, but a
@@ -19,7 +19,7 @@ export function layoutDayBlocks(
   const MIN = 60_000;
   const floorMin = (iso: string) => Math.floor(new Date(iso).getTime() / MIN) * MIN;
   const items = blocks
-    .map((b) => ({ id: b.id, start: floorMin(b.startAt), end: floorMin(b.endAt) }))
+    .map((b) => ({ id: b.key, start: floorMin(b.startAt), end: floorMin(b.endAt) }))
     .sort((a, b) => a.start - b.start || b.end - a.end);
 
   let cluster: string[] = [];

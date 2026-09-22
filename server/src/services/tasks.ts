@@ -1,4 +1,18 @@
-import { and, asc, eq, ilike, inArray, isNotNull, lte, notInArray, sql } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  eq,
+  gte,
+  ilike,
+  inArray,
+  isNotNull,
+  isNull,
+  lt,
+  lte,
+  notInArray,
+  or,
+  sql,
+} from 'drizzle-orm';
 import { DEFAULT_DURATION_MIN, TERMINAL_STATUSES } from '@task-manager/shared';
 import type {
   CreateTaskInput,
@@ -13,6 +27,7 @@ import { toTask } from '../db/mappers';
 import { ownedBy, type Executor } from '../db/scope';
 import { between } from '../lib/frac-index';
 import { nextInstance as computeNext } from '../lib/recurrence';
+import { localDateStr } from '../lib/recurrence-plan';
 import { badRequest, notFound } from '../lib/errors';
 import { parseWhen } from '../lib/when';
 import { invalidateReminderClocks } from './reminder-clock';
@@ -39,6 +54,12 @@ interface ListFilter {
   contextId?: number;
   status?: TaskStatus;
   dueBefore?: Date; // only tasks with a due date at/before this
+  // Drops occurrences of a rule that does not track completion once their
+  // deadline is before this instant. A routine nobody ticks off is never late,
+  // so it must not show up as overdue anywhere (spec P4.2). The cutoff differs
+  // per caller: "overdue" means `now`, while today's agenda passes the start of
+  // the day so this morning's routine still appears on it.
+  dropUntrackedBefore?: Date;
 }
 
 // A scheduled task (has a deadline) always has a duration; a task with no
@@ -62,11 +83,15 @@ function timeOf(d: Date | string | null | undefined): string | null {
 const selection = {
   task: tasks,
   rule: recurrenceRules.rule,
+  until: recurrenceRules.until,
+  tracksCompletion: recurrenceRules.tracksCompletion,
 };
 
 type Row = {
   task: typeof tasks.$inferSelect;
   rule: string | null;
+  until: string | null;
+  tracksCompletion: boolean | null;
 };
 
 async function rowsToTasks(userId: string, rows: Row[]): Promise<Task[]> {
@@ -78,6 +103,9 @@ async function rowsToTasks(userId: string, rows: Row[]): Promise<Task[]> {
     toTask(r.task, {
       nextInstance: r.rule ? computeNext(r.rule) : null,
       recurrenceRule: r.rule,
+      recurrenceUntil: r.until,
+      // No rule to read it from: a one-off task is always "tracked".
+      tracksCompletion: r.tracksCompletion ?? true,
       subtasks: subs.get(r.task.id) ?? [],
     }),
   );
@@ -93,6 +121,18 @@ export async function listTasks(userId: string, filter: ListFilter): Promise<Tas
   if (filter.dueBefore) {
     conds.push(isNotNull(tasks.dueAt));
     conds.push(lte(tasks.dueAt, filter.dueBefore));
+  }
+  if (filter.dropUntrackedBefore) {
+    // Keep everything except a dated, untracked occurrence already past the
+    // cutoff. Spelled as an OR of the ways a row survives, so a task with no
+    // rule (left join → null) and a dateless one both stay.
+    const survives = or(
+      isNull(recurrenceRules.id),
+      eq(recurrenceRules.tracksCompletion, true),
+      isNull(tasks.dueAt),
+      gte(tasks.dueAt, filter.dropUntrackedBefore),
+    );
+    if (survives) conds.push(survives);
   }
 
   // "All" orders by sort_global; a single context orders by sort_context.
@@ -151,7 +191,12 @@ export async function searchOpenTasks(userId: string, query: string): Promise<Ta
 export async function tasksDueToday(userId: string, now: Date = new Date()): Promise<Task[]> {
   const end = new Date(now);
   end.setHours(23, 59, 59, 999);
-  return listTasks(userId, { status: 'active', dueBefore: end });
+  const start = new Date(now);
+  start.setHours(0, 0, 0, 0);
+  // Today's own untracked routines belong on the agenda; ones left open from an
+  // earlier day are not overdue, they simply passed, and the spawner closes them
+  // as 'skipped' on its next run.
+  return listTasks(userId, { status: 'active', dueBefore: end, dropUntrackedBefore: start });
 }
 
 export async function createTask(userId: string, input: CreateTaskInput): Promise<Task> {
@@ -185,6 +230,11 @@ export async function createTask(userId: string, input: CreateTaskInput): Promis
           remindTime: input.recurrence.remindTime ?? null,
           defaultDueTime: timeOf(input.dueAt),
           dueOffsetD: input.recurrence.dueOffsetDays ?? 0,
+          until: input.recurrence.until ?? null,
+          tracksCompletion: input.recurrence.tracksCompletion ?? true,
+          // The rule projects future occurrences at the length of the task it
+          // was created from.
+          durationMin: resolveDuration(dueAt, input.durationMin),
         })
         .returning();
       recurrenceId = rule.id;
@@ -251,11 +301,16 @@ export async function updateTask(
 
     // Deadline ⇒ duration invariant: recompute whenever either changes so a task
     // with a deadline always has a duration (default 30), and one without has none.
+    // Resolved unconditionally because the rule writes below mirror it onto the
+    // rule, whose duration must match even when the task's own value is unchanged.
+    const resolvedDueAt =
+      patch.dueAt !== undefined ? (patch.dueAt ? parseWhen(patch.dueAt) : null) : cur.dueAt;
+    const nextDurationMin = resolveDuration(
+      resolvedDueAt,
+      patch.durationMin !== undefined ? patch.durationMin : cur.durationMin,
+    );
     if (patch.dueAt !== undefined || patch.durationMin !== undefined) {
-      const nextDue =
-        patch.dueAt !== undefined ? (patch.dueAt ? parseWhen(patch.dueAt) : null) : cur.dueAt;
-      const nextDur = patch.durationMin !== undefined ? patch.durationMin : cur.durationMin;
-      set.durationMin = resolveDuration(nextDue, nextDur);
+      set.durationMin = nextDurationMin;
     }
 
     // { completed: true } runs the complete-logic (spec §3).
@@ -278,13 +333,23 @@ export async function updateTask(
           orphanRuleId = cur.recurrenceId;
         }
       } else if (cur.recurrenceId) {
+        // An existing rule keeps whatever the caller left out; an explicit null
+        // clears. Resetting on omission let a caller that only knows the rule
+        // string wipe an end date — and after a series split that revives the
+        // old half.
+        const next = patch.recurrence;
         await tx
           .update(recurrenceRules)
           .set({
-            rule: patch.recurrence.rule,
-            remindTime: patch.recurrence.remindTime ?? null,
+            rule: next.rule,
+            ...(next.remindTime !== undefined ? { remindTime: next.remindTime } : {}),
             defaultDueTime: timeOf(patch.dueAt !== undefined ? patch.dueAt : cur.dueAt),
-            dueOffsetD: patch.recurrence.dueOffsetDays ?? 0,
+            ...(next.dueOffsetDays !== undefined ? { dueOffsetD: next.dueOffsetDays } : {}),
+            ...(next.until !== undefined ? { until: next.until } : {}),
+            ...(next.tracksCompletion !== undefined
+              ? { tracksCompletion: next.tracksCompletion }
+              : {}),
+            durationMin: nextDurationMin,
           })
           .where(
             and(ownedBy(recurrenceRules.userId, userId), eq(recurrenceRules.id, cur.recurrenceId)),
@@ -300,18 +365,29 @@ export async function updateTask(
             remindTime: patch.recurrence.remindTime ?? null,
             defaultDueTime: timeOf(patch.dueAt !== undefined ? patch.dueAt : cur.dueAt),
             dueOffsetD: patch.recurrence.dueOffsetDays ?? 0,
+            until: patch.recurrence.until ?? null,
+            tracksCompletion: patch.recurrence.tracksCompletion ?? true,
+            durationMin: nextDurationMin,
           })
           .returning();
         set.recurrenceId = rule.id;
       }
     }
 
-    // Deadline changed on an already-recurring task without touching the rule:
-    // keep the rule's default_due_time in sync so future instances match. (CR02 §1)
-    if (patch.recurrence === undefined && patch.dueAt !== undefined && cur.recurrenceId) {
+    // Deadline or block length changed on an already-recurring task without
+    // touching the rule: keep the rule's default_due_time and duration in sync so
+    // future instances — and the calendar's projection of them — match. (CR02 §1)
+    if (
+      patch.recurrence === undefined &&
+      cur.recurrenceId &&
+      (patch.dueAt !== undefined || patch.durationMin !== undefined)
+    ) {
       await tx
         .update(recurrenceRules)
-        .set({ defaultDueTime: timeOf(patch.dueAt) })
+        .set({
+          ...(patch.dueAt !== undefined ? { defaultDueTime: timeOf(patch.dueAt) } : {}),
+          durationMin: nextDurationMin,
+        })
         .where(
           and(ownedBy(recurrenceRules.userId, userId), eq(recurrenceRules.id, cur.recurrenceId)),
         );
@@ -371,13 +447,72 @@ export async function appendNote(userId: string, id: string, text: string): Prom
   return updateTask(userId, id, { note: next });
 }
 
-export async function deleteTask(userId: string, id: string): Promise<void> {
-  const [row] = await db
-    .delete(tasks)
-    .where(and(ownedBy(tasks.userId, userId), eq(tasks.id, id)))
-    .returning({ id: tasks.id });
-  if (!row) throw notFound('Task not found');
+// Deleting one occurrence leaves its rule running: the next matching day spawns
+// again. `series` ends the rule instead — deactivated rather than deleted, so
+// finished occurrences keep their recurrence_id as history — and removes the
+// occurrences still open. Returns whether a series was actually ended.
+export async function deleteTask(
+  userId: string,
+  id: string,
+  opts: { series?: boolean } = {},
+): Promise<{ seriesEnded: boolean }> {
+  const seriesEnded = await db.transaction(async (tx) => {
+    const [row] = await tx
+      .delete(tasks)
+      .where(and(ownedBy(tasks.userId, userId), eq(tasks.id, id)))
+      .returning({ id: tasks.id, recurrenceId: tasks.recurrenceId, status: tasks.status });
+    if (!row) throw notFound('Task not found');
+    if (!row.recurrenceId) return false;
+
+    if (opts.series) {
+      // A split series is several rules sharing a series_id; the whole group
+      // ends. An unsplit rule has none and is its own series.
+      const [rule] = await tx
+        .select({ seriesId: recurrenceRules.seriesId })
+        .from(recurrenceRules)
+        .where(
+          and(ownedBy(recurrenceRules.userId, userId), eq(recurrenceRules.id, row.recurrenceId)),
+        );
+      const members = rule?.seriesId
+        ? and(ownedBy(recurrenceRules.userId, userId), eq(recurrenceRules.seriesId, rule.seriesId))
+        : and(ownedBy(recurrenceRules.userId, userId), eq(recurrenceRules.id, row.recurrenceId));
+      const ended = await tx
+        .update(recurrenceRules)
+        .set({ active: false })
+        .where(members)
+        .returning({ id: recurrenceRules.id });
+      await tx.delete(tasks).where(
+        and(
+          ownedBy(tasks.userId, userId),
+          inArray(
+            tasks.recurrenceId,
+            ended.map((r) => r.id),
+          ),
+          notInArray(tasks.status, [...TERMINAL_STATUSES]),
+        ),
+      );
+      return true;
+    }
+
+    // A rule made today has spawned nothing yet, so with its occurrence gone the
+    // calendar would project today right back into the emptied slot.
+    if (!(TERMINAL_STATUSES as readonly TaskStatus[]).includes(row.status)) {
+      const today = localDateStr(new Date());
+      await tx
+        .update(recurrenceRules)
+        .set({ lastSpawned: today })
+        .where(
+          and(
+            ownedBy(recurrenceRules.userId, userId),
+            eq(recurrenceRules.id, row.recurrenceId),
+            or(isNull(recurrenceRules.lastSpawned), lt(recurrenceRules.lastSpawned, today)),
+          ),
+        );
+    }
+    return false;
+  });
   invalidateReminderClocks();
+  return { seriesEnded };
 }
 
 // Snooze a task's reminder by `minutes` from now, and clear its notification log

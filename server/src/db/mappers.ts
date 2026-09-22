@@ -31,6 +31,8 @@ export function toSubtask(r: InferSelectModel<typeof subtasks>): Subtask {
 export interface TaskExtras {
   nextInstance: string | null;
   recurrenceRule: string | null;
+  recurrenceUntil: string | null;
+  tracksCompletion: boolean;
   subtasks: Subtask[];
 }
 
@@ -48,6 +50,8 @@ export function toTask(r: InferSelectModel<typeof tasks>, extras: TaskExtras): T
     sortContext: r.sortContext,
     recurrenceId: r.recurrenceId ?? null,
     recurrenceRule: extras.recurrenceRule,
+    recurrenceUntil: extras.recurrenceUntil,
+    tracksCompletion: extras.tracksCompletion,
     completedAt: iso(r.completedAt),
     createdAt: r.createdAt.toISOString(),
     createdVia: r.createdVia,

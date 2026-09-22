@@ -11,7 +11,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import { ChevronLeft, ChevronRight } from 'lucide-react-native';
+import { ChevronLeft, ChevronRight, Repeat } from 'lucide-react-native';
 import {
   DEFAULT_DURATION_MIN,
   type CalendarBlock,
@@ -22,6 +22,7 @@ import { haptics } from '../../lib/haptics';
 import { useIntlTag, useT } from '../../lib/i18n';
 import { useCalendarStore } from '../../store/calendar';
 import { useTasksStore } from '../../store/tasks';
+import { useToastStore } from '../../store/toast';
 import { useRefreshOnFocus } from '../../lib/use-refresh-on-focus';
 import { WideSidebar } from '../nav/wide-sidebar';
 import { useTaskCard } from '../tasks/task-card-host';
@@ -42,7 +43,9 @@ import {
 import { DragPreview, overlayHeightForMin } from './calendar-overlay';
 import { resolveDrop } from './use-calendar-gestures';
 import { layoutDayBlocks } from './calendar-layout';
+import { useMinuteNow } from './use-minute-now';
 import { QuickCreateSheet } from '../tasks/quick-create-sheet';
+import { ChoiceDialog, type ChoiceOption } from '../../components/choice-dialog';
 
 const LABEL_W = 44;
 const HOURS = Array.from({ length: HOUR_END - HOUR_START }, (_, i) => HOUR_START + i);
@@ -80,7 +83,15 @@ export function CalendarScreen() {
   const contexts = useTasksStore((s) => s.contexts);
 
   const { openTask, taskCardNode } = useTaskCard();
-  const openBlock = useCallback((taskId: string) => openTask(taskId), [openTask]);
+  const openBlock = useCallback(
+    (b: CalendarBlock) => {
+      if (b.id) return openTask(b.id);
+      const current = useTasksStore.getState().tasks.find((t) => t.recurrenceId === b.ruleId);
+      if (current) return openTask(current.id);
+      useToastStore.getState().show({ title: tr('calendar.ghost.noOpenTask'), message: b.title });
+    },
+    [openTask, tr],
+  );
   const storeTasks = useTasksStore((s) => s.tasks);
   const firstTasks = useRef(true);
   useEffect(() => {
@@ -160,6 +171,18 @@ export function CalendarScreen() {
           );
         })}
       </View>
+      {mode !== 'month' ? (
+        <View style={styles.legend}>
+          <View style={styles.legendItem}>
+            <View style={styles.legendSolid} />
+            <Text style={styles.legendText}>{tr('calendar.legend.scheduled')}</Text>
+          </View>
+          <View style={styles.legendItem}>
+            <View style={styles.legendDashed} />
+            <Text style={styles.legendText}>{tr('calendar.legend.repeating')}</Text>
+          </View>
+        </View>
+      ) : null}
     </View>
   );
 
@@ -231,10 +254,10 @@ function Timeline({
   anchor: Date;
   blocks: CalendarBlock[];
   colorOf: (id: number | null) => string;
-  onOpenBlock: (id: string) => void;
+  onOpenBlock: (b: CalendarBlock) => void;
 }) {
   const days = useMemo(() => visibleDays(mode, anchor), [mode, anchor]);
-  const now = new Date();
+  const now = useMinuteNow();
   const scrollRef = useRef<ScrollView>(null);
   const intlTag = useIntlTag();
   const hourLabels = useMemo(
@@ -244,6 +267,11 @@ function Timeline({
   );
 
   const moveBlock = useCalendarStore((s) => s.moveBlock);
+  const moveOccurrence = useCalendarStore((s) => s.moveOccurrence);
+  const tr = useT();
+  const [pendingMove, setPendingMove] = useState<null | { block: CalendarBlock; startISO: string }>(
+    null,
+  );
   const [gridW, setGridW] = useState(0);
   const [drag, setDrag] = useState<null | {
     id: string;
@@ -335,7 +363,7 @@ function Timeline({
     (ex: number, ey: number, b: CalendarBlock, durMin: number, color: string) => {
       const drop = computeDrop(ex, ey, b, durMin);
       setDrag({
-        id: b.id,
+        id: b.key,
         durMin,
         left: colLeft(drop.dayIndex) + 2,
         top: (drop.minutes / 60) * hourH,
@@ -349,10 +377,37 @@ function Timeline({
   const commitDrag = useCallback(
     (ex: number, ey: number, b: CalendarBlock, durMin: number) => {
       const drop = computeDrop(ex, ey, b, durMin);
+      if (drop.startISO === b.startAt) return setDrag(null);
+      if (b.ruleId && !b.done) return setPendingMove({ block: b, startISO: drop.startISO });
       setDrag(null);
-      if (drop.startISO !== b.startAt) moveBlock(b.id, drop.startISO);
+      if (b.id) moveBlock(b.id, drop.startISO);
     },
     [computeDrop, moveBlock],
+  );
+
+  const resolveMove = useCallback(
+    (scope: 'occurrence' | 'following' | null) => {
+      const move = pendingMove;
+      setPendingMove(null);
+      setDrag(null);
+      if (move && scope) moveOccurrence(move.block, move.startISO, scope);
+    },
+    [pendingMove, moveOccurrence],
+  );
+  const moveOptions = useMemo<ChoiceOption[]>(
+    () => [
+      {
+        key: 'occurrence',
+        label: tr('calendar.moveScope.occurrence'),
+        onPress: () => resolveMove('occurrence'),
+      },
+      {
+        key: 'following',
+        label: tr('calendar.moveScope.following'),
+        onPress: () => resolveMove('following'),
+      },
+    ],
+    [tr, resolveMove],
   );
 
   const openDraft = useCallback(
@@ -463,10 +518,10 @@ function Timeline({
                       const start = new Date(b.startAt);
                       const end = new Date(b.endAt);
                       const top = timeToY(start);
-                      const lay = dayLayout.get(b.id);
+                      const lay = dayLayout.get(b.key);
                       return (
                         <TimelineBlock
-                          key={b.id}
+                          key={b.key}
                           block={b}
                           color={colorOf(b.contextId)}
                           top={top}
@@ -475,7 +530,7 @@ function Timeline({
                           col={lay?.col ?? 0}
                           cols={lay?.cols ?? 1}
                           colW={colW}
-                          isDragging={drag?.id === b.id}
+                          isDragging={drag?.id === b.key}
                           onUpdateDrag={updateDrag}
                           onCommitDrag={commitDrag}
                           onOpen={onOpenBlock}
@@ -519,6 +574,13 @@ function Timeline({
           </GestureDetector>
         </ScrollView>
       </View>
+      <ChoiceDialog
+        open={pendingMove !== null}
+        title={tr('calendar.moveScope.title')}
+        message={tr('calendar.moveScope.message')}
+        options={moveOptions}
+        onCancel={() => resolveMove(null)}
+      />
       <QuickCreateSheet
         open={draft !== null}
         initial={draftInitial}
@@ -557,7 +619,7 @@ const TimelineBlock = memo(function TimelineBlock({
   isDragging: boolean;
   onUpdateDrag: (ex: number, ey: number, b: CalendarBlock, durMin: number, color: string) => void;
   onCommitDrag: (ex: number, ey: number, b: CalendarBlock, durMin: number) => void;
-  onOpen: (id: string) => void;
+  onOpen: (b: CalendarBlock) => void;
 }) {
   // Overlapping blocks split the column into side-by-side lanes.
   const usable = colW > 0 ? colW - 4 : 0;
@@ -570,6 +632,9 @@ const TimelineBlock = memo(function TimelineBlock({
   // captured `block` (carrying `Date`s) is never serialized to a worklet — that
   // crashes native ("Cannot copy value of type Date").
   const gesture = useMemo(() => {
+    const tap = Gesture.Tap()
+      .runOnJS(true)
+      .onEnd(() => onOpen(block));
     const panBase = Gesture.Pan()
       .runOnJS(true)
       .onStart(() => grabTick())
@@ -579,9 +644,6 @@ const TimelineBlock = memo(function TimelineBlock({
       Platform.OS === 'web'
         ? panBase.activeOffsetX([-4, 4]).activeOffsetY([-4, 4])
         : panBase.activateAfterLongPress(220);
-    const tap = Gesture.Tap()
-      .runOnJS(true)
-      .onEnd(() => onOpen(block.id));
     return Gesture.Exclusive(pan, tap);
   }, [block, durMin, color, onUpdateDrag, onCommitDrag, onOpen]);
 
@@ -591,29 +653,40 @@ const TimelineBlock = memo(function TimelineBlock({
         style={[
           styles.tlBlock,
           laneStyle,
-          // eslint-disable-next-line react-native/no-inline-styles
-          {
-            top,
-            height,
-            backgroundColor: block.done ? `${color}12` : `${color}26`,
-            borderLeftColor: color,
-            opacity: isDragging ? 0.35 : block.done ? 0.6 : 1,
-          },
+          block.virtual
+            ? [styles.tlGhost, { top, height }]
+            : // eslint-disable-next-line react-native/no-inline-styles
+              {
+                top,
+                height,
+                backgroundColor: block.done ? `${color}12` : `${color}26`,
+                borderLeftColor: color,
+                opacity: isDragging ? 0.35 : block.done ? 0.6 : 1,
+              },
         ]}
       >
-        <Text
-          numberOfLines={2}
-          style={[
-            styles.tlBlockText,
-            // eslint-disable-next-line react-native/no-inline-styles
-            {
-              color: block.done ? colors.textMuted : colors.textPrimary,
-              textDecorationLine: block.done ? 'line-through' : 'none',
-            },
-          ]}
-        >
-          {block.title}
-        </Text>
+        {block.virtual ? (
+          <View style={styles.tlGhostRow}>
+            <Repeat size={9} color={colors.textSecondary} strokeWidth={1.8} />
+            <Text numberOfLines={1} style={styles.tlGhostText}>
+              {block.title}
+            </Text>
+          </View>
+        ) : (
+          <Text
+            numberOfLines={2}
+            style={[
+              styles.tlBlockText,
+              // eslint-disable-next-line react-native/no-inline-styles
+              {
+                color: block.done ? colors.textMuted : colors.textPrimary,
+                textDecorationLine: block.done ? 'line-through' : 'none',
+              },
+            ]}
+          >
+            {block.title}
+          </Text>
+        )}
       </Animated.View>
     </GestureDetector>
   );
@@ -691,7 +764,7 @@ function MonthView({
                   const c = colorOf(b.contextId);
                   return (
                     <View
-                      key={b.id}
+                      key={b.key}
                       style={[
                         styles.mvBar,
                         // eslint-disable-next-line react-native/no-inline-styles
@@ -754,6 +827,25 @@ const styles = StyleSheet.create({
   },
   modeBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
   modeBtnText: { fontSize: 12.5 },
+  legend: { flexDirection: 'row', gap: 14 },
+  legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  legendSolid: {
+    width: 14,
+    height: 10,
+    borderRadius: 3,
+    backgroundColor: `${colors.accentPrimary}26`,
+    borderLeftWidth: 2.5,
+    borderLeftColor: colors.accentPrimary,
+  },
+  legendDashed: {
+    width: 14,
+    height: 10,
+    borderRadius: 3,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: colors.borderPopover,
+  },
+  legendText: { fontSize: 11, color: colors.textMuted },
   // CalendarScreen — wide/mobile layout
   wideRoot: { flex: 1, flexDirection: 'row', backgroundColor: colors.bgBase },
   wideMain: { flex: 1, paddingHorizontal: 24 },
@@ -820,6 +912,14 @@ const styles = StyleSheet.create({
     borderLeftWidth: 2.5,
   },
   tlBlockText: { fontSize: 10 },
+  tlGhost: {
+    borderWidth: 1,
+    borderLeftWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: colors.borderPopover,
+  },
+  tlGhostRow: { flexDirection: 'row', alignItems: 'center', gap: 3 },
+  tlGhostText: { flex: 1, fontSize: 10, color: colors.textSecondary },
   // MonthView
   mvWeekRow: { flexDirection: 'row', paddingBottom: 8 },
   mvWeekday: {

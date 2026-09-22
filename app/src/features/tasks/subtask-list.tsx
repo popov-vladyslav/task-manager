@@ -34,9 +34,10 @@ interface SubtaskRowProps {
   onToggle: (subtask: Subtask) => void;
   onRename: (subtask: Subtask, title: string) => void;
   onDelete: (subtask: Subtask) => void;
+  onFocus?: () => void;
 }
 
-function SubtaskRowBase({ subtask, onToggle, onRename, onDelete }: SubtaskRowProps) {
+function SubtaskRowBase({ subtask, onToggle, onRename, onDelete, onFocus }: SubtaskRowProps) {
   const t = useTheme();
   const tr = useT();
   const styles = useMemo(() => makeStyles(t), [t]);
@@ -71,6 +72,7 @@ function SubtaskRowBase({ subtask, onToggle, onRename, onDelete }: SubtaskRowPro
         ref={inputRef}
         value={title}
         onChangeText={setTitle}
+        onFocus={onFocus}
         onBlur={commit}
         onSubmitEditing={commit}
         onKeyPress={isWeb ? submitOnEnter(() => inputRef.current?.blur()) : undefined}
@@ -98,10 +100,11 @@ export const SubtaskRow = memo(SubtaskRowBase);
 interface AddSubtaskRowProps {
   onAdd: (title: string) => Promise<void> | void;
   onDismiss?: () => void;
+  onFocus?: () => void;
 }
 
 export const AddSubtaskRow = forwardRef<TextInput, AddSubtaskRowProps>(function AddSubtaskRow(
-  { onAdd, onDismiss },
+  { onAdd, onDismiss, onFocus },
   ref,
 ) {
   const t = useTheme();
@@ -126,6 +129,7 @@ export const AddSubtaskRow = forwardRef<TextInput, AddSubtaskRowProps>(function 
         ref={ref}
         value={title}
         onChangeText={setTitle}
+        onFocus={onFocus}
         onSubmitEditing={submit}
         onBlur={submit}
         onKeyPress={isWeb ? submitOnEnter(submit) : undefined}

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { Bell, Clock, Repeat, Timer } from 'lucide-react-native';
+import { Bell, CalendarOff, CircleCheck, Clock, Repeat, Timer } from 'lucide-react-native';
 import {
   DEFAULT_DURATION_MIN,
   INTL_TAG,
@@ -9,6 +9,7 @@ import {
 } from '@task-manager/shared';
 import { BottomSheet } from '../../components/bottom-sheet';
 import { Chip } from '../../components/chip';
+import { Toggle } from '../../components/toggle';
 import { currentT, useIntlTag, useT, type T } from '../../lib/i18n';
 import { useLocaleStore } from '../../store/locale';
 import { useTheme, type Theme } from '../../theme';
@@ -30,6 +31,7 @@ const DAY_LABEL_KEY: Record<string, TranslationKey> = {
   sun: 'common.weekdaySun',
 };
 type RecKind = 'none' | 'daily' | 'weekly' | 'monthly';
+type EndsKind = 'never' | 'date';
 const recOptions = (tr: T): Option<RecKind>[] => [
   { value: 'none', label: tr('when.repeat.none') },
   { value: 'daily', label: tr('when.repeat.daily') },
@@ -59,6 +61,8 @@ export interface WhenValue {
   durationMin: number | null;
   remindAt: string | null;
   recurrenceRule: string | null;
+  recurrenceUntil: string | null;
+  tracksCompletion: boolean;
 }
 
 export interface WhenPatch {
@@ -85,6 +89,34 @@ function weeklyDays(rule: string | null): string[] {
     .filter(Boolean);
 }
 
+function toDayStr(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+function fromDayStr(day: string): Date {
+  const [y, m, d] = day.split('-').map(Number);
+  return new Date(y, m - 1, d);
+}
+
+function untilLabel(day: string, tag: string): string {
+  return fromDayStr(day).toLocaleDateString(tag, {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}
+
+// A rule's remind_time is a time of day on the occurrence's own day, so a
+// reminder that falls on the day before cannot be carried onto the rule.
+function ruleRemindTime(due: Date | null, reminder: number | null): string | null {
+  if (!due || reminder == null) return null;
+  const at = due.getHours() * 60 + due.getMinutes() - reminder;
+  if (at < 0) return null;
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${pad(Math.floor(at / 60))}:${pad(at % 60)}`;
+}
+
 function reminderOffset(dueAt: string | null, remindAt: string | null): number | null {
   if (!remindAt) return null;
   if (!dueAt) return 0;
@@ -96,7 +128,7 @@ export function describeWhen(v: WhenValue): { main: string | null; sub: string |
   const tag = currentIntlTag();
   const main = v.dueAt ? dueLine(v.dueAt, v.durationMin) : null;
   const kind = recKind(v.recurrenceRule);
-  const sub =
+  const rule =
     kind === 'none'
       ? null
       : kind === 'daily'
@@ -108,6 +140,10 @@ export function describeWhen(v: WhenValue): { main: string | null; sub: string |
                 .join(', '),
             })
           : tr('when.repeat.monthlyOn', { day: v.recurrenceRule?.slice(8) ?? '' });
+  const sub =
+    rule && v.recurrenceUntil
+      ? tr('when.repeat.until', { rule, date: untilLabel(v.recurrenceUntil, tag) })
+      : rule;
   return { main, sub };
 }
 
@@ -138,7 +174,17 @@ export function WhenSheet({ open, value, onClose, onSave }: WhenSheetProps) {
   const tr = useT();
   const tag = useIntlTag();
   const styles = useMemo(() => makeStyles(t), [t]);
-  const options = useMemo(() => ({ repeat: recOptions(tr), reminder: reminderOptions(tr) }), [tr]);
+  const options = useMemo(
+    () => ({
+      repeat: recOptions(tr),
+      reminder: reminderOptions(tr),
+      ends: [
+        { value: 'never', label: tr('when.ends.never') },
+        { value: 'date', label: tr('when.ends.onDate') },
+      ] satisfies Option<EndsKind>[],
+    }),
+    [tr],
+  );
 
   const [day, setDay] = useState<Date | null>(null);
   const [minutes, setMinutes] = useState<number | null>(null);
@@ -146,6 +192,9 @@ export function WhenSheet({ open, value, onClose, onSave }: WhenSheetProps) {
   const [reminder, setReminder] = useState<number | null>(null);
   const [kind, setKind] = useState<RecKind>('none');
   const [days, setDays] = useState<string[]>([]);
+  const [until, setUntil] = useState<Date | null>(null);
+  const [tracks, setTracks] = useState(true);
+  const endsRef = useRef<OptionFieldHandle>(null);
   const timeRef = useRef<TimeFieldHandle>(null);
   const durationRef = useRef<DurationFieldHandle>(null);
   const reminderRef = useRef<OptionFieldHandle>(null);
@@ -160,6 +209,8 @@ export function WhenSheet({ open, value, onClose, onSave }: WhenSheetProps) {
     setReminder(reminderOffset(value.dueAt, value.remindAt));
     setKind(recKind(value.recurrenceRule));
     setDays(weeklyDays(value.recurrenceRule));
+    setUntil(value.recurrenceUntil ? fromDayStr(value.recurrenceUntil) : null);
+    setTracks(value.tracksCompletion);
   }, [open, value]);
 
   const today = startOfDay(new Date());
@@ -192,14 +243,22 @@ export function WhenSheet({ open, value, onClose, onSave }: WhenSheetProps) {
     const remindAt =
       reminder == null || !due ? null : new Date(due.getTime() - reminder * 60_000).toISOString();
     const base = due ?? today;
-    const recurrence: RecurrenceInput | null =
+    const rule =
       kind === 'none'
         ? null
         : kind === 'daily'
-          ? { rule: 'daily' }
+          ? 'daily'
           : kind === 'weekly'
-            ? { rule: `weekly:${(days.length ? days : [WEEKDAYS[base.getDay()]]).join(',')}` }
-            : { rule: `monthly:${base.getDate()}` };
+            ? `weekly:${(days.length ? days : [WEEKDAYS[base.getDay()]]).join(',')}`
+            : `monthly:${base.getDate()}`;
+    const recurrence: RecurrenceInput | null = rule
+      ? {
+          rule,
+          remindTime: ruleRemindTime(due, reminder),
+          until: until ? toDayStr(until) : null,
+          tracksCompletion: tracks,
+        }
+      : null;
     onSave({
       dueAt: due ? due.toISOString() : null,
       durationMin: due ? (duration ?? DEFAULT_DURATION_MIN) : null,
@@ -217,6 +276,15 @@ export function WhenSheet({ open, value, onClose, onSave }: WhenSheetProps) {
       : kind === 'weekly'
         ? tr('when.repeat.weeklyDays', { days: days.map((d) => tr(DAY_LABEL_KEY[d])).join('') })
         : (options.repeat.find((o) => o.value === kind)?.label ?? tr('common.never'));
+
+  const endsLabel = until ? untilLabel(toDayStr(until), tag) : tr('when.ends.never');
+  const pickEnds = (k: EndsKind) =>
+    setUntil(k === 'never' ? null : (until ?? addDays(day ?? today, 30)));
+  const untilPicker = until ? (
+    <View style={styles.untilGrid}>
+      <CalendarGrid key={`until-${open}`} value={until} onChange={setUntil} />
+    </View>
+  ) : null;
 
   const pickKind = (k: RecKind) => {
     setKind(k);
@@ -329,8 +397,37 @@ export function WhenSheet({ open, value, onClose, onSave }: WhenSheetProps) {
             />
           }
           onPress={() => repeatRef.current?.open()}
-          last
+          last={kind === 'none'}
         />
+        {kind !== 'none' ? (
+          <>
+            <Row
+              icon={<CalendarOff size={15} color={t.colors.textSecondary} strokeWidth={1.8} />}
+              label={tr('when.row.ends')}
+              value="—"
+              control={
+                <OptionField
+                  ref={endsRef}
+                  value={until ? 'date' : 'never'}
+                  label={endsLabel}
+                  options={options.ends}
+                  onChange={pickEnds}
+                  closeOnPick={(k) => k === 'never'}
+                  footer={untilPicker}
+                  width={280}
+                />
+              }
+              onPress={() => endsRef.current?.open()}
+            />
+            <Row
+              icon={<CircleCheck size={15} color={t.colors.textSecondary} strokeWidth={1.8} />}
+              label={tr('when.row.trackCompletion')}
+              value="—"
+              control={<Toggle value={tracks} onValueChange={setTracks} />}
+              last
+            />
+          </>
+        ) : null}
       </View>
 
       <View style={styles.actions}>
@@ -396,6 +493,7 @@ const makeStyles = (t: Theme) =>
       borderColor: t.colors.borderSubtle,
     },
     rowLast: { borderBottomWidth: 0 },
+    untilGrid: { paddingHorizontal: 10, paddingTop: 8, paddingBottom: 6 },
     rowIcon: { width: 20, alignItems: 'center' },
     rowLabel: { flex: 1, fontSize: 13.5, fontWeight: '500', color: t.colors.textControl },
     rowValue: { fontSize: 13.5, fontWeight: '700', color: t.colors.textPrimary },

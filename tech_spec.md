@@ -47,7 +47,8 @@ CREATE TABLE tasks (
   title         text NOT NULL,
   context_id    int REFERENCES contexts(id),
   priority      text CHECK (priority IN ('high','medium','low')) DEFAULT 'medium',
-  status        text CHECK (status IN ('active','waiting','done')) DEFAULT 'active',
+  status        text CHECK (status IN ('active','waiting','done','missed','skipped')) DEFAULT 'active',
+                                               -- 0006: missed; 0021: skipped (обидва термінальні)
   due_at        timestamptz,
   remind_at     timestamptz,
   sort_global   real NOT NULL DEFAULT 0,     -- fractional indexing для reorder
@@ -58,7 +59,8 @@ CREATE TABLE tasks (
   created_via   text CHECK (created_via IN ('app','mcp')) DEFAULT 'app',
   note          text                         -- 0014: nullable; replaces comments (ADR 0006)
 );
-CREATE INDEX idx_tasks_open ON tasks (status, context_id) WHERE status != 'done';
+CREATE INDEX idx_tasks_open ON tasks (status, context_id)
+  WHERE status NOT IN ('done','missed','skipped');   -- 0006, 0021
 
 -- 0015 (ADR 0007): checklist items owned by a task. No dates, reminders,
 -- timers or contexts — never listed as tasks anywhere.
@@ -82,8 +84,28 @@ CREATE TABLE recurrence_rules (
   remind_time   time,                        -- '10:00'
   due_offset_d  int DEFAULT 0,               -- дедлайн = дата генерації + offset днів
   active        boolean NOT NULL DEFAULT true,
-  last_spawned  date                         -- захист від дублів
+  last_spawned  date,                        -- захист від дублів
+  until         date,                        -- 0021: останній день правила; null = без кінця
+  tracks_completion boolean NOT NULL DEFAULT true, -- 0021: false → пропущені інстанси = 'skipped'
+  duration_min  integer,                     -- 0021: довжина блоку для проєкції в календарі
+  series_id     uuid                         -- 0022: спільний ключ усіх правил однієї поділеної серії
+                                             --       (без FK; null, доки правило не ділили)
 );
+
+-- 0021 (ADR 0010): перенесений окремий інстанс правила. occurs_on — день, у який
+-- правило спрацювало б; due_at/remind_at — куди його перенесли. Читають і
+-- проєкція календаря, і спавнер, тому перенесений інстанс нагадує в новий час.
+CREATE TABLE recurrence_overrides (
+  id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id    uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  rule_id    uuid NOT NULL REFERENCES recurrence_rules(id) ON DELETE CASCADE,
+  occurs_on  date NOT NULL,
+  due_at     timestamptz,
+  remind_at  timestamptz,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (rule_id, occurs_on)
+);
+CREATE INDEX idx_recurrence_overrides_rule ON recurrence_overrides (rule_id, occurs_on);
 
 -- comments: replaced by tasks.note (ADR 0006); table dropped in 0019.
 -- sections (0017: table + tasks.section_id + tasks.sort_section; 0018: contexts.sections_enabled):
@@ -171,7 +193,24 @@ GET    /api/tasks/completed-counts       → { [contextId | 'none']: n } — к�
                                           (без завантаження списку; app ховає "Показати виконані", якщо 0)
 POST   /api/tasks              { title, contextId?, dueAt?, remindAt?, durationMin?, recurrence?, note? }
 PATCH  /api/tasks/:id          (будь-які поля вкл. note (nullable); { completed: true } → complete-логіка)
-DELETE /api/tasks/:id
+# recurrence = { rule, remindTime?, dueOffsetDays?, until?, tracksCompletion? } (0021):
+#   until — 'YYYY-MM-DD', останній день правила; на POST пропущене поле = без кінця.
+#   tracksCompletion — false: інстанси не позначають виконаними, пропущені закриваються як 'skipped'.
+#   Обидва пишуться в recurrence_rules; Task повертає їх як recurrenceUntil / tracksCompletion
+#   (у задачі без правила — null / true). duration_min правила = довжина блоку задачі
+#   (синхронізується при зміні dueAt або durationMin).
+#   PATCH з recurrence для задачі, що ВЖЕ має правило: remindTime / dueOffsetDays / until /
+#   tracksCompletion, яких у запиті немає, лишаються як були; явний null (для tracksCompletion —
+#   true) очищає. Раніше пропуск скидав їх — після поділу серії це оживляло стару половину.
+#   Нове правило (POST або PATCH задачі без правила) бере дефолти: null / 0 / null / true.
+DELETE /api/tasks/:id?scope=occurrence|series   → 204
+#   Без scope (або 'occurrence') видаляється лише цей рядок: правило лишається активним,
+#   наступний збіг заспавнить задачу знову. Якщо видалено відкритий інстанс, last_spawned
+#   правила підтягується до сьогодні, щоб календар не спроєктував привид у щойно звільнений слот.
+#   scope=series — кінець серії: active = false для правила разом з усіма правилами з тим самим
+#     series_id (поділена серія, 0022; без series_id — лише це правило; правило не видаляється),
+#   усі відкриті інстанси правила видаляються, завершені (done/missed/skipped) лишаються як історія.
+#   Для задачі без правила scope=series — звичайне видалення.
 POST   /api/tasks/:id/reorder  { after_id?, before_id?, scope: 'global'|'context' }
 
 # Subtasks (0015, ADR 0007). Кожен запис повертає батьківський Task з subtasks[] (відсортовані по sort_order).
@@ -193,7 +232,44 @@ POST   /api/routines           { title, time_hint? }
 PATCH  /api/routines/:id
 POST   /api/routines/:id/toggle { day }                    (idempotent upsert/delete)
 
-GET    /api/calendar?from=&to=              (time_entries + tasks з due_at у діапазоні)
+GET    /api/calendar?from=&to=[&ghosts=true]  (tasks з due_at у діапазоні)
+# CalendarBlock: { key, id, title, contextId, startAt, endAt, done, virtual, ruleId, occursOn }
+#   key — стабільний ідентифікатор для списків/layout: id задачі або `${ruleId}@${occursOn}`.
+#   id — null для проєкції (рядка в tasks ще немає); virtual=true саме в такому блоці.
+#   ruleId/occursOn — заповнені і для реальних інстансів правила (для drag зі scope).
+# ghosts=true (0021, ADR 0010) додає проєкцію майбутніх інстансів правил: не зберігається,
+#   рахується на запит, тільки для вікна ≤ 42 днів (довше — мовчки без ghosts); місяць не просить.
+#   День з реальним інстансом ніколи не дублюється проєкцією.
+POST   /api/recurrence/:ruleId/move  { occursOn, dueAt, scope: 'occurrence'|'following', taskId? } → 200 { ruleId }
+#   taskId — id задачі за реальним блоком (CalendarBlock.id), null/відсутнє для проєкції. З taskId
+#   реальний інстанс береться саме цей (чужий/невідомий → 404); без нього — за днем дедлайну = occursOn.
+#   Перенесення інстанса правила (drag у календарі). occursOn — `occursOn` самого блоку:
+#   для реального інстанса це локальний день його дедлайну, для проєкції — день збігу правила.
+#   Реальний інстанс = відкрита задача правила з таким днем дедлайну; інакше occursOn мусить бути
+#   справжньою проєкцією (активне правило з default_due_time, день ≥ сьогодні, > last_spawned,
+#   ≤ until, збігається з rule) — інакше 400. dueAt у минулий день → 400. Чуже/невідоме правило → 404.
+#   scope=occurrence: реальний — рухається лише рядок tasks, правило НЕ синхронізується (на відміну
+#     від PATCH); проєкція — upsert у recurrence_overrides (due_at + remind_at), який читають і
+#     календар, і спавнер, тож інстанс заспавниться й нагадає вже в новий час.
+#     Виняток — інстанс, який має існувати раніше за нічний спавн: проєкція сьогоднішнього дня,
+#     перенесення НА сьогодні або на день, раніший за день збігу. Тоді задача створюється одразу
+#     (як звичайна задача з дедлайном), а день збігу позначається override з due_at = null:
+#     календар нічого там не малює, спавнер нічого не створює. Для сьогоднішньої проєкції замість
+#     override правило отримує last_spawned = сьогодні.
+#   scope=following: реальний — правило змінюється на місці (rule, default_due_time, remind_time),
+#     overrides від цього дня видаляються, задача переїжджає; проєкція — серія ділиться:
+#     старе правило until = min(старий, новий день збігу) − 1, обидва отримують series_id =
+#     coalesce(series_id старого, id старого); нове правило — копія зі зсунутими
+#     полями і last_spawned = тому ж дню. Задача наперед НЕ створюється: нове правило проєктується
+#     і спавниться як звичайне, тому жоден день між ними не губиться і не дублюється.
+#     Якщо новий день збігу — сьогодні, перша задача нового правила створюється одразу
+#     (last_spawned = сьогодні): нічний спавн уже минув.
+#     Відповідь несе ruleId правила, яке тепер керує перенесеним інстансом.
+#   Зсув: daily міняє лише час (інстанс лишається на своєму дні); weekly замінює перетягнутий
+#     день тижня; monthly — число місяця; з due_offset_d день збігу = день дедлайну − offset.
+#     Нагадування зберігає відстань до дедлайну (remind_time обрізається межами доби).
+#   Після перенесення задачі її записи в notification_log стираються — інакше claim за старий
+#     час заглушив би push за новий.
 POST   /api/timer/start        { task_id }  → 409 якщо вже є активний (з деталями)
 POST   /api/timer/stop         → закриває активний, повертає entry
 
@@ -216,17 +292,22 @@ Tools ("товсті", один виклик = повна дія):
 
 ```
 create_task     { title, context?, due_at?, remind_at?, duration_min?,
-                  recurrence? { freq, days?, day_of_month?, remind_time? }, note? }
+                  recurrence? { freq, days?, day_of_month?, remind_time?,
+                                until?, tracks_completion? }, note? }
                 → створює задачу + правило (якщо recurrence) + нотатку
+                  until — 'YYYY-MM-DD', останній день; tracks_completion=false —
+                  рутина, яку не відмічають (пропущені інстанси → 'skipped') (0021)
 update_task     { id | title_match, title?, context?, due_at?, remind_at?,
                   duration_min?, status?, recurrence?, note? (null очищає) }
+                  recurrence на update_task: remind_time / until / tracks_completion, яких немає
+                  в запиті, зберігаються; remind_time: null та until: null очищають.
 append_note     { id | title_match, text }       → дописує до note через порожній рядок
 add_subtask     { id | title_match, title }      → чекліст-пункт; у відповідях під задачею
 update_subtask  { subtask_id, title?, done? }      друкується `    [x] title [subtask_id]`
 delete_subtask  { subtask_id }                     (ADR 0007; підзадачі — не задачі)
                                                 -- title_match: пошук по назві, щоб
 complete_task   { id | title_match }               я міг "закрий задачу про іпотеку"
-delete_task     { id | title_match }
+delete_task     { id | title_match, series? }      series: true — зупинити повторення (як scope=series)
 list_tasks      { context?, status?, due_before?, overdue? }
 get_today       {} → задачі на сьогодні + рутина + активний таймер
 add_routine     { title, time_hint? }
@@ -247,6 +328,7 @@ delete_context  { slug }
 | Job | Розклад | Логіка |
 |---|---|---|
 | spawn-recurring | щодня 00:05 Europe/Warsaw | для кожного active rule: якщо сьогодні = день правила і last_spawned < сьогодні → створити інстанс, проставити due/remind, оновити last_spawned |
+| close-ended-series | у тому ж запуску, одразу після spawn-recurring | для правил з until < сьогодні: відкриті інстанси з due_at < початку сьогодні (або без дати) → 'missed' (tracks_completion) / 'skipped'; інстанс, ще актуальний сьогодні або пізніше, не чіпається. Без цього останній інстанс серії, що скінчилась, лишався б відкритим назавжди |
 | send-reminders | кожну хвилину | tasks: remind_at <= now, status='active', немає 'initial' в notification_log → push + лог |
 | repeat-reminders | кожні 15 хв | якщо settings.repeat_reminders: задачі з initial-пушем старшим за repeat_after_h, досі active, без repeat за останні repeat_after_h → повторний push |
 | routine-reset | — не потрібен | completions прив'язані до `day`, "скидання" — це просто новий день |

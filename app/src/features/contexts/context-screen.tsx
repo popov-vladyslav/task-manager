@@ -18,6 +18,7 @@ import { AddTaskRow } from '../tasks/add-task-row';
 import { QuickCreateSheet } from '../tasks/quick-create-sheet';
 import { TaskCard } from '../tasks/task-card';
 import { useTaskCard } from '../tasks/task-card-host';
+import { useDeleteTask } from '../tasks/use-delete-task';
 
 export function ContextScreen() {
   const t = useTheme();
@@ -36,8 +37,7 @@ export function ContextScreen() {
   const loadCompleted = useTasksStore((s) => s.loadCompleted);
   const uncomplete = useTasksStore((s) => s.uncomplete);
   const toggleComplete = useTasksStore((s) => s.toggleComplete);
-  const removeTask = useTasksStore((s) => s.removeTask);
-  const undoRemove = useTasksStore((s) => s.undoRemove);
+  const { requestDelete, deleteDialogNode } = useDeleteTask();
   const reorder = useTasksStore((s) => s.reorder);
   const pendingOpenTaskId = useTasksStore((s) => s.pendingOpenTaskId);
   const requestOpenTask = useTasksStore((s) => s.requestOpenTask);
@@ -108,15 +108,11 @@ export function ContextScreen() {
 
   const onDeleteTask = useCallback(
     (id: string) => {
-      const task = useTasksStore.getState().tasks.find((x) => x.id === id);
-      removeTask(id);
-      useToastStore.getState().show({
-        title: tr('toasts.taskDeleted'),
-        message: task?.title,
-        onUndo: () => undoRemove(id),
-      });
+      const { tasks, completed } = useTasksStore.getState();
+      const task = tasks.find((x) => x.id === id) ?? completed.find((x) => x.id === id);
+      if (task) requestDelete(task);
     },
-    [removeTask, undoRemove, tr],
+    [requestDelete],
   );
 
   const renderCard = useCallback(
@@ -184,6 +180,7 @@ export function ContextScreen() {
           <View style={styles.wideListWrap}>{list}</View>
         </View>
         {taskCardNode}
+        {deleteDialogNode}
         <QuickCreateSheet
           open={createOpen}
           onClose={() => setCreateOpen(false)}
@@ -205,6 +202,7 @@ export function ContextScreen() {
       <AddTaskRow onPress={() => setCreateOpen(true)} />
       <View style={styles.flex1}>{list}</View>
       {taskCardNode}
+      {deleteDialogNode}
       <QuickCreateSheet
         open={createOpen}
         onClose={() => setCreateOpen(false)}

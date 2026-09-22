@@ -110,6 +110,8 @@ export function QuickCreateSheet({
     durationMin: when.durationMin,
     remindAt: when.remindAt,
     recurrenceRule: when.recurrence?.rule ?? null,
+    recurrenceUntil: when.recurrence?.until ?? null,
+    tracksCompletion: when.recurrence?.tracksCompletion ?? true,
   });
   const canSend = title.trim().length > 0 && !busy;
 
@@ -271,6 +273,8 @@ export function QuickCreateSheet({
           durationMin: when.durationMin,
           remindAt: when.remindAt,
           recurrenceRule: when.recurrence?.rule ?? null,
+          recurrenceUntil: when.recurrence?.until ?? null,
+          tracksCompletion: when.recurrence?.tracksCompletion ?? true,
         }}
         onClose={closeWhen}
         onSave={(patch) => {

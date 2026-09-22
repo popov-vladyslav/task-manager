@@ -1,7 +1,7 @@
 import cron from 'node-cron';
 import { env } from './env';
 import { pool } from './db/client';
-import { spawnDueRecurring } from './services/recurring';
+import { closeEndedOccurrences, spawnDueRecurring } from './services/recurring';
 import {
   repeatReminders,
   sendDueNotifications,
@@ -119,6 +119,8 @@ export function startScheduler(): void {
     guarded('spawn-recurring', async () => {
       const n = await spawnDueRecurring();
       if (n) console.log(`[cron] spawned ${n} recurring task(s)`);
+      const ended = await closeEndedOccurrences();
+      if (ended) console.log(`[cron] closed ${ended} occurrence(s) of ended series`);
       // Midnight rollover: re-read the reminder clocks unconditionally. Today's
       // spawns carry new remind_at values, and yesterday's occurrences were just
       // closed as 'missed' — both move the next fire time.

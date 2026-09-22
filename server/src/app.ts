@@ -6,6 +6,7 @@ import contextsRouter from './routes/contexts';
 import tasksRouter from './routes/tasks';
 import timerRouter from './routes/timer';
 import calendarRouter from './routes/calendar';
+import recurrenceRouter from './routes/recurrence';
 import pushRouter from './routes/push';
 import mcpRouter from './routes/mcp';
 import mcpTokensRouter from './routes/mcp-tokens';
@@ -70,6 +71,7 @@ export function createApp(): express.Express {
   app.use('/api/tasks', requireAuth, tasksRouter);
   app.use('/api/timer', requireAuth, timerRouter);
   app.use('/api/calendar', requireAuth, calendarRouter);
+  app.use('/api/recurrence', requireAuth, recurrenceRouter);
   app.use('/api/push', requireAuth, pushRouter);
   app.use('/api/data', requireAuth, dataRouter);
   app.use('/api/summary', requireAuth, summaryRouter);

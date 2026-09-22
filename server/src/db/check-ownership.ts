@@ -15,6 +15,7 @@ import { env } from '../env';
 const OWNED_TABLES = [
   'contexts',
   'recurrence_rules',
+  'recurrence_overrides',
   'tasks',
   'subtasks',
   'time_entries',

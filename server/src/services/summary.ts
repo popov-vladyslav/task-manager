@@ -9,8 +9,11 @@ import { subtasksByTask } from './subtasks-read';
 
 // Unfinished work from before today, split into yesterday's leftovers and the
 // older pile. ORDINARY TASKS ONLY: `recurrence_id IS NULL` excludes every
-// occurrence of a recurring task, so a skipped daily routine never nags here —
-// the recurrence engine closes those out as 'missed' instead.
+// occurrence of a recurring task, so a missed daily routine never nags here —
+// the recurrence engine closes those out on its next run instead ('missed', or
+// 'skipped' for a rule that does not track completion). That exclusion is also
+// what already satisfies "an untracked occurrence never reaches the morning
+// summary" (spec P4.2); the overdue filter for it lives in services/tasks.ts.
 export async function getMorningSummary(
   userId: string,
   now: Date = new Date(),
@@ -42,6 +45,8 @@ export async function getMorningSummary(
       // Ordinary tasks only, so there is never a recurrence rule to report.
       nextInstance: null,
       recurrenceRule: null,
+      recurrenceUntil: null,
+      tracksCompletion: true,
       subtasks: subs.get(r.task.id) ?? [],
     }),
   );

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { FlatList, Keyboard, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import ReorderableList, { type ReorderableListReorderEvent } from 'react-native-reorderable-list';
+import { useAnimatedScrollHandler, useSharedValue } from 'react-native-reanimated';
 import {
   AlignLeft,
   Bell,
@@ -18,15 +19,18 @@ import { IconButton } from '../../components/icon-button';
 import { Popover, usePopoverAnchor } from '../../components/popover';
 import { haptics } from '../../lib/haptics';
 import { useT } from '../../lib/i18n';
-import { isPendingDelete, useTasksStore } from '../../store/tasks';
+import { isPendingDelete, TEMP_SUBTASK_PREFIX, useTasksStore } from '../../store/tasks';
 import { useTimerStore } from '../../store/timer';
 import { useToastStore } from '../../store/toast';
+import { useDeleteTask } from './use-delete-task';
 import { useTheme, webInputReset, type Theme } from '../../theme';
 import { ContextPopover } from './context-popover';
 import { AddSubtaskRow, DRAG_GUTTER, SubtaskRow } from './subtask-list';
 import { describeWhen, WhenSheet } from './when-sheet';
 
 const isWeb = process.env.EXPO_OS === 'web';
+const KEYBOARD_GAP = 24;
+const isPendingSubtask = (s: Subtask) => s.id.startsWith(TEMP_SUBTASK_PREFIX);
 
 interface TaskCardScreenProps {
   taskId: string;
@@ -45,8 +49,7 @@ export function TaskCardScreen({ taskId, onClose, compact = false }: TaskCardScr
   const load = useTasksStore((s) => s.load);
   const loadCompleted = useTasksStore((s) => s.loadCompleted);
   const patchTask = useTasksStore((s) => s.patchTask);
-  const removeTask = useTasksStore((s) => s.removeTask);
-  const undoRemove = useTasksStore((s) => s.undoRemove);
+  const { requestDelete, deleteDialogNode } = useDeleteTask();
   const toggleComplete = useTasksStore((s) => s.toggleComplete);
   const uncomplete = useTasksStore((s) => s.uncomplete);
   const addSubtask = useTasksStore((s) => s.addSubtask);
@@ -63,6 +66,32 @@ export function TaskCardScreen({ taskId, onClose, compact = false }: TaskCardScr
   const [titleHeight, setTitleHeight] = useState<number>();
   const noteRef = useRef<TextInput>(null);
   const addRef = useRef<TextInput>(null);
+  const listRef = useRef<FlatList<Subtask>>(null);
+  const keepAddInView = useRef(false);
+  const scrollY = useSharedValue(0);
+  const onListScroll = useAnimatedScrollHandler({
+    onScroll: (e) => {
+      scrollY.value = e.contentOffset.y;
+    },
+  });
+
+  const revealFocused = useCallback(() => {
+    const keyboard = Keyboard.metrics();
+    const input = TextInput.State.currentlyFocusedInput();
+    const list = listRef.current;
+    if (!keyboard || !input || !list) return;
+    input.measureInWindow((_x, y, _w, h) => {
+      const overlap = y + h + KEYBOARD_GAP - keyboard.screenY;
+      if (overlap > 0) list.scrollToOffset({ offset: scrollY.value + overlap, animated: true });
+    });
+  }, [scrollY]);
+  const revealFocusedSoon = useCallback(() => {
+    if (Keyboard.isVisible()) setTimeout(revealFocused, 250);
+  }, [revealFocused]);
+  useEffect(() => {
+    const sub = Keyboard.addListener('keyboardDidShow', revealFocused);
+    return () => sub.remove();
+  }, [revealFocused]);
 
   const fetched = useRef(false);
   useEffect(() => {
@@ -85,6 +114,8 @@ export function TaskCardScreen({ taskId, onClose, compact = false }: TaskCardScr
             durationMin: task.durationMin,
             remindAt: task.remindAt,
             recurrenceRule: task.recurrenceRule,
+            recurrenceUntil: task.recurrenceUntil,
+            tracksCompletion: task.tracksCompletion,
           })
         : { main: null, sub: null },
     [task],
@@ -128,21 +159,26 @@ export function TaskCardScreen({ taskId, onClose, compact = false }: TaskCardScr
 
   const onToggleSubtask = useCallback(
     (s: Subtask) => {
+      if (isPendingSubtask(s)) return;
       haptics.select();
       updateSubtask(s.taskId, s.id, { done: !s.done });
     },
     [updateSubtask],
   );
   const onRenameSubtask = useCallback(
-    (s: Subtask, next: string) => updateSubtask(s.taskId, s.id, { title: next }),
+    (s: Subtask, next: string) => {
+      if (!isPendingSubtask(s)) updateSubtask(s.taskId, s.id, { title: next });
+    },
     [updateSubtask],
   );
   const onDeleteSubtask = useCallback(
-    (s: Subtask) => deleteSubtask(s.taskId, s.id),
+    (s: Subtask) => {
+      if (!isPendingSubtask(s)) deleteSubtask(s.taskId, s.id);
+    },
     [deleteSubtask],
   );
   const onReorderSubtasks = ({ from, to }: ReorderableListReorderEvent) => {
-    if (!task || from === to) return;
+    if (!task || from === to || subs.some(isPendingSubtask)) return;
     const order = [...subs];
     if (from < 0 || to < 0 || from >= order.length || to >= order.length) return;
     const [moved] = order.splice(from, 1);
@@ -208,13 +244,7 @@ export function TaskCardScreen({ taskId, onClose, compact = false }: TaskCardScr
   const remove = () => {
     if (!task) return;
     menu.close();
-    removeTask(task.id);
-    useToastStore.getState().show({
-      title: tr('toasts.taskDeleted'),
-      message: task.title,
-      onUndo: () => undoRemove(task.id),
-    });
-    onClose();
+    requestDelete(task, onClose);
   };
 
   if (!task) {
@@ -255,6 +285,13 @@ export function TaskCardScreen({ taskId, onClose, compact = false }: TaskCardScr
       />
 
       <ReorderableList
+        ref={listRef}
+        onScroll={onListScroll}
+        onContentSizeChange={() => {
+          if (!keepAddInView.current) return;
+          keepAddInView.current = false;
+          revealFocused();
+        }}
         data={subs}
         keyExtractor={(s, i) => s?.id ?? `i${i}`}
         onReorder={onReorderSubtasks}
@@ -264,22 +301,27 @@ export function TaskCardScreen({ taskId, onClose, compact = false }: TaskCardScr
             onToggle={onToggleSubtask}
             onRename={onRenameSubtask}
             onDelete={onDeleteSubtask}
+            onFocus={revealFocusedSoon}
           />
         )}
         contentContainerStyle={styles.content}
+        automaticallyAdjustKeyboardInsets
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="interactive"
         showsVerticalScrollIndicator={false}
         ListFooterComponent={
           addOpen ? (
             <AddSubtaskRow
               ref={addRef}
-              onAdd={(title) =>
-                addSubtask(task.id, title).catch(() =>
+              onFocus={revealFocusedSoon}
+              onAdd={(title) => {
+                keepAddInView.current = true;
+                return addSubtask(task.id, title).catch(() =>
                   useToastStore
                     .getState()
                     .show({ title: tr('toasts.addSubtaskFailed'), message: title }),
-                )
-              }
+                );
+              }}
               onDismiss={() => {
                 if (subs.length === 0) setAddOpen(false);
               }}
@@ -417,6 +459,8 @@ export function TaskCardScreen({ taskId, onClose, compact = false }: TaskCardScr
           durationMin: task.durationMin,
           remindAt: task.remindAt,
           recurrenceRule: task.recurrenceRule,
+          recurrenceUntil: task.recurrenceUntil,
+          tracksCompletion: task.tracksCompletion,
         }}
         onClose={() => setWhenOpen(false)}
         onSave={(patch) => {
@@ -431,6 +475,7 @@ export function TaskCardScreen({ taskId, onClose, compact = false }: TaskCardScr
           <Text style={styles.menuDanger}>{tr('tasks.card.deleteTask')}</Text>
         </Pressable>
       </Popover>
+      {deleteDialogNode}
     </View>
   );
 }

@@ -47,9 +47,41 @@ Steps:
 ## Stage vs production (deep links, EAS environments, channels)
 
 **`APP_SCHEME` on the API.** The **stage** `log-api` service must set
-`APP_SCHEME=com.vladyslavpopovpl.app.stage`. Production needs no value — the zod default in
-`server/src/env.ts` supplies `com.vladyslavpopovpl.app`. If stage's value is missing, stage
+`APP_SCHEME=net.tasktracker.app.stage`. Production needs no value — the zod default in
+`server/src/env.ts` supplies `net.tasktracker.app`. If stage's value is missing, stage
 sign-in links open the **production** app.
+
+**Changing the bundle id: the deploy IS the flip, so it goes last.** The API issues
+`<scheme>://auth?token=…`, and only an installed app registering that scheme can open it — so the
+scheme the API sends and the app on the device have to change together. Production reads the
+scheme from the zod default, which means **deploying the server is what flips it**:
+
+1. Build and install the new production app first —
+   `cd app && eas env:exec production "eas build --profile production --platform ios"`.
+2. Only then merge to `main`, which ships the matching default.
+
+Merge first and the API points at a scheme no installed app claims; native sign-in fails until the
+new build is on the device. Stage is the mirror image: it sets `APP_SCHEME` explicitly, so the env
+var is the flip and the code deploy is inert — update the variable, redeploy, done.
+
+To decouple the two on production, pin `APP_SCHEME` to the **outgoing** identifier before merging.
+The env var overrides the default, so the deploy changes nothing; delete the variable once the new
+build is installed and the default takes over.
+
+A mismatch is narrower than it looks: it breaks only a *fresh native sign-in*. Nobody is signed
+out (sessions expire on 14-day inactivity and `refresh()` does not rotate), and web sign-in is
+unaffected — `APP_SCHEME` is read only at `server/src/services/auth.ts` for the native branch,
+while web uses `APP_URL`.
+
+**Running a local `eas` command.** `eas build --profile stage` on its own dies at the pre-flight
+`expo config` with `EXPO_PUBLIC_API_URL is unset`. eas-cli applies a profile's static `env`
+(`APP_VARIANT`) immediately but fetches `environment:` only later, on the builder — so the guard in
+`app/app.config.js` trips locally even when the EAS environment is healthy. Wrap local commands
+instead of copying the value into the repo:
+
+```bash
+cd app && eas env:exec preview "eas build --profile stage --platform ios"
+```
 
 **`EXPO_PUBLIC_API_URL` on every buildable EAS profile.** It is inlined at build time, so each
 profile's EAS environment must carry it:
