@@ -33,8 +33,8 @@ const schema = z.object({
   // register it. The previous generic `app://` was squattable and in practice a
   // magic link opened an unrelated application. Must stay in lockstep with
   // app.config.js, which sets the app's `scheme` to the same strings; stage
-  // overrides this with `com.vladyslavpopovpl.app.stage`.
-  APP_SCHEME: z.string().default('com.vladyslavpopovpl.app'),
+  // overrides this with `net.tasktracker.app.stage`.
+  APP_SCHEME: z.string().default('net.tasktracker.app'),
   // Public base URL of THIS API (legacy). Kept only as a fallback for MCP_BASE_URL.
   PUBLIC_URL: z.string().default(process.env.RENDER_EXTERNAL_URL ?? 'http://localhost:4000'),
   // Public base URL the MCP server advertises — the OAuth issuer and the

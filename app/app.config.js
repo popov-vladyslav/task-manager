@@ -20,12 +20,12 @@ const VARIANTS = {
   production: {
     name: 'Task Tracker',
     icon: './assets/images/icon.png',
-    id: 'com.vladyslavpopovpl.app',
+    id: 'net.tasktracker.app',
   },
   stage: {
     name: 'Task Tracker (stage)',
     icon: './assets/images/icon-stage.png',
-    id: 'com.vladyslavpopovpl.app.stage',
+    id: 'net.tasktracker.app.stage',
   },
 };
 
