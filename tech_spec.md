@@ -192,11 +192,15 @@ GET    /api/tasks/completed-counts       → { [contextId | 'none']: n } — к�
 POST   /api/tasks              { title, contextId?, dueAt?, remindAt?, durationMin?, recurrence?, note? }
 PATCH  /api/tasks/:id          (будь-які поля вкл. note (nullable); { completed: true } → complete-логіка)
 # recurrence = { rule, remindTime?, dueOffsetDays?, until?, tracksCompletion? } (0021):
-#   until — 'YYYY-MM-DD', останній день правила; пропущене поле = без кінця.
+#   until — 'YYYY-MM-DD', останній день правила; на POST пропущене поле = без кінця.
 #   tracksCompletion — false: інстанси не позначають виконаними, пропущені закриваються як 'skipped'.
 #   Обидва пишуться в recurrence_rules; Task повертає їх як recurrenceUntil / tracksCompletion
 #   (у задачі без правила — null / true). duration_min правила = довжина блоку задачі
 #   (синхронізується при зміні dueAt або durationMin).
+#   PATCH з recurrence для задачі, що ВЖЕ має правило: remindTime / dueOffsetDays / until /
+#   tracksCompletion, яких у запиті немає, лишаються як були; явний null (для tracksCompletion —
+#   true) очищає. Раніше пропуск скидав їх — після поділу серії це оживляло стару половину.
+#   Нове правило (POST або PATCH задачі без правила) бере дефолти: null / 0 / null / true.
 DELETE /api/tasks/:id?scope=occurrence|series   → 204
 #   Без scope (або 'occurrence') видаляється лише цей рядок: правило лишається активним,
 #   наступний збіг заспавнить задачу знову. Якщо видалено відкритий інстанс, last_spawned
@@ -289,6 +293,8 @@ create_task     { title, context?, due_at?, remind_at?, duration_min?,
                   рутина, яку не відмічають (пропущені інстанси → 'skipped') (0021)
 update_task     { id | title_match, title?, context?, due_at?, remind_at?,
                   duration_min?, status?, recurrence?, note? (null очищає) }
+                  recurrence на update_task: remind_time / until / tracks_completion, яких немає
+                  в запиті, зберігаються; remind_time: null та until: null очищають.
 append_note     { id | title_match, text }       → дописує до note через порожній рядок
 add_subtask     { id | title_match, title }      → чекліст-пункт; у відповідях під задачею
 update_subtask  { subtask_id, title?, done? }      друкується `    [x] title [subtask_id]`

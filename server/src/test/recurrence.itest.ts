@@ -159,17 +159,55 @@ test('update rewrites until and tracksCompletion on an existing rule', async () 
   assert.equal(rule.tracksCompletion, true);
 });
 
-test('omitting the fields on an update clears until and restores tracking', async () => {
+test('fields left out of an update are kept; an explicit null clears', async () => {
   const task = await createTask({
     title: 'vitamins',
     dueAt: '2026-10-01T08:00',
-    recurrence: { rule: 'daily', until: '2026-10-31', tracksCompletion: false },
+    recurrence: {
+      rule: 'daily',
+      until: '2026-10-31',
+      tracksCompletion: false,
+      remindTime: '07:30',
+    },
   });
 
-  const updated = await patchTask(task.id, { recurrence: { rule: 'daily' } });
+  const kept = await patchTask(task.id, { recurrence: { rule: 'weekly:mon' } });
+  assert.equal(kept.recurrenceRule, 'weekly:mon');
+  assert.equal(kept.recurrenceUntil, '2026-10-31');
+  assert.equal(kept.tracksCompletion, false);
+  assert.equal((await ruleOf(kept)).remindTime?.slice(0, 5), '07:30');
 
-  assert.equal(updated.recurrenceUntil, null, 'an omitted until means open-ended');
-  assert.equal(updated.tracksCompletion, true, 'an omitted flag means tracked');
+  const cleared = await patchTask(task.id, {
+    recurrence: { rule: 'weekly:mon', until: null, remindTime: null, tracksCompletion: true },
+  });
+  assert.equal(cleared.recurrenceUntil, null);
+  assert.equal(cleared.tracksCompletion, true);
+  assert.equal((await ruleOf(cleared)).remindTime, null);
+});
+
+test('update_task over MCP keeps the end date it was not told about', async () => {
+  const task = await createTask({
+    title: 'mcp keeps until',
+    dueAt: '2026-10-01T08:00',
+    recurrence: { rule: 'daily', until: '2026-11-30', tracksCompletion: false },
+  });
+
+  const res = await mcpCall(server.baseUrl, mcpToken, 'update_task', {
+    id: task.id,
+    recurrence: { freq: 'weekly', days: ['tue'] },
+  });
+  assert.equal(res.status, 200, res.text);
+
+  const rule = await ruleOf(task);
+  assert.equal(rule.rule, 'weekly:tue');
+  assert.equal(rule.until, '2026-11-30');
+  assert.equal(rule.tracksCompletion, false);
+
+  await mcpCall(server.baseUrl, mcpToken, 'update_task', {
+    id: task.id,
+    recurrence: { freq: 'weekly', days: ['tue'], until: null },
+  });
+  assert.equal((await ruleOf(task)).until, null, 'null still clears on purpose');
 });
 
 test('resizing or rescheduling the task keeps the rule’s duration in sync', async () => {

@@ -333,15 +333,22 @@ export async function updateTask(
           orphanRuleId = cur.recurrenceId;
         }
       } else if (cur.recurrenceId) {
+        // An existing rule keeps whatever the caller left out; an explicit null
+        // clears. Resetting on omission let a caller that only knows the rule
+        // string wipe an end date — and after a series split that revives the
+        // old half.
+        const next = patch.recurrence;
         await tx
           .update(recurrenceRules)
           .set({
-            rule: patch.recurrence.rule,
-            remindTime: patch.recurrence.remindTime ?? null,
+            rule: next.rule,
+            ...(next.remindTime !== undefined ? { remindTime: next.remindTime } : {}),
             defaultDueTime: timeOf(patch.dueAt !== undefined ? patch.dueAt : cur.dueAt),
-            dueOffsetD: patch.recurrence.dueOffsetDays ?? 0,
-            until: patch.recurrence.until ?? null,
-            tracksCompletion: patch.recurrence.tracksCompletion ?? true,
+            ...(next.dueOffsetDays !== undefined ? { dueOffsetD: next.dueOffsetDays } : {}),
+            ...(next.until !== undefined ? { until: next.until } : {}),
+            ...(next.tracksCompletion !== undefined
+              ? { tracksCompletion: next.tracksCompletion }
+              : {}),
             durationMin: nextDurationMin,
           })
           .where(

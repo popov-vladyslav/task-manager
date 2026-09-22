@@ -36,19 +36,30 @@ const recurrenceInput = z.object({
     .max(31)
     .optional()
     .describe("Day of month (1-31) for freq='monthly'. Defaults to 1."),
-  remind_time: z.string().optional().describe("Reminder time 'HH:MM' applied to each occurrence."),
+  remind_time: z
+    .string()
+    .nullable()
+    .optional()
+    .describe(
+      "Reminder time 'HH:MM' applied to each occurrence. On update_task: omit to keep the " +
+        'current one, null to remove it.',
+    ),
   until: z
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .nullable()
     .optional()
-    .describe("Last day the rule repeats, 'YYYY-MM-DD'. Omit for an open-ended rule."),
+    .describe(
+      "Last day the rule repeats, 'YYYY-MM-DD'. On create_task omit for an open-ended rule. On " +
+        'update_task: omit to keep the current end date, null to make the rule open-ended.',
+    ),
   tracks_completion: z
     .boolean()
     .optional()
     .describe(
       'Whether occurrences are meant to be ticked off (default true). False for a routine ' +
         'nobody completes by hand: an occurrence that passes is closed as skipped and never ' +
-        'counts as overdue.',
+        'counts as overdue. On update_task omit to keep the current setting.',
     ),
 });
 type RecurrenceMcpInput = z.infer<typeof recurrenceInput>;
@@ -56,9 +67,9 @@ type RecurrenceMcpInput = z.infer<typeof recurrenceInput>;
 function toRecurrenceInput(rule: string, r: RecurrenceMcpInput): RecurrenceInput {
   return {
     rule,
-    remindTime: r.remind_time ?? null,
-    until: r.until ?? null,
-    tracksCompletion: r.tracks_completion ?? true,
+    remindTime: r.remind_time,
+    until: r.until,
+    tracksCompletion: r.tracks_completion,
   };
 }
 
