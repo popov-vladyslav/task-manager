@@ -47,8 +47,8 @@ Steps:
 ## Stage vs production (deep links, EAS environments, channels)
 
 **`APP_SCHEME` on the API.** The **stage** `log-api` service must set
-`APP_SCHEME=com.vladyslavpopovpl.app.stage`. Production needs no value — the zod default in
-`server/src/env.ts` supplies `com.vladyslavpopovpl.app`. If stage's value is missing, stage
+`APP_SCHEME=net.tasktracker.app.stage`. Production needs no value — the zod default in
+`server/src/env.ts` supplies `net.tasktracker.app`. If stage's value is missing, stage
 sign-in links open the **production** app.
 
 **`EXPO_PUBLIC_API_URL` on every buildable EAS profile.** It is inlined at build time, so each
