@@ -5,6 +5,7 @@ import { formatTrackedShort, type Context, type Task } from '@task-manager/share
 import { INTL_TAG } from '@task-manager/shared';
 import { currentT, useT } from '../lib/i18n';
 import { useLocaleStore } from '../store/locale';
+import { isOverdue } from '../store/task-selectors';
 import { useTheme, type Theme } from '../theme';
 
 interface TaskRowProps {
@@ -90,11 +91,6 @@ export function TaskRow({
       ) : null}
     </Pressable>
   );
-}
-
-function isOverdue(task: Task): boolean {
-  if (!task.dueAt || task.status === 'done') return false;
-  return new Date(task.dueAt).getTime() < Date.now();
 }
 
 function dueLabel(task: Task): string {

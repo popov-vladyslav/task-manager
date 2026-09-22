@@ -431,6 +431,130 @@ test('all following, dropped onto today: the new series starts with a real task 
   );
 });
 
+async function deleteSeriesFrom(ruleId: string): Promise<number> {
+  const [open] = await db
+    .select({ id: tasks.id })
+    .from(tasks)
+    .where(and(eq(tasks.recurrenceId, ruleId), eq(tasks.status, 'active')));
+  const [row] = open
+    ? [open]
+    : await db
+        .insert(tasks)
+        .values({ userId: alice.id, title: 'handle', recurrenceId: ruleId })
+        .returning({ id: tasks.id });
+  const res = await fetch(`${server.baseUrl}/api/tasks/${row.id}?scope=series`, {
+    method: 'DELETE',
+    headers: alice.headers,
+  });
+  return res.status;
+}
+
+const activeFlags = async (ids: string[]) =>
+  Promise.all(ids.map(async (id) => (await ruleById(id)).active));
+
+test('a split links both halves, and whole-series delete from either half ends both', async () => {
+  const makeSplit = async (title: string) => {
+    const rule = await makeRule(alice, { title, rule: `weekly:${dow(2)}` });
+    const res = await move(alice, rule.id, {
+      occursOn: dayStr(2),
+      dueAt: at(5, 9).toISOString(),
+      scope: 'following',
+    });
+    assert.equal(res.status, 200);
+    return [rule.id, res.ruleId as string];
+  };
+
+  const [oldA, newA] = await makeSplit('split delete from old');
+  assert.equal((await ruleById(oldA)).seriesId, oldA, 'the first split keys the group on the root');
+  assert.equal((await ruleById(newA)).seriesId, oldA);
+  assert.equal(await deleteSeriesFrom(oldA), 204);
+  assert.deepEqual(await activeFlags([oldA, newA]), [false, false]);
+
+  const [oldB, newB] = await makeSplit('split delete from new');
+  assert.equal(await deleteSeriesFrom(newB), 204);
+  assert.deepEqual(await activeFlags([oldB, newB]), [false, false]);
+});
+
+test('a series split twice is one group; deleting from any member ends all three', async () => {
+  const root = await makeRule(alice, { title: 'double split', rule: `weekly:${dow(1)}` });
+  const first = await move(alice, root.id, {
+    occursOn: dayStr(8),
+    dueAt: at(9, 9).toISOString(),
+    scope: 'following',
+  });
+  assert.equal(first.status, 200);
+  const mid = first.ruleId as string;
+  const second = await move(alice, mid, {
+    occursOn: dayStr(16),
+    dueAt: at(18, 9).toISOString(),
+    scope: 'following',
+  });
+  assert.equal(second.status, 200);
+  const last = second.ruleId as string;
+
+  const ids = [root.id, mid, last];
+  const keys = await Promise.all(ids.map(async (id) => (await ruleById(id)).seriesId));
+  assert.deepEqual(keys, [root.id, root.id, root.id]);
+
+  assert.equal(await deleteSeriesFrom(mid), 204);
+  assert.deepEqual(await activeFlags(ids), [false, false, false]);
+});
+
+test('an unsplit rule is its own series', async () => {
+  const lone = await makeRule(alice, { title: 'lone rule' });
+  const other = await makeRule(alice, { title: 'other lone rule' });
+  assert.equal((await ruleById(lone.id)).seriesId, null);
+
+  assert.equal(await deleteSeriesFrom(lone.id), 204);
+  assert.deepEqual(await activeFlags([lone.id, other.id]), [false, true]);
+});
+
+test('a real occurrence already moved off its weekday can still move the whole series', async () => {
+  const task = await createRecurringToday('moved twice', `weekly:${dow(0)}`, 9);
+  const ruleId = task.recurrenceId as string;
+  const once = await move(alice, ruleId, {
+    occursOn: dayStr(0),
+    dueAt: at(2, 9).toISOString(),
+    scope: 'occurrence',
+    taskId: task.id,
+  });
+  assert.equal(once.status, 200);
+
+  const following = await move(alice, ruleId, {
+    occursOn: dayStr(2),
+    dueAt: at(3, 11).toISOString(),
+    scope: 'following',
+    taskId: task.id,
+  });
+  assert.equal(following.status, 200, 'not a 500: the match day comes from the rule');
+  const rule = await ruleById(ruleId);
+  assert.equal(rule.rule, `weekly:${dow(3)}`);
+  assert.equal(rule.defaultDueTime?.slice(0, 5), '11:00');
+  const [row] = await db.select().from(tasks).where(eq(tasks.id, task.id));
+  assert.deepEqual(row.dueAt, at(3, 11));
+});
+
+test('taskId names the real occurrence; an unknown or foreign one is a 404', async () => {
+  const task = await createRecurringToday('by task id', 'daily', 8);
+  const ruleId = task.recurrenceId as string;
+  const body = { occursOn: dayStr(0), dueAt: at(0, 21).toISOString(), scope: 'occurrence' };
+
+  const unknown = await move(alice, ruleId, {
+    ...body,
+    taskId: '00000000-0000-4000-8000-000000000000',
+  });
+  assert.equal(unknown.status, 404);
+  const asBob = await move(bob, ruleId, { ...body, taskId: task.id });
+  assert.equal(asBob.status, 404);
+  const [untouched] = await db.select().from(tasks).where(eq(tasks.id, task.id));
+  assert.deepEqual(untouched.dueAt, at(0, 8));
+
+  const ok = await move(alice, ruleId, { ...body, taskId: task.id });
+  assert.equal(ok.status, 200);
+  const [moved] = await db.select().from(tasks).where(eq(tasks.id, task.id));
+  assert.deepEqual(moved.dueAt, at(0, 21));
+});
+
 test('a real occurrence moved to tomorrow survives the midnight spawn', async () => {
   const task = await createRecurringToday('move real to tomorrow', 'daily', 12);
   const res = await move(alice, task.recurrenceId as string, {

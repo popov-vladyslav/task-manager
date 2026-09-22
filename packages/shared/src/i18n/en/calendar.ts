@@ -9,4 +9,5 @@ export const calendar = {
   'calendar.moveScope.message': 'This task repeats. Move only this one, or this and all following?',
   'calendar.moveScope.occurrence': 'Only this one',
   'calendar.moveScope.following': 'This and all following',
+  'calendar.ghost.noOpenTask': 'No open task for this repeat yet — it appears on its day',
 } as const;

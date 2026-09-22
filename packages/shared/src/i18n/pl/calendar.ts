@@ -12,4 +12,6 @@ export const calendar: Pick<Dictionary, keyof typeof import('../en/calendar').ca
     'To zadanie się powtarza. Przenieść tylko to jedno czy to i wszystkie kolejne?',
   'calendar.moveScope.occurrence': 'Tylko to jedno',
   'calendar.moveScope.following': 'To i wszystkie kolejne',
+  'calendar.ghost.noOpenTask':
+    'Ta powtórka nie ma jeszcze otwartego zadania — pojawi się w swoim dniu',
 };

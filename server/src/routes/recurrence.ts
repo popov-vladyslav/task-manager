@@ -9,6 +9,7 @@ const moveSchema = z.object({
   occursOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   dueAt: z.string().min(1),
   scope: z.enum(['occurrence', 'following']),
+  taskId: z.uuid().nullish(),
 });
 
 router.post('/:ruleId/move', async (req, res) => {

@@ -128,7 +128,12 @@ export const api = {
     ),
   moveOccurrence: (
     ruleId: string,
-    body: { occursOn: string; dueAt: string; scope: 'occurrence' | 'following' },
+    body: {
+      occursOn: string;
+      dueAt: string;
+      scope: 'occurrence' | 'following';
+      taskId: string | null;
+    },
   ) => request<{ ruleId: string }>(`/api/recurrence/${ruleId}/move`, { method: 'POST', body }),
   getMorningSummary: () => request<MorningSummary>('/api/summary/morning'),
   getSettings: () => request<AppSettings>('/api/settings'),

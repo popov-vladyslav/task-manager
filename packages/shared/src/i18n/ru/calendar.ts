@@ -12,4 +12,6 @@ export const calendar: Pick<Dictionary, keyof typeof import('../en/calendar').ca
     'Эта задача повторяется. Перенести только её или её и все следующие?',
   'calendar.moveScope.occurrence': 'Только эту',
   'calendar.moveScope.following': 'Эту и все следующие',
+  'calendar.ghost.noOpenTask':
+    'У этого повтора пока нет открытой задачи — она появится в свой день',
 };

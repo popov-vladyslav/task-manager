@@ -87,7 +87,9 @@ CREATE TABLE recurrence_rules (
   last_spawned  date,                        -- захист від дублів
   until         date,                        -- 0021: останній день правила; null = без кінця
   tracks_completion boolean NOT NULL DEFAULT true, -- 0021: false → пропущені інстанси = 'skipped'
-  duration_min  integer                      -- 0021: довжина блоку для проєкції в календарі
+  duration_min  integer,                     -- 0021: довжина блоку для проєкції в календарі
+  series_id     uuid                         -- 0022: спільний ключ усіх правил однієї поділеної серії
+                                             --       (без FK; null, доки правило не ділили)
 );
 
 -- 0021 (ADR 0010): перенесений окремий інстанс правила. occurs_on — день, у який
@@ -205,7 +207,8 @@ DELETE /api/tasks/:id?scope=occurrence|series   → 204
 #   Без scope (або 'occurrence') видаляється лише цей рядок: правило лишається активним,
 #   наступний збіг заспавнить задачу знову. Якщо видалено відкритий інстанс, last_spawned
 #   правила підтягується до сьогодні, щоб календар не спроєктував привид у щойно звільнений слот.
-#   scope=series — кінець серії: recurrence_rules.active = false (правило не видаляється),
+#   scope=series — кінець серії: active = false для правила разом з усіма правилами з тим самим
+#     series_id (поділена серія, 0022; без series_id — лише це правило; правило не видаляється),
 #   усі відкриті інстанси правила видаляються, завершені (done/missed/skipped) лишаються як історія.
 #   Для задачі без правила scope=series — звичайне видалення.
 POST   /api/tasks/:id/reorder  { after_id?, before_id?, scope: 'global'|'context' }
@@ -237,7 +240,9 @@ GET    /api/calendar?from=&to=[&ghosts=true]  (tasks з due_at у діапазо
 # ghosts=true (0021, ADR 0010) додає проєкцію майбутніх інстансів правил: не зберігається,
 #   рахується на запит, тільки для вікна ≤ 42 днів (довше — мовчки без ghosts); місяць не просить.
 #   День з реальним інстансом ніколи не дублюється проєкцією.
-POST   /api/recurrence/:ruleId/move  { occursOn, dueAt, scope: 'occurrence'|'following' } → 200 { ruleId }
+POST   /api/recurrence/:ruleId/move  { occursOn, dueAt, scope: 'occurrence'|'following', taskId? } → 200 { ruleId }
+#   taskId — id задачі за реальним блоком (CalendarBlock.id), null/відсутнє для проєкції. З taskId
+#   реальний інстанс береться саме цей (чужий/невідомий → 404); без нього — за днем дедлайну = occursOn.
 #   Перенесення інстанса правила (drag у календарі). occursOn — `occursOn` самого блоку:
 #   для реального інстанса це локальний день його дедлайну, для проєкції — день збігу правила.
 #   Реальний інстанс = відкрита задача правила з таким днем дедлайну; інакше occursOn мусить бути
@@ -253,7 +258,8 @@ POST   /api/recurrence/:ruleId/move  { occursOn, dueAt, scope: 'occurrence'|'fol
 #     override правило отримує last_spawned = сьогодні.
 #   scope=following: реальний — правило змінюється на місці (rule, default_due_time, remind_time),
 #     overrides від цього дня видаляються, задача переїжджає; проєкція — серія ділиться:
-#     старе правило until = min(старий, новий день збігу) − 1, нове правило — копія зі зсунутими
+#     старе правило until = min(старий, новий день збігу) − 1, обидва отримують series_id =
+#     coalesce(series_id старого, id старого); нове правило — копія зі зсунутими
 #     полями і last_spawned = тому ж дню. Задача наперед НЕ створюється: нове правило проєктується
 #     і спавниться як звичайне, тому жоден день між ними не губиться і не дублюється.
 #     Якщо новий день збігу — сьогодні, перша задача нового правила створюється одразу
@@ -322,6 +328,7 @@ delete_context  { slug }
 | Job | Розклад | Логіка |
 |---|---|---|
 | spawn-recurring | щодня 00:05 Europe/Warsaw | для кожного active rule: якщо сьогодні = день правила і last_spawned < сьогодні → створити інстанс, проставити due/remind, оновити last_spawned |
+| close-ended-series | у тому ж запуску, одразу після spawn-recurring | для правил з until < сьогодні: відкриті інстанси з due_at < початку сьогодні (або без дати) → 'missed' (tracks_completion) / 'skipped'; інстанс, ще актуальний сьогодні або пізніше, не чіпається. Без цього останній інстанс серії, що скінчилась, лишався б відкритим назавжди |
 | send-reminders | кожну хвилину | tasks: remind_at <= now, status='active', немає 'initial' в notification_log → push + лог |
 | repeat-reminders | кожні 15 хв | якщо settings.repeat_reminders: задачі з initial-пушем старшим за repeat_after_h, досі active, без repeat за останні repeat_after_h → повторний push |
 | routine-reset | — не потрібен | completions прив'язані до `day`, "скидання" — це просто новий день |

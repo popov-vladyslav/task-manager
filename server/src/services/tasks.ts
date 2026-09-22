@@ -465,21 +465,32 @@ export async function deleteTask(
     if (!row.recurrenceId) return false;
 
     if (opts.series) {
-      await tx
-        .update(recurrenceRules)
-        .set({ active: false })
+      // A split series is several rules sharing a series_id; the whole group
+      // ends. An unsplit rule has none and is its own series.
+      const [rule] = await tx
+        .select({ seriesId: recurrenceRules.seriesId })
+        .from(recurrenceRules)
         .where(
           and(ownedBy(recurrenceRules.userId, userId), eq(recurrenceRules.id, row.recurrenceId)),
         );
-      await tx
-        .delete(tasks)
-        .where(
-          and(
-            ownedBy(tasks.userId, userId),
-            eq(tasks.recurrenceId, row.recurrenceId),
-            notInArray(tasks.status, [...TERMINAL_STATUSES]),
+      const members = rule?.seriesId
+        ? and(ownedBy(recurrenceRules.userId, userId), eq(recurrenceRules.seriesId, rule.seriesId))
+        : and(ownedBy(recurrenceRules.userId, userId), eq(recurrenceRules.id, row.recurrenceId));
+      const ended = await tx
+        .update(recurrenceRules)
+        .set({ active: false })
+        .where(members)
+        .returning({ id: recurrenceRules.id });
+      await tx.delete(tasks).where(
+        and(
+          ownedBy(tasks.userId, userId),
+          inArray(
+            tasks.recurrenceId,
+            ended.map((r) => r.id),
           ),
-        );
+          notInArray(tasks.status, [...TERMINAL_STATUSES]),
+        ),
+      );
       return true;
     }
 

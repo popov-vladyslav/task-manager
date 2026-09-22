@@ -125,3 +125,37 @@ export async function spawnDueRecurring(now: Date = new Date()): Promise<number>
   if (spawned > 0) invalidateReminderClocks();
   return spawned;
 }
+
+// A rule past its end date never spawns again, so nothing would ever close the
+// occurrence left open on its last day. Done here, after the spawn, with the
+// same rule: an occurrence still due today or later is left alone.
+export async function closeEndedOccurrences(now: Date = new Date()): Promise<number> {
+  const today = localDateStr(now);
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const ended = await db
+    .select({ id: recurrenceRules.id, tracksCompletion: recurrenceRules.tracksCompletion })
+    .from(recurrenceRules)
+    .where(and(isNotNull(recurrenceRules.until), lt(recurrenceRules.until, today)));
+  if (ended.length === 0) return 0;
+
+  let closed = 0;
+  for (const status of ['missed', 'skipped'] as const) {
+    const ids = ended.filter((r) => r.tracksCompletion === (status === 'missed')).map((r) => r.id);
+    if (ids.length === 0) continue;
+    // Global like the spawner: keyed by rule id (a UUID), so it cannot mix owners.
+    const rows = await db
+      .update(tasks)
+      .set({ status })
+      .where(
+        and(
+          inArray(tasks.recurrenceId, ids),
+          notInArray(tasks.status, [...TERMINAL_STATUSES]),
+          or(isNull(tasks.dueAt), lt(tasks.dueAt, startOfToday)),
+        ),
+      )
+      .returning({ id: tasks.id });
+    closed += rows.length;
+  }
+  if (closed > 0) invalidateReminderClocks();
+  return closed;
+}

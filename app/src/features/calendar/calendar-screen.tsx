@@ -22,6 +22,7 @@ import { haptics } from '../../lib/haptics';
 import { useIntlTag, useT } from '../../lib/i18n';
 import { useCalendarStore } from '../../store/calendar';
 import { useTasksStore } from '../../store/tasks';
+import { useToastStore } from '../../store/toast';
 import { useRefreshOnFocus } from '../../lib/use-refresh-on-focus';
 import { WideSidebar } from '../nav/wide-sidebar';
 import { useTaskCard } from '../tasks/task-card-host';
@@ -86,9 +87,10 @@ export function CalendarScreen() {
     (b: CalendarBlock) => {
       if (b.id) return openTask(b.id);
       const current = useTasksStore.getState().tasks.find((t) => t.recurrenceId === b.ruleId);
-      if (current) openTask(current.id);
+      if (current) return openTask(current.id);
+      useToastStore.getState().show({ title: tr('calendar.ghost.noOpenTask'), message: b.title });
     },
-    [openTask],
+    [openTask, tr],
   );
   const storeTasks = useTasksStore((s) => s.tasks);
   const firstTasks = useRef(true);

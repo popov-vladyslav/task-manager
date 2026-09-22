@@ -150,6 +150,7 @@ export const useCalendarStore = create<CalendarState>((set, get) => ({
         occursOn: block.occursOn,
         dueAt: newStartISO,
         scope,
+        taskId: block.id,
       });
     } catch {
       set({ data: prev });

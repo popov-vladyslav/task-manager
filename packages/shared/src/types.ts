@@ -172,8 +172,9 @@ export interface CalendarBlock {
   // The rule this block belongs to — set on real occurrences too, so a drag can
   // ask "this one or the whole series?" either way.
   ruleId: string | null;
-  // The day the rule matched, 'YYYY-MM-DD'. Null for a one-off task. With a
-  // due_offset_d it is not the day the block is drawn on.
+  // 'YYYY-MM-DD'. For a projected block, the day the rule matched — with a
+  // due_offset_d not the day it is drawn on. For a real block, the local day of
+  // its deadline. Null for a one-off task.
   occursOn: string | null;
 }
 

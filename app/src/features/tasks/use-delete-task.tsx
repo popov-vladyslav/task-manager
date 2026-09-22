@@ -2,6 +2,7 @@ import { useCallback, useMemo, useState } from 'react';
 import type { Task } from '@task-manager/shared';
 import { ChoiceDialog, type ChoiceOption } from '../../components/choice-dialog';
 import { useT } from '../../lib/i18n';
+import { useCalendarStore } from '../../store/calendar';
 import { useTasksStore } from '../../store/tasks';
 import { useToastStore } from '../../store/toast';
 
@@ -57,6 +58,7 @@ export function useDeleteTask() {
         onPress: async () => {
           setPending(null);
           if (!(await removeSeries(task.id))) return;
+          void useCalendarStore.getState().load({ silent: true });
           useToastStore.getState().show({ title: tr('toasts.seriesDeleted'), message: task.title });
           onDone?.();
         },

@@ -11,7 +11,7 @@ import { db } from '../db/client';
 import { loginCodes, recurrenceOverrides, recurrenceRules, tasks, users } from '../db/schema';
 import { hashToken } from '../lib/tokens';
 import { localDateStr } from '../lib/recurrence-plan';
-import { spawnDueRecurring } from '../services/recurring';
+import { closeEndedOccurrences, spawnDueRecurring } from '../services/recurring';
 import * as tasksSvc from '../services/tasks';
 
 let server: TestServer;
@@ -555,4 +555,42 @@ test('delete_task says a recurring task still repeats, and series: true stops it
   });
   assert.ok(ended.text.includes('will not repeat'), ended.text);
   assert.equal((await ruleOf(all)).active, false);
+});
+
+test('the last occurrence of an ended rule is closed the day after its end date', async () => {
+  const today = localDateStr(new Date());
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  const tracked = await createTask({
+    title: 'ended tracked',
+    dueAt: `${localDateStr(yesterday)}T09:00`,
+    recurrence: { rule: 'daily', until: localDateStr(yesterday) },
+  });
+  const routine = await createTask({
+    title: 'ended routine',
+    dueAt: `${localDateStr(yesterday)}T09:00`,
+    recurrence: { rule: 'daily', until: localDateStr(yesterday), tracksCompletion: false },
+  });
+  const stillDue = await createTask({
+    title: 'ended but moved forward',
+    dueAt: `${today}T23:00`,
+    recurrence: { rule: 'daily', until: localDateStr(yesterday) },
+  });
+  const openEnded = await createTask({
+    title: 'open-ended',
+    dueAt: `${localDateStr(yesterday)}T09:00`,
+    recurrence: { rule: 'weekly:mon' },
+  });
+
+  const closed = await closeEndedOccurrences();
+  assert.equal(closed, 2);
+
+  const statusOf = async (id: string) =>
+    (await db.select({ status: tasks.status }).from(tasks).where(eq(tasks.id, id)))[0].status;
+  assert.equal(await statusOf(tracked.id), 'missed');
+  assert.equal(await statusOf(routine.id), 'skipped');
+  assert.equal(await statusOf(stillDue.id), 'active', 'an occurrence still due today stays');
+  assert.equal(await statusOf(openEnded.id), 'active', 'the spawner, not this, handles live rules');
+
+  assert.equal(await closeEndedOccurrences(), 0, 'idempotent');
 });

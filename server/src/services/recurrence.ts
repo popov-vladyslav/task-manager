@@ -18,6 +18,10 @@ export interface MoveInput {
   occursOn: string;
   dueAt: string;
   scope: MoveScope;
+  // The task behind a real block; null (or absent) for a projected one. Without
+  // it the real occurrence would have to be guessed from its due day, which a
+  // due_offset_d or an earlier move can put on another day.
+  taskId?: string | null;
 }
 
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
@@ -41,12 +45,18 @@ export async function moveOccurrence(
     const [rule] = await tx
       .select()
       .from(recurrenceRules)
-      .where(and(ownedBy(recurrenceRules.userId, userId), eq(recurrenceRules.id, ruleId)));
+      .where(and(ownedBy(recurrenceRules.userId, userId), eq(recurrenceRules.id, ruleId)))
+      .for('update');
     if (!rule) throw notFound('Series not found');
     if (!rule.active) throw badRequest('This series has ended');
 
     const open = await tx
-      .select({ id: tasks.id, dueAt: tasks.dueAt, remindAt: tasks.remindAt })
+      .select({
+        id: tasks.id,
+        dueAt: tasks.dueAt,
+        remindAt: tasks.remindAt,
+        createdAt: tasks.createdAt,
+      })
       .from(tasks)
       .where(
         and(
@@ -56,7 +66,11 @@ export async function moveOccurrence(
           notInArray(tasks.status, [...TERMINAL_STATUSES]),
         ),
       );
-    const real = open.find((t) => t.dueAt && localDateStr(t.dueAt) === input.occursOn);
+    const real =
+      input.taskId != null
+        ? open.find((t) => t.id === input.taskId)
+        : open.find((t) => t.dueAt && localDateStr(t.dueAt) === input.occursOn);
+    if (input.taskId != null && !real) throw notFound('Task not found');
 
     const moveTask = async (id: string, from: Date | null, remindAt: Date | null, to: Date) => {
       await tx
@@ -101,7 +115,18 @@ export async function moveOccurrence(
         await moveTask(real.id, real.dueAt, real.remindAt, newDue);
         return { ruleId };
       }
-      const matchDay = addLocalDays(input.occursOn, -(rule.dueOffsetD ?? 0));
+      // The day the rule matched for this task: its due day, unless an earlier
+      // move took the task off it — then the day it was spawned on, or, for a
+      // rule's very first task, the day it was created.
+      const offset = rule.dueOffsetD ?? 0;
+      const matchDay =
+        [
+          addLocalDays(localDateStr(real.dueAt as Date), -offset),
+          rule.lastSpawned,
+          localDateStr(real.createdAt),
+        ].find((d): d is string => d != null && ruleMatchesToday(rule.rule, parseLocalDay(d))) ??
+        null;
+      if (!matchDay) throw badRequest('Cannot tell which day of the series this task is');
       const shifted = shiftRule(rule, matchDay, newDue);
       await tx
         .update(recurrenceRules)
@@ -176,9 +201,10 @@ export async function moveOccurrence(
     // Both rules change hands on the same day — the earlier of the old and the
     // new match day — so no day in between is spawned twice or dropped.
     const lastOldDay = addLocalDays(shifted.matchDay < matchDay ? shifted.matchDay : matchDay, -1);
+    const seriesId = rule.seriesId ?? rule.id;
     await tx
       .update(recurrenceRules)
-      .set({ until: lastOldDay })
+      .set({ until: lastOldDay, seriesId })
       .where(and(ownedBy(recurrenceRules.userId, userId), eq(recurrenceRules.id, ruleId)));
     await tx
       .delete(recurrenceOverrides)
@@ -202,6 +228,7 @@ export async function moveOccurrence(
         until: rule.until,
         tracksCompletion: rule.tracksCompletion,
         durationMin: rule.durationMin,
+        seriesId,
         lastSpawned: shifted.matchDay === today ? today : lastOldDay,
       })
       .returning({ id: recurrenceRules.id });
